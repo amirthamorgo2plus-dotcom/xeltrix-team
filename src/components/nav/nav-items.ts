@@ -10,6 +10,7 @@ import {
   Bell,
   CalendarHeart,
   User,
+  Plug,
   type LucideIcon,
 } from "lucide-react";
 
@@ -26,5 +27,6 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/calendar",      label: "Calendar",   icon: CalendarDays },
   { href: "/holidays",      label: "Holidays",   icon: CalendarHeart },
   { href: "/targets",       label: "Targets",    icon: Target },
+  { href: "/integrations",  label: "Integrations", icon: Plug },
   { href: "/profile",       label: "Profile",    icon: User },
 ];

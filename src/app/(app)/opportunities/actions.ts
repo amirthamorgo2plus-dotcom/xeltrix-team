@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership } from "@/lib/data";
+import { pushWonOpportunityToZoho } from "@/lib/zoho/sync";
 
 export async function createOpportunity(_prev: { error?: string } | undefined, formData: FormData) {
   const m = await getMyMembership();
@@ -37,6 +38,14 @@ export async function setOpportunityStage(id: string, stage: string) {
   if (stage === "won") update.close_date = new Date().toISOString().slice(0, 10);
   const { error } = await supabase.from("opportunities").update(update).eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (stage === "won") {
+    // Fire and forget push to Zoho — don't block the UI on it
+    pushWonOpportunityToZoho(id).catch((e) =>
+      console.error("Zoho push failed:", e instanceof Error ? e.message : e)
+    );
+  }
+
   revalidatePath("/opportunities");
   revalidatePath("/dashboard");
 }
