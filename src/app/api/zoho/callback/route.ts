@@ -46,7 +46,12 @@ export async function GET(request: NextRequest) {
   try {
     const origin = request.nextUrl.origin;
     const tokens = await exchangeCodeForTokens(code, getRedirectUri(origin));
-    const organization_id = await fetchOrganizationId(tokens.access_token);
+
+    // Prefer an explicit ZOHO_ORG_ID from env (avoids the /organizations endpoint
+    // which requires elevated permissions some Zoho Books plans don't grant).
+    // Fall back to auto-detection.
+    const envOrgId = process.env.ZOHO_ORG_ID?.trim();
+    const organization_id = envOrgId || (await fetchOrganizationId(tokens.access_token));
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
     await supabase.from("integrations").upsert(
