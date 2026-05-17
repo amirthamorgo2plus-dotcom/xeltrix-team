@@ -82,15 +82,15 @@ export default async function DashboardPage({
     supabase.from("v_leave_balance").select("member_id, balance"),
     supabase
       .from("leads")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .in("status", ["new", "contacted", "qualified"]),
     supabase
       .from("tasks")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .in("status", ["todo", "in_progress"]),
     supabase
       .from("complaints")
-      .select("id", { count: "exact", head: true })
+      .select("id")
       .in("status", ["open", "in_progress"]),
   ]);
 
