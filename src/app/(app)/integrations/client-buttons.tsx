@@ -15,7 +15,9 @@ export function SyncNowButton() {
           start(async () => {
             const r = await triggerSync();
             if (r?.ok) {
-              setMsg(`Synced ${r.customers ?? 0} customers, ${r.items ?? 0} items, ${r.invoices ?? 0} invoices`);
+              const summary = `Synced ${r.customers ?? 0} customers, ${r.items ?? 0} items, ${r.invoices ?? 0} invoices, ${r.quotes ?? 0} quotes`;
+              const warnings = (r as { warnings?: string[] }).warnings ?? [];
+              setMsg(warnings.length ? `${summary} — ${warnings.join("; ")}` : summary);
             } else {
               setMsg(r?.error ? `Error: ${r.error}` : "Sync failed");
             }
