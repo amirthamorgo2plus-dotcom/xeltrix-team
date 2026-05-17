@@ -9,7 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { createTask } from "./actions";
 
-export function TaskForm() {
+export function TaskForm({
+  members,
+  myMemberId,
+}: {
+  members: { id: string; name: string }[];
+  myMemberId: string | null;
+}) {
   const ref = useRef<HTMLFormElement>(null);
   const [state, action, pending] = useActionState(createTask, undefined);
 
@@ -25,11 +31,21 @@ export function TaskForm() {
             await action(fd);
             ref.current?.reset();
           }}
-          className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+          className="grid grid-cols-1 gap-3 sm:grid-cols-4"
         >
           <div className="flex flex-col gap-1 sm:col-span-2">
             <Label>Title *</Label>
             <Input name="title" required />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label>Assign to</Label>
+            <Select name="owner_id" defaultValue={myMemberId ?? ""}>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.id === myMemberId ? `${m.name} (me)` : m.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <div className="flex flex-col gap-1">
             <Label>Priority</Label>
@@ -44,11 +60,11 @@ export function TaskForm() {
             <Label>Due (date & time)</Label>
             <Input name="due_at" type="datetime-local" />
           </div>
-          <div className="flex flex-col gap-1 sm:col-span-2">
+          <div className="flex flex-col gap-1 sm:col-span-3">
             <Label>Description</Label>
             <Textarea name="description" />
           </div>
-          <div className="sm:col-span-3">
+          <div className="sm:col-span-4">
             <Button type="submit" disabled={pending}>
               {pending ? "Adding..." : "Add task"}
             </Button>

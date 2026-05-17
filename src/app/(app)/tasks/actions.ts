@@ -11,11 +11,13 @@ export async function createTask(_prev: { error?: string } | undefined, formData
   const title = String(formData.get("title") ?? "").trim();
   if (!title) return { error: "Title is required." };
 
+  const owner_id = String(formData.get("owner_id") ?? "").trim() || m.id;
   const due_raw = String(formData.get("due_at") ?? "");
+
   const supabase = await createClient();
   const { error } = await supabase.from("tasks").insert({
     team_id: m.team_id,
-    owner_id: m.id,
+    owner_id,
     title,
     description: String(formData.get("description") ?? "").trim() || null,
     due_at: due_raw ? new Date(due_raw).toISOString() : null,
@@ -31,6 +33,16 @@ export async function createTask(_prev: { error?: string } | undefined, formData
 export async function setTaskStatus(id: string, status: string) {
   const supabase = await createClient();
   const { error } = await supabase.from("tasks").update({ status }).eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/tasks");
+}
+
+export async function reassignTask(id: string, owner_id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("tasks")
+    .update({ owner_id: owner_id || null })
+    .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/tasks");
 }
