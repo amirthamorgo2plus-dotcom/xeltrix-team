@@ -11,6 +11,7 @@ import {
   CalendarHeart,
   User,
   Plug,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 
@@ -27,6 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/calendar",      label: "Calendar",   icon: CalendarDays },
   { href: "/holidays",      label: "Holidays",   icon: CalendarHeart },
   { href: "/targets",       label: "Targets",    icon: Target },
+  { href: "/templates",     label: "Templates",  icon: Package },
   { href: "/integrations",  label: "Integrations", icon: Plug },
   { href: "/profile",       label: "Profile",    icon: User },
 ];
