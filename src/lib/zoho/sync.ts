@@ -1,7 +1,13 @@
 import "server-only";
 import { createClient as createSbAdmin } from "@supabase/supabase-js";
 import { zohoFetch, getIntegrationForTeam } from "./client";
-import type { IntegrationRow, ZohoContact, ZohoInvoice, ZohoItem } from "./types";
+import type {
+  IntegrationRow,
+  ZohoContact,
+  ZohoEstimate,
+  ZohoInvoice,
+  ZohoItem,
+} from "./types";
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -9,7 +15,13 @@ function adminClient() {
   return createSbAdmin(url, srk, { auth: { persistSession: false } });
 }
 
-type SyncCounts = { customers: number; invoices: number; items: number };
+type SyncCounts = {
+  customers: number;
+  invoices: number;
+  items: number;
+  quotes: number;
+  warnings: string[];
+};
 
 async function getDefaultOwnerId(team_id: string): Promise<string | null> {
   const sb = adminClient();
@@ -19,7 +31,7 @@ async function getDefaultOwnerId(team_id: string): Promise<string | null> {
     .eq("team_id", team_id)
     .eq("active", true)
     .in("role", ["admin", "manager"])
-    .order("role"); // admin sorts before manager
+    .order("role");
   return data?.[0]?.id ?? null;
 }
 
@@ -39,22 +51,21 @@ async function fetchAll<T>(
     out.push(...list);
     if (list.length < 200) break;
     page++;
-    if (page > 50) break; // safety: stop at 10k records
+    if (page > 50) break;
   }
   return out;
 }
 
 export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
   const sb = adminClient();
-  const counts: SyncCounts = { customers: 0, invoices: 0, items: 0 };
+  const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, warnings: [] };
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
-  // ---- Pull contacts (customers) -> leads ----
+  // ---- Contacts -> leads ----
   const contacts = await fetchAll<ZohoContact>(integration, "/contacts", "contacts", {
     contact_type: "customer",
   });
 
-  // Snapshot existing leads to preserve manual owner reassignments
   const { data: existingLeads } = await sb
     .from("leads")
     .select("zoho_customer_id, owner_id")
@@ -83,7 +94,6 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   }
   counts.customers = leadRows.length;
 
-  // Map of zoho_customer_id -> lead.id for invoice linking below
   const { data: refreshedLeads } = await sb
     .from("leads")
     .select("id, zoho_customer_id")
@@ -93,9 +103,8 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     (refreshedLeads ?? []).map((l) => [l.zoho_customer_id as string, l.id])
   );
 
-  // ---- Pull items -> opportunity_templates ----
+  // ---- Items -> opportunity_templates ----
   const items = await fetchAll<ZohoItem>(integration, "/items", "items");
-
   const itemRows = items.map((it) => ({
     team_id: integration.team_id,
     zoho_item_id: it.item_id,
@@ -106,7 +115,6 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     active: (it.status ?? "active") === "active",
     updated_at: new Date().toISOString(),
   }));
-
   if (itemRows.length > 0) {
     const { error } = await sb
       .from("opportunity_templates")
@@ -115,13 +123,11 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   }
   counts.items = itemRows.length;
 
-  // ---- Pull invoices -> won opportunities ----
+  // ---- Invoices -> won opportunities ----
   const invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
     sort_column: "created_time",
     sort_order: "D",
   });
-
-  // Snapshot existing opps to preserve manual owner reassignments
   const { data: existingOpps } = await sb
     .from("opportunities")
     .select("zoho_invoice_id, owner_id")
@@ -143,7 +149,6 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     probability: 100,
     owner_id: oppOwnerMap.get(inv.invoice_id) ?? defaultOwner,
   }));
-
   if (oppRows.length > 0) {
     const { error } = await sb
       .from("opportunities")
@@ -152,12 +157,55 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   }
   counts.invoices = oppRows.length;
 
-  // Mark sync as successful
+  // ---- Estimates -> quotes ----
+  let estimates: ZohoEstimate[] = [];
+  try {
+    estimates = await fetchAll<ZohoEstimate>(integration, "/estimates", "estimates", {
+      sort_column: "created_time",
+      sort_order: "D",
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    counts.warnings.push(`Quotes skipped: ${msg}`);
+  }
+
+  if (estimates.length > 0) {
+    const { data: existingQuotes } = await sb
+      .from("quotes")
+      .select("zoho_estimate_id, owner_id")
+      .eq("team_id", integration.team_id)
+      .not("zoho_estimate_id", "is", null);
+    const quoteOwnerMap = new Map(
+      (existingQuotes ?? []).map((q) => [q.zoho_estimate_id as string, q.owner_id])
+    );
+
+    const quoteRows = estimates.map((est) => ({
+      team_id: integration.team_id,
+      lead_id: customerToLead.get(est.customer_id) ?? null,
+      zoho_estimate_id: est.estimate_id,
+      number: est.estimate_number,
+      status: est.status,
+      value: est.total,
+      currency: est.currency_code ?? null,
+      date: est.date,
+      expiry_date: est.expiry_date ?? null,
+      customer_id: est.customer_id,
+      customer_name: est.customer_name,
+      owner_id: quoteOwnerMap.get(est.estimate_id) ?? defaultOwner,
+    }));
+
+    const { error } = await sb
+      .from("quotes")
+      .upsert(quoteRows, { onConflict: "team_id,zoho_estimate_id" });
+    if (error) throw new Error(`quotes bulk upsert failed: ${error.message}`);
+    counts.quotes = quoteRows.length;
+  }
+
   await sb
     .from("integrations")
     .update({
       last_synced_at: new Date().toISOString(),
-      last_sync_error: null,
+      last_sync_error: counts.warnings.length ? counts.warnings.join("; ") : null,
     })
     .eq("id", integration.id);
 
@@ -174,9 +222,9 @@ export async function pushWonOpportunityToZoho(opportunityId: string) {
     .eq("id", opportunityId)
     .maybeSingle();
   if (!opp) return;
-  if (opp.zoho_invoice_id) return; // already pushed
+  if (opp.zoho_invoice_id) return;
 
-  const integration = await getIntegrationForTeam(opp.team_id, /* useAdmin */ true);
+  const integration = await getIntegrationForTeam(opp.team_id, true);
   if (!integration?.access_token) return;
 
   let zohoCustomerId = opp.zoho_customer_id ?? null;
