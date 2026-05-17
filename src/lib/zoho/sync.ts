@@ -57,9 +57,12 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         ...(existingLead ? {} : { owner_id: defaultOwner }),
       };
 
-      await sb
+      const { error: leadErr } = await sb
         .from("leads")
         .upsert(leadPayload, { onConflict: "team_id,zoho_customer_id" });
+      if (leadErr) {
+        throw new Error(`leads upsert failed: ${leadErr.message}`);
+      }
       counts.customers++;
     }
     if (list.length < 200) break;
@@ -76,7 +79,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     if (list.length === 0) break;
 
     for (const it of list) {
-      await sb.from("opportunity_templates").upsert(
+      const { error: tplErr } = await sb.from("opportunity_templates").upsert(
         {
           team_id: integration.team_id,
           zoho_item_id: it.item_id,
@@ -89,6 +92,9 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         },
         { onConflict: "team_id,zoho_item_id" }
       );
+      if (tplErr) {
+        throw new Error(`opportunity_templates upsert failed: ${tplErr.message}`);
+      }
       counts.items++;
     }
     if (list.length < 200) break;
@@ -134,9 +140,12 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         ...(existingOpp ? {} : { owner_id: defaultOwner }),
       };
 
-      await sb
+      const { error: oppErr } = await sb
         .from("opportunities")
         .upsert(oppPayload, { onConflict: "team_id,zoho_invoice_id" });
+      if (oppErr) {
+        throw new Error(`opportunities upsert failed: ${oppErr.message}`);
+      }
       counts.invoices++;
     }
     if (list.length < 200) break;
