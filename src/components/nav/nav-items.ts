@@ -12,6 +12,7 @@ import {
   User,
   Plug,
   Package,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard",     label: "Dashboard",  icon: LayoutDashboard },
   { href: "/leads",         label: "Leads",      icon: Users },
   { href: "/opportunities", label: "Pipeline",   icon: Briefcase },
+  { href: "/quotes",        label: "Quotes",     icon: FileText },
   { href: "/tasks",         label: "Tasks",      icon: CheckSquare },
   { href: "/follow-ups",    label: "Follow-ups", icon: Bell },
   { href: "/complaints",    label: "Complaints", icon: AlertCircle },

@@ -7,6 +7,7 @@ export const ZOHO_API     = `https://www.zohoapis.${ZOHO_REGION}/books/v3`;
 export const ZOHO_SCOPES = [
   "ZohoBooks.invoices.READ",
   "ZohoBooks.invoices.CREATE",
+  "ZohoBooks.estimates.READ",
   "ZohoBooks.contacts.READ",
   "ZohoBooks.contacts.CREATE",
   "ZohoBooks.items.READ",

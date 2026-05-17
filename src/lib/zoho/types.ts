@@ -46,6 +46,20 @@ export type ZohoItem = {
   status?: string;
 };
 
+export type ZohoEstimate = {
+  estimate_id: string;
+  estimate_number: string;
+  customer_id: string;
+  customer_name: string;
+  status: string;       // draft | sent | viewed | accepted | declined | invoiced | expired
+  total: number;
+  currency_code?: string;
+  date: string;
+  expiry_date?: string;
+  created_time?: string;
+  last_modified_time?: string;
+};
+
 export type IntegrationRow = {
   id: string;
   team_id: string;
