@@ -11,6 +11,7 @@ export function LeadStatusSelect({ id, value }: { id: string; value: string }) {
     <select
       value={value}
       disabled={pending}
+      suppressHydrationWarning
       onChange={(e) => start(() => updateLeadStatus(id, e.target.value))}
       className="h-8 rounded-md border border-zinc-300 bg-transparent px-2 text-xs dark:border-zinc-700"
     >

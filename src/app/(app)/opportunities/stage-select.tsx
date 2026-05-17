@@ -11,6 +11,7 @@ export function StageSelect({ id, value }: { id: string; value: string }) {
     <select
       value={value}
       disabled={pending}
+      suppressHydrationWarning
       onChange={(e) => start(() => setOpportunityStage(id, e.target.value))}
       className="h-7 rounded-md border border-zinc-300 bg-transparent px-1 text-xs dark:border-zinc-700"
     >
