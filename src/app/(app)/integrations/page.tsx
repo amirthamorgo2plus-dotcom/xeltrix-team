@@ -1,5 +1,9 @@
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+
+// Server Actions in this route inherit this — gives the sync time to paginate Zoho
+export const maxDuration = 60;
+
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

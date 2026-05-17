@@ -11,9 +11,22 @@ function adminClient() {
 
 type SyncCounts = { customers: number; invoices: number; items: number };
 
+async function getDefaultOwnerId(team_id: string): Promise<string | null> {
+  const sb = adminClient();
+  const { data } = await sb
+    .from("team_members")
+    .select("id, role")
+    .eq("team_id", team_id)
+    .eq("active", true)
+    .in("role", ["admin", "manager"])
+    .order("role"); // admin sorts before manager
+  return data?.[0]?.id ?? null;
+}
+
 export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
   const sb = adminClient();
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0 };
+  const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
   // ---- Pull contacts (customers) -> leads ----
   let page = 1;
@@ -25,18 +38,28 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     if (list.length === 0) break;
 
     for (const c of list) {
-      await sb.from("leads").upsert(
-        {
-          team_id: integration.team_id,
-          zoho_customer_id: c.contact_id,
-          name: c.contact_name || c.company_name || "(no name)",
-          email: c.email ?? null,
-          phone: c.phone ?? c.mobile ?? null,
-          source: "zoho_books",
-          status: "qualified", // contacts in Books are already real customers
-        },
-        { onConflict: "team_id,zoho_customer_id" }
-      );
+      // Check if row exists so we don't trample manual owner reassignments
+      const { data: existingLead } = await sb
+        .from("leads")
+        .select("id")
+        .eq("team_id", integration.team_id)
+        .eq("zoho_customer_id", c.contact_id)
+        .maybeSingle();
+
+      const leadPayload = {
+        team_id: integration.team_id,
+        zoho_customer_id: c.contact_id,
+        name: c.contact_name || c.company_name || "(no name)",
+        email: c.email ?? null,
+        phone: c.phone ?? c.mobile ?? null,
+        source: "zoho_books",
+        status: "qualified",
+        ...(existingLead ? {} : { owner_id: defaultOwner }),
+      };
+
+      await sb
+        .from("leads")
+        .upsert(leadPayload, { onConflict: "team_id,zoho_customer_id" });
       counts.customers++;
     }
     if (list.length < 200) break;
@@ -90,20 +113,30 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         .eq("zoho_customer_id", inv.customer_id)
         .maybeSingle();
 
-      await sb.from("opportunities").upsert(
-        {
-          team_id: integration.team_id,
-          lead_id: lead?.id ?? null,
-          zoho_invoice_id: inv.invoice_id,
-          zoho_customer_id: inv.customer_id,
-          title: `${inv.invoice_number} · ${inv.customer_name}`,
-          value: inv.total,
-          stage: "won", // user rule: mark won when invoice is CREATED
-          close_date: inv.date,
-          probability: 100,
-        },
-        { onConflict: "team_id,zoho_invoice_id" }
-      );
+      // Check for existing opp so we don't overwrite manual owner reassignments
+      const { data: existingOpp } = await sb
+        .from("opportunities")
+        .select("id")
+        .eq("team_id", integration.team_id)
+        .eq("zoho_invoice_id", inv.invoice_id)
+        .maybeSingle();
+
+      const oppPayload = {
+        team_id: integration.team_id,
+        lead_id: lead?.id ?? null,
+        zoho_invoice_id: inv.invoice_id,
+        zoho_customer_id: inv.customer_id,
+        title: `${inv.invoice_number} · ${inv.customer_name}`,
+        value: inv.total,
+        stage: "won",
+        close_date: inv.date,
+        probability: 100,
+        ...(existingOpp ? {} : { owner_id: defaultOwner }),
+      };
+
+      await sb
+        .from("opportunities")
+        .upsert(oppPayload, { onConflict: "team_id,zoho_invoice_id" });
       counts.invoices++;
     }
     if (list.length < 200) break;

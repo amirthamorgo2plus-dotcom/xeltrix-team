@@ -1,7 +1,5 @@
 "use server";
 
-export const maxDuration = 60; // Vercel Hobby plan max; gives the sync time to paginate Zoho
-
 import { revalidatePath } from "next/cache";
 import { createClient as createSbAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";

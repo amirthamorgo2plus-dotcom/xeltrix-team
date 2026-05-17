@@ -66,7 +66,7 @@ export default async function DashboardPage({
       .in("member_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
     supabase
       .from("opportunities")
-      .select("stage, value, owner_id")
+      .select("stage, value, owner_id, close_date")
       .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
     supabase
       .from("holidays")
@@ -96,7 +96,17 @@ export default async function DashboardPage({
 
   // KPIs
   const target = (tvaRows ?? []).reduce((s, r) => s + Number(r.target ?? 0), 0);
-  const achieved = (tvaRows ?? []).reduce((s, r) => s + Number(r.achieved ?? 0), 0);
+  // Compute Sales Achieved DIRECTLY from won opps in the selected month —
+  // independent of whether targets have been set
+  const achieved = (pipelineRows ?? [])
+    .filter(
+      (o) =>
+        o.stage === "won" &&
+        o.close_date &&
+        o.close_date >= monthFirst &&
+        o.close_date <= monthLast
+    )
+    .reduce((s, o) => s + Number(o.value ?? 0), 0);
   const pct = target > 0 ? Math.round((achieved / target) * 100) : null;
 
   // Attendance %: (worked_days) / (working_days)
