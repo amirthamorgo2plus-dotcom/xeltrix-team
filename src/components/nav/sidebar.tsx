@@ -9,6 +9,8 @@ import {
   Clock,
   Briefcase,
   Bell,
+  CalendarHeart,
+  User,
 } from "lucide-react";
 
 const nav = [
@@ -20,7 +22,9 @@ const nav = [
   { href: "/complaints",   label: "Complaints",    icon: AlertCircle },
   { href: "/attendance",   label: "Attendance",    icon: Clock },
   { href: "/calendar",     label: "Calendar",      icon: CalendarDays },
+  { href: "/holidays",     label: "Holidays",      icon: CalendarHeart },
   { href: "/targets",      label: "Targets",       icon: Target },
+  { href: "/profile",      label: "Profile",       icon: User },
 ];
 
 export function Sidebar() {
