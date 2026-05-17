@@ -3,6 +3,7 @@ import {
   isSameMonth, isToday, parseISO, startOfMonth, startOfWeek, subMonths,
 } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import { getTeamMembers } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,14 @@ export default async function CalendarPage({
   const isoEnd = format(days[41], "yyyy-MM-dd");
 
   const supabase = await createClient();
+  const teamMembers = await getTeamMembers();
+  const memberNameById = new Map(
+    teamMembers.map((m) => {
+      const profile = m.profiles as { full_name?: string } | null;
+      return [m.id, profile?.full_name ?? "Someone"];
+    })
+  );
+
   const [holRes, taskRes, fuRes, attRes] = await Promise.all([
     supabase
       .from("holidays")
@@ -52,7 +61,7 @@ export default async function CalendarPage({
       .is("done_at", null),
     supabase
       .from("attendance")
-      .select("date, status, member_id, member:team_members(profiles:profiles!team_members_user_id_fkey(full_name))")
+      .select("date, status, member_id")
       .gte("date", isoStart)
       .lte("date", isoEnd)
       .in("status", ["leave", "half_day"]),
@@ -83,14 +92,10 @@ export default async function CalendarPage({
     });
   });
   (attRes.data ?? []).forEach((a) => {
-    const member = Array.isArray(a.member)
-      ? (a.member as { profiles?: { full_name?: string } | { full_name?: string }[] | null }[])[0]
-      : (a.member as { profiles?: { full_name?: string } | { full_name?: string }[] | null } | null);
-    const profile =
-      Array.isArray(member?.profiles) ? member?.profiles?.[0] : member?.profiles;
+    const name = memberNameById.get(a.member_id) ?? "Someone";
     pushEvent(a.date as string, {
       kind: "leave",
-      label: `${profile?.full_name ?? "Someone"} on ${a.status}`,
+      label: `${name} on ${a.status}`,
     });
   });
 

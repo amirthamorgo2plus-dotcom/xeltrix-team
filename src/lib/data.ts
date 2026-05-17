@@ -39,13 +39,30 @@ export const getTeamMembers = cache(async () => {
   const m = await getMyMembership();
   if (!m) return [];
   const supabase = await createClient();
-  const { data } = await supabase
+
+  const { data: members } = await supabase
     .from("team_members")
-    .select("id, role, active, user_id, profiles:profiles!team_members_user_id_fkey(full_name, avatar_url)")
+    .select("id, role, active, user_id")
     .eq("team_id", m.team_id)
     .eq("active", true)
     .order("role");
-  return data ?? [];
+
+  if (!members || members.length === 0) return [];
+
+  const userIds = members.map((mem) => mem.user_id);
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url")
+    .in("id", userIds);
+
+  const profileMap = new Map(
+    (profiles ?? []).map((p) => [p.id, { full_name: p.full_name, avatar_url: p.avatar_url }])
+  );
+
+  return members.map((mem) => ({
+    ...mem,
+    profiles: profileMap.get(mem.user_id) ?? null,
+  }));
 });
 
 export const getTeamSettings = cache(async () => {
