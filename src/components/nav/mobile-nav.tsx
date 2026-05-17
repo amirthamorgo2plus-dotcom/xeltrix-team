@@ -4,18 +4,17 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X } from "lucide-react";
-import { NAV_ITEMS } from "./nav-items";
+import { visibleNavItems } from "./nav-items";
 
-export function MobileNav() {
+export function MobileNav({ role }: { role?: string | null }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  const items = visibleNavItems(role);
 
-  // Close drawer whenever the route changes
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
 
-  // Block body scroll when drawer open
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -56,7 +55,7 @@ export function MobileNav() {
               </button>
             </div>
             <nav className="flex flex-col gap-1">
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+              {items.map(({ href, label, icon: Icon }) => (
                 <Link
                   key={href}
                   href={href}

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getMyProfile } from "@/lib/data";
+import { getMyProfile, getMyMembership } from "@/lib/data";
 import { Sidebar } from "@/components/nav/sidebar";
 import { MobileNav } from "@/components/nav/mobile-nav";
 import { NotificationBell } from "@/components/nav/notification-bell";
@@ -19,14 +19,16 @@ export default async function AppLayout({
   if (!user) redirect("/login");
 
   const profile = await getMyProfile();
+  const membership = await getMyMembership();
+  const role = membership?.role ?? null;
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
+      <Sidebar role={role} />
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-between gap-2 border-b border-zinc-200 px-4 md:px-6 dark:border-zinc-800">
           <div className="flex items-center gap-2 text-sm text-zinc-500 min-w-0">
-            <MobileNav />
+            <MobileNav role={role} />
             <Link
               href="/profile"
               className="inline-flex items-center gap-2 truncate hover:text-zinc-900 dark:hover:text-zinc-100"
