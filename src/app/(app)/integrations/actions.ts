@@ -33,12 +33,12 @@ export async function triggerSync() {
   try {
     const m = await getMyMembership();
     if (!m || (m.role !== "admin" && m.role !== "manager")) {
-      return { ok: false, error: "Only admin/manager can sync." };
+      return { ok: false as const, error: "Only admin/manager can sync." };
     }
 
     const integration = await getIntegrationForTeam(m.team_id, /* useAdmin */ true);
     if (!integration?.refresh_token) {
-      return { ok: false, error: "Zoho not connected." };
+      return { ok: false as const, error: "Zoho not connected." };
     }
 
     try {
@@ -52,7 +52,7 @@ export async function triggerSync() {
       } catch { /* ignore */ }
       revalidatePath("/integrations");
       revalidatePath("/dashboard");
-      return { ok: true, ...counts };
+      return { ok: true as const, ...counts };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "unknown_error";
       try {
@@ -62,12 +62,12 @@ export async function triggerSync() {
           .eq("id", integration.id);
       } catch { /* ignore so we still return msg */ }
       revalidatePath("/integrations");
-      return { ok: false, error: msg };
+      return { ok: false as const, error: msg };
     }
   } catch (outer) {
     // Anything before/around the inner block (env vars, admin client init, etc.)
     return {
-      ok: false,
+      ok: false as const,
       error: outer instanceof Error ? outer.message : "unknown_outer_error",
     };
   }
