@@ -35,6 +35,13 @@ async function getDefaultOwnerId(team_id: string): Promise<string | null> {
   return data?.[0]?.id ?? null;
 }
 
+// Zoho sometimes sends empty strings for missing date fields; Postgres rejects ""
+function toDateOrNull(v: string | undefined | null): string | null {
+  if (v == null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
 async function fetchAll<T>(
   integration: IntegrationRow,
   path: string,
@@ -145,7 +152,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     title: `${inv.invoice_number} · ${inv.customer_name}`,
     value: inv.total,
     stage: "won",
-    close_date: inv.date,
+    close_date: toDateOrNull(inv.date),
     probability: 100,
     owner_id: oppOwnerMap.get(inv.invoice_id) ?? defaultOwner,
   }));
@@ -187,8 +194,8 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       status: est.status,
       value: est.total,
       currency: est.currency_code ?? null,
-      date: est.date,
-      expiry_date: est.expiry_date ?? null,
+      date: toDateOrNull(est.date),
+      expiry_date: toDateOrNull(est.expiry_date),
       customer_id: est.customer_id,
       customer_name: est.customer_name,
       owner_id: quoteOwnerMap.get(est.estimate_id) ?? defaultOwner,
