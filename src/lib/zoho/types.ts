@@ -33,6 +33,8 @@ export type ZohoInvoice = {
   total: number;
   date: string;         // YYYY-MM-DD
   due_date?: string;
+  salesperson_id?: string;
+  salesperson_name?: string;
   created_time: string;
   last_modified_time: string;
 };
@@ -56,6 +58,8 @@ export type ZohoEstimate = {
   currency_code?: string;
   date: string;
   expiry_date?: string;
+  salesperson_id?: string;
+  salesperson_name?: string;
   created_time?: string;
   last_modified_time?: string;
 };

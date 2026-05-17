@@ -68,6 +68,19 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, warnings: [] };
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
+  // Map Zoho salesperson name -> Xeltrix team_members.id (configured by admin)
+  const { data: mappedMembers } = await sb
+    .from("team_members")
+    .select("id, zoho_salesperson_name")
+    .eq("team_id", integration.team_id)
+    .eq("active", true)
+    .not("zoho_salesperson_name", "is", null);
+  const salespersonToMember = new Map(
+    (mappedMembers ?? []).map((m) => [m.zoho_salesperson_name as string, m.id])
+  );
+  const resolveOwner = (salespersonName: string | undefined, fallback: string | null) =>
+    (salespersonName ? salespersonToMember.get(salespersonName) ?? null : null) ?? fallback;
+
   // ---- Contacts -> leads ----
   const contacts = await fetchAll<ZohoContact>(integration, "/contacts", "contacts", {
     contact_type: "customer",
@@ -154,7 +167,10 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     stage: "won",
     close_date: toDateOrNull(inv.date),
     probability: 100,
-    owner_id: oppOwnerMap.get(inv.invoice_id) ?? defaultOwner,
+    zoho_salesperson_id: inv.salesperson_id ?? null,
+    zoho_salesperson_name: inv.salesperson_name ?? null,
+    owner_id:
+      oppOwnerMap.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
   }));
   if (oppRows.length > 0) {
     const { error } = await sb
@@ -198,7 +214,10 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       expiry_date: toDateOrNull(est.expiry_date),
       customer_id: est.customer_id,
       customer_name: est.customer_name,
-      owner_id: quoteOwnerMap.get(est.estimate_id) ?? defaultOwner,
+      zoho_salesperson_id: est.salesperson_id ?? null,
+      zoho_salesperson_name: est.salesperson_name ?? null,
+      owner_id:
+        quoteOwnerMap.get(est.estimate_id) ?? resolveOwner(est.salesperson_name, defaultOwner),
     }));
 
     const { error } = await sb
