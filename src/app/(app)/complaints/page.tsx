@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { ExportButton } from "@/components/export-button";
 import { ComplaintForm } from "./complaint-form";
 import { ComplaintStatusSelect } from "./status-select";
 
@@ -22,9 +23,12 @@ export default async function ComplaintsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Complaints</h1>
-        <p className="text-sm text-zinc-500">{data?.length ?? 0} total</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Complaints</h1>
+          <p className="text-sm text-zinc-500">{data?.length ?? 0} total</p>
+        </div>
+        <ExportButton href="/api/export/complaints" />
       </div>
 
       <ComplaintForm />

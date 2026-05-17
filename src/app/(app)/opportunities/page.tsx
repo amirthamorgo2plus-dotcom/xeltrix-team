@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getTeamSettings } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ExportButton } from "@/components/export-button";
 import { OpportunityForm } from "./opportunity-form";
 import { StageSelect } from "./stage-select";
 
@@ -49,9 +50,12 @@ export default async function OpportunitiesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Pipeline</h1>
-        <p className="text-sm text-zinc-500">{opps?.length ?? 0} opportunities</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Pipeline</h1>
+          <p className="text-sm text-zinc-500">{opps?.length ?? 0} opportunities</p>
+        </div>
+        <ExportButton href="/api/export/opportunities" />
       </div>
 
       <OpportunityForm leads={leads ?? []} />

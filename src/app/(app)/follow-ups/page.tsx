@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { ExportButton } from "@/components/export-button";
 import { FollowUpForm } from "./follow-up-form";
 import { DoneButton } from "./done-button";
 
@@ -21,9 +22,12 @@ export default async function FollowUpsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Follow-ups</h1>
-        <p className="text-sm text-zinc-500">{open.length} pending · {done.length} done</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Follow-ups</h1>
+          <p className="text-sm text-zinc-500">{open.length} pending · {done.length} done</p>
+        </div>
+        <ExportButton href="/api/export/follow-ups" />
       </div>
 
       <FollowUpForm leads={leads ?? []} />

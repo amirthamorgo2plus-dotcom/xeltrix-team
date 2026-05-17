@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/empty-state";
+import { ExportButton } from "@/components/export-button";
 import { TaskForm } from "./task-form";
 import { TaskStatusButton } from "./status-button";
 import { AssigneeSelect } from "./assignee-select";
@@ -62,9 +63,12 @@ export default async function TasksPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Tasks</h1>
-        <p className="text-sm text-zinc-500">{tasks.length} total</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Tasks</h1>
+          <p className="text-sm text-zinc-500">{tasks.length} total</p>
+        </div>
+        <ExportButton href="/api/export/tasks" />
       </div>
 
       <TaskForm members={memberOpts} myMemberId={me?.id ?? null} />
