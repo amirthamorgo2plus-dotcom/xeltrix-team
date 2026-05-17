@@ -23,136 +23,136 @@ async function getDefaultOwnerId(team_id: string): Promise<string | null> {
   return data?.[0]?.id ?? null;
 }
 
+async function fetchAll<T>(
+  integration: IntegrationRow,
+  path: string,
+  arrayKey: string,
+  extraQuery: Record<string, string | number> = {}
+): Promise<T[]> {
+  const out: T[] = [];
+  let page = 1;
+  for (;;) {
+    const res = await zohoFetch<Record<string, T[]>>(integration, path, {
+      query: { page, per_page: 200, ...extraQuery },
+    });
+    const list = res[arrayKey] ?? [];
+    out.push(...list);
+    if (list.length < 200) break;
+    page++;
+    if (page > 50) break; // safety: stop at 10k records
+  }
+  return out;
+}
+
 export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
   const sb = adminClient();
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0 };
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
   // ---- Pull contacts (customers) -> leads ----
-  let page = 1;
-  for (;;) {
-    const res = await zohoFetch<{ contacts: ZohoContact[] }>(integration, "/contacts", {
-      query: { page, per_page: 200, contact_type: "customer" },
-    });
-    const list = res.contacts ?? [];
-    if (list.length === 0) break;
+  const contacts = await fetchAll<ZohoContact>(integration, "/contacts", "contacts", {
+    contact_type: "customer",
+  });
 
-    for (const c of list) {
-      // Check if row exists so we don't trample manual owner reassignments
-      const { data: existingLead } = await sb
-        .from("leads")
-        .select("id")
-        .eq("team_id", integration.team_id)
-        .eq("zoho_customer_id", c.contact_id)
-        .maybeSingle();
+  // Snapshot existing leads to preserve manual owner reassignments
+  const { data: existingLeads } = await sb
+    .from("leads")
+    .select("zoho_customer_id, owner_id")
+    .eq("team_id", integration.team_id)
+    .not("zoho_customer_id", "is", null);
+  const leadOwnerMap = new Map(
+    (existingLeads ?? []).map((l) => [l.zoho_customer_id as string, l.owner_id])
+  );
 
-      const leadPayload = {
-        team_id: integration.team_id,
-        zoho_customer_id: c.contact_id,
-        name: c.contact_name || c.company_name || "(no name)",
-        email: c.email ?? null,
-        phone: c.phone ?? c.mobile ?? null,
-        source: "zoho_books",
-        status: "qualified",
-        ...(existingLead ? {} : { owner_id: defaultOwner }),
-      };
+  const leadRows = contacts.map((c) => ({
+    team_id: integration.team_id,
+    zoho_customer_id: c.contact_id,
+    name: c.contact_name || c.company_name || "(no name)",
+    email: c.email ?? null,
+    phone: c.phone ?? c.mobile ?? null,
+    source: "zoho_books",
+    status: "qualified",
+    owner_id: leadOwnerMap.get(c.contact_id) ?? defaultOwner,
+  }));
 
-      const { error: leadErr } = await sb
-        .from("leads")
-        .upsert(leadPayload, { onConflict: "team_id,zoho_customer_id" });
-      if (leadErr) {
-        throw new Error(`leads upsert failed: ${leadErr.message}`);
-      }
-      counts.customers++;
-    }
-    if (list.length < 200) break;
-    page++;
+  if (leadRows.length > 0) {
+    const { error } = await sb
+      .from("leads")
+      .upsert(leadRows, { onConflict: "team_id,zoho_customer_id" });
+    if (error) throw new Error(`leads bulk upsert failed: ${error.message}`);
   }
+  counts.customers = leadRows.length;
+
+  // Map of zoho_customer_id -> lead.id for invoice linking below
+  const { data: refreshedLeads } = await sb
+    .from("leads")
+    .select("id, zoho_customer_id")
+    .eq("team_id", integration.team_id)
+    .not("zoho_customer_id", "is", null);
+  const customerToLead = new Map(
+    (refreshedLeads ?? []).map((l) => [l.zoho_customer_id as string, l.id])
+  );
 
   // ---- Pull items -> opportunity_templates ----
-  page = 1;
-  for (;;) {
-    const res = await zohoFetch<{ items: ZohoItem[] }>(integration, "/items", {
-      query: { page, per_page: 200 },
-    });
-    const list = res.items ?? [];
-    if (list.length === 0) break;
+  const items = await fetchAll<ZohoItem>(integration, "/items", "items");
 
-    for (const it of list) {
-      const { error: tplErr } = await sb.from("opportunity_templates").upsert(
-        {
-          team_id: integration.team_id,
-          zoho_item_id: it.item_id,
-          name: it.name,
-          sku: it.sku ?? null,
-          rate: it.rate ?? null,
-          unit: it.unit ?? null,
-          active: (it.status ?? "active") === "active",
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "team_id,zoho_item_id" }
-      );
-      if (tplErr) {
-        throw new Error(`opportunity_templates upsert failed: ${tplErr.message}`);
-      }
-      counts.items++;
-    }
-    if (list.length < 200) break;
-    page++;
+  const itemRows = items.map((it) => ({
+    team_id: integration.team_id,
+    zoho_item_id: it.item_id,
+    name: it.name,
+    sku: it.sku ?? null,
+    rate: it.rate ?? null,
+    unit: it.unit ?? null,
+    active: (it.status ?? "active") === "active",
+    updated_at: new Date().toISOString(),
+  }));
+
+  if (itemRows.length > 0) {
+    const { error } = await sb
+      .from("opportunity_templates")
+      .upsert(itemRows, { onConflict: "team_id,zoho_item_id" });
+    if (error) throw new Error(`opportunity_templates bulk upsert failed: ${error.message}`);
   }
+  counts.items = itemRows.length;
 
   // ---- Pull invoices -> won opportunities ----
-  page = 1;
-  for (;;) {
-    const res = await zohoFetch<{ invoices: ZohoInvoice[] }>(integration, "/invoices", {
-      query: { page, per_page: 200, sort_column: "created_time", sort_order: "D" },
-    });
-    const list = res.invoices ?? [];
-    if (list.length === 0) break;
+  const invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
+    sort_column: "created_time",
+    sort_order: "D",
+  });
 
-    for (const inv of list) {
-      // Find lead by zoho_customer_id (created by contact sync above)
-      const { data: lead } = await sb
-        .from("leads")
-        .select("id")
-        .eq("team_id", integration.team_id)
-        .eq("zoho_customer_id", inv.customer_id)
-        .maybeSingle();
+  // Snapshot existing opps to preserve manual owner reassignments
+  const { data: existingOpps } = await sb
+    .from("opportunities")
+    .select("zoho_invoice_id, owner_id")
+    .eq("team_id", integration.team_id)
+    .not("zoho_invoice_id", "is", null);
+  const oppOwnerMap = new Map(
+    (existingOpps ?? []).map((o) => [o.zoho_invoice_id as string, o.owner_id])
+  );
 
-      // Check for existing opp so we don't overwrite manual owner reassignments
-      const { data: existingOpp } = await sb
-        .from("opportunities")
-        .select("id")
-        .eq("team_id", integration.team_id)
-        .eq("zoho_invoice_id", inv.invoice_id)
-        .maybeSingle();
+  const oppRows = invoices.map((inv) => ({
+    team_id: integration.team_id,
+    lead_id: customerToLead.get(inv.customer_id) ?? null,
+    zoho_invoice_id: inv.invoice_id,
+    zoho_customer_id: inv.customer_id,
+    title: `${inv.invoice_number} · ${inv.customer_name}`,
+    value: inv.total,
+    stage: "won",
+    close_date: inv.date,
+    probability: 100,
+    owner_id: oppOwnerMap.get(inv.invoice_id) ?? defaultOwner,
+  }));
 
-      const oppPayload = {
-        team_id: integration.team_id,
-        lead_id: lead?.id ?? null,
-        zoho_invoice_id: inv.invoice_id,
-        zoho_customer_id: inv.customer_id,
-        title: `${inv.invoice_number} · ${inv.customer_name}`,
-        value: inv.total,
-        stage: "won",
-        close_date: inv.date,
-        probability: 100,
-        ...(existingOpp ? {} : { owner_id: defaultOwner }),
-      };
-
-      const { error: oppErr } = await sb
-        .from("opportunities")
-        .upsert(oppPayload, { onConflict: "team_id,zoho_invoice_id" });
-      if (oppErr) {
-        throw new Error(`opportunities upsert failed: ${oppErr.message}`);
-      }
-      counts.invoices++;
-    }
-    if (list.length < 200) break;
-    page++;
+  if (oppRows.length > 0) {
+    const { error } = await sb
+      .from("opportunities")
+      .upsert(oppRows, { onConflict: "team_id,zoho_invoice_id" });
+    if (error) throw new Error(`opportunities bulk upsert failed: ${error.message}`);
   }
+  counts.invoices = oppRows.length;
 
-  // Update integration with success timestamp
+  // Mark sync as successful
   await sb
     .from("integrations")
     .update({
@@ -177,9 +177,8 @@ export async function pushWonOpportunityToZoho(opportunityId: string) {
   if (opp.zoho_invoice_id) return; // already pushed
 
   const integration = await getIntegrationForTeam(opp.team_id, /* useAdmin */ true);
-  if (!integration?.access_token) return; // no integration; silent no-op
+  if (!integration?.access_token) return;
 
-  // Resolve the Zoho customer (use the one stored, or look up by lead)
   let zohoCustomerId = opp.zoho_customer_id ?? null;
   if (!zohoCustomerId && opp.lead_id) {
     const { data: lead } = await sb
@@ -190,7 +189,6 @@ export async function pushWonOpportunityToZoho(opportunityId: string) {
     if (lead?.zoho_customer_id) {
       zohoCustomerId = lead.zoho_customer_id;
     } else if (lead) {
-      // Create a new Zoho contact
       const created = await zohoFetch<{ contact: { contact_id: string } }>(
         integration,
         "/contacts",
@@ -205,7 +203,6 @@ export async function pushWonOpportunityToZoho(opportunityId: string) {
         }
       );
       zohoCustomerId = created.contact.contact_id;
-      // Save back on lead for next time
       await sb
         .from("leads")
         .update({ zoho_customer_id: zohoCustomerId })
