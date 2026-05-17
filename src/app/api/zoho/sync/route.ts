@@ -5,6 +5,8 @@ import { getAllZohoIntegrations, getIntegrationForTeam } from "@/lib/zoho/client
 import { syncFromZoho } from "@/lib/zoho/sync";
 import type { IntegrationRow } from "@/lib/zoho/types";
 
+export const maxDuration = 60; // sec — sync paginates Zoho, can take a while
+
 function isCronRequest(request: NextRequest) {
   const auth = request.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
