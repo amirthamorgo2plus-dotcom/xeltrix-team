@@ -1,8 +1,19 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient as createSbAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership } from "@/lib/data";
+import { getIntegrationForTeam } from "@/lib/zoho/client";
+import { syncFromZoho } from "@/lib/zoho/sync";
+
+function adminClient() {
+  return createSbAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+}
 
 export async function disconnectZoho() {
   const m = await getMyMembership();
@@ -21,24 +32,26 @@ export async function disconnectZoho() {
 export async function triggerSync() {
   const m = await getMyMembership();
   if (!m || (m.role !== "admin" && m.role !== "manager")) {
-    throw new Error("Only admin/manager can sync.");
+    return { ok: false, error: "Only admin/manager can sync." };
   }
-  // We just call our own /api/zoho/sync via a relative fetch.
-  // In server actions we don't have a request origin, so use the env-configured site URL.
-  const base =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    `https://${process.env.VERCEL_URL ?? "xeltrix-team.vercel.app"}`;
-  const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
 
-  const res = await fetch(`${base}/api/zoho/sync`, {
-    method: "POST",
-    headers: session?.access_token
-      ? { Cookie: `sb-access-token=${session.access_token}` }
-      : {},
-  });
-  const json = await res.json().catch(() => ({}));
-  revalidatePath("/integrations");
-  revalidatePath("/dashboard");
-  return json;
+  const integration = await getIntegrationForTeam(m.team_id, /* useAdmin */ true);
+  if (!integration?.refresh_token) {
+    return { ok: false, error: "Zoho not connected." };
+  }
+
+  try {
+    const counts = await syncFromZoho(integration);
+    revalidatePath("/integrations");
+    revalidatePath("/dashboard");
+    return { ok: true, ...counts };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "unknown_error";
+    await adminClient()
+      .from("integrations")
+      .update({ last_sync_error: msg })
+      .eq("id", integration.id);
+    revalidatePath("/integrations");
+    return { ok: false, error: msg };
+  }
 }
