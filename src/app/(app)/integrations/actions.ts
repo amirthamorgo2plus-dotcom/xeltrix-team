@@ -30,28 +30,45 @@ export async function disconnectZoho() {
 }
 
 export async function triggerSync() {
-  const m = await getMyMembership();
-  if (!m || (m.role !== "admin" && m.role !== "manager")) {
-    return { ok: false, error: "Only admin/manager can sync." };
-  }
-
-  const integration = await getIntegrationForTeam(m.team_id, /* useAdmin */ true);
-  if (!integration?.refresh_token) {
-    return { ok: false, error: "Zoho not connected." };
-  }
-
   try {
-    const counts = await syncFromZoho(integration);
-    revalidatePath("/integrations");
-    revalidatePath("/dashboard");
-    return { ok: true, ...counts };
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : "unknown_error";
-    await adminClient()
-      .from("integrations")
-      .update({ last_sync_error: msg })
-      .eq("id", integration.id);
-    revalidatePath("/integrations");
-    return { ok: false, error: msg };
+    const m = await getMyMembership();
+    if (!m || (m.role !== "admin" && m.role !== "manager")) {
+      return { ok: false, error: "Only admin/manager can sync." };
+    }
+
+    const integration = await getIntegrationForTeam(m.team_id, /* useAdmin */ true);
+    if (!integration?.refresh_token) {
+      return { ok: false, error: "Zoho not connected." };
+    }
+
+    try {
+      const counts = await syncFromZoho(integration);
+      // best-effort: clear any prior error
+      try {
+        await adminClient()
+          .from("integrations")
+          .update({ last_sync_error: null })
+          .eq("id", integration.id);
+      } catch { /* ignore */ }
+      revalidatePath("/integrations");
+      revalidatePath("/dashboard");
+      return { ok: true, ...counts };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "unknown_error";
+      try {
+        await adminClient()
+          .from("integrations")
+          .update({ last_sync_error: msg })
+          .eq("id", integration.id);
+      } catch { /* ignore so we still return msg */ }
+      revalidatePath("/integrations");
+      return { ok: false, error: msg };
+    }
+  } catch (outer) {
+    // Anything before/around the inner block (env vars, admin client init, etc.)
+    return {
+      ok: false,
+      error: outer instanceof Error ? outer.message : "unknown_outer_error",
+    };
   }
 }
