@@ -202,9 +202,10 @@ export default async function DashboardPage({
           href="/targets"
         />
         <KpiCard
-          label="Sales (incl. tax)"
+          label="Sales"
           value={fmtMoney(achieved, currency)}
-          hint={`Excl. tax: ${fmtMoney(achievedExcl, currency)}`}
+          secondary={{ label: "Excl. tax", value: fmtMoney(achievedExcl, currency) }}
+          hint="Incl. tax · won opps"
           href="/opportunities"
           tone="success"
         />
@@ -222,9 +223,10 @@ export default async function DashboardPage({
           href="/attendance"
         />
         <KpiCard
-          label="Pipeline (incl. tax)"
+          label="Pipeline"
           value={fmtMoney(pipelineValue, currency)}
-          hint={`Excl. tax: ${fmtMoney(pipelineValueExcl, currency)}`}
+          secondary={{ label: "Excl. tax", value: fmtMoney(pipelineValueExcl, currency) }}
+          hint="Incl. tax · open stages"
           href="/opportunities"
         />
         <KpiCard

@@ -8,12 +8,15 @@ export function KpiCard({
   hint,
   tone,
   href,
+  secondary,
 }: {
   label: string;
   value: string | number;
   hint?: string;
   tone?: "success" | "warning" | "danger" | null;
   href?: string;
+  // When provided, renders a second prominent line (e.g. with-tax vs without-tax).
+  secondary?: { label: string; value: string | number };
 }) {
   const toneClass =
     tone === "success"
@@ -34,7 +37,17 @@ export function KpiCard({
     >
       <CardHeader>
         <CardTitle>{label}</CardTitle>
-        <div className={cn("text-3xl font-semibold", toneClass)}>{value}</div>
+        <div className={cn("text-2xl font-semibold tracking-tight", toneClass)}>
+          {value}
+        </div>
+        {secondary && (
+          <div className="mt-1 flex items-baseline gap-2 text-sm">
+            <span className="text-zinc-500">{secondary.label}</span>
+            <span className="font-medium text-zinc-700 tabular-nums dark:text-zinc-300">
+              {secondary.value}
+            </span>
+          </div>
+        )}
       </CardHeader>
       {hint && (
         <CardContent>
