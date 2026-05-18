@@ -65,6 +65,45 @@ async function fetchAll<T>(
   return out;
 }
 
+// Zoho's list endpoints (/invoices, /estimates) don't include sub_total or
+// tax_total — only the detail endpoint does. This batches detail fetches
+// with a concurrency cap and returns a map of id -> {sub_total, tax_total}.
+async function fetchTaxBreakdowns(
+  integration: IntegrationRow,
+  resource: "invoices" | "estimates",
+  ids: string[],
+  concurrency = 5
+): Promise<Map<string, { sub_total: number; tax_total: number }>> {
+  const out = new Map<string, { sub_total: number; tax_total: number }>();
+  const key = resource === "invoices" ? "invoice" : "estimate";
+
+  for (let i = 0; i < ids.length; i += concurrency) {
+    const batch = ids.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const res = await zohoFetch<Record<string, { sub_total?: number; tax_total?: number }>>(
+            integration,
+            `/${resource}/${id}`
+          );
+          return { id, data: res[key] };
+        } catch {
+          return { id, data: null };
+        }
+      })
+    );
+    results.forEach(({ id, data }) => {
+      if (data) {
+        out.set(id, {
+          sub_total: Number(data.sub_total ?? 0),
+          tax_total: Number(data.tax_total ?? 0),
+        });
+      }
+    });
+  }
+  return out;
+}
+
 export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
   const sb = adminClient();
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, expenses: 0, warnings: [] };
@@ -160,12 +199,32 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   if (estimates.length > 0) {
     const { data: existingQuotes } = await sb
       .from("quotes")
-      .select("zoho_estimate_id, owner_id")
+      .select("zoho_estimate_id, owner_id, value_excl_tax")
       .eq("team_id", integration.team_id)
       .not("zoho_estimate_id", "is", null);
     const quoteOwnerMap = new Map(
       (existingQuotes ?? []).map((q) => [q.zoho_estimate_id as string, q.owner_id])
     );
+    const quotesWithTax = new Set(
+      (existingQuotes ?? [])
+        .filter((q) => q.value_excl_tax !== null)
+        .map((q) => q.zoho_estimate_id as string)
+    );
+
+    // Detail-fetch tax breakdowns for estimates we don't already have it for
+    const estIdsNeedingDetail = estimates
+      .map((e) => e.estimate_id)
+      .filter((id) => !quotesWithTax.has(id));
+    const estTaxMap = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
+    // Merge: prefer fresh tax data, fall back to whatever list response had
+    const estTaxFor = (est: ZohoEstimate) => {
+      const detail = estTaxMap.get(est.estimate_id);
+      if (detail) return detail;
+      return {
+        sub_total: est.sub_total ?? 0,
+        tax_total: est.tax_total ?? 0,
+      };
+    };
 
     const quoteRows = estimates.map((est) => ({
       team_id: integration.team_id,
@@ -174,6 +233,8 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       number: est.estimate_number,
       status: est.status,
       value: est.total,
+      value_excl_tax: estTaxFor(est).sub_total || null,
+      tax_amount: estTaxFor(est).tax_total || null,
       currency: est.currency_code ?? null,
       date: toDateOrNull(est.date),
       expiry_date: toDateOrNull(est.expiry_date),
@@ -213,20 +274,25 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
           !skipEstimateIds.has(est.estimate_id) &&
           !["declined", "expired"].includes((est.status ?? "").toLowerCase())
       )
-      .map((est) => ({
-        team_id: integration.team_id,
-        lead_id: customerToLead.get(est.customer_id) ?? null,
-        zoho_estimate_id: est.estimate_id,
-        zoho_customer_id: est.customer_id,
-        title: `${est.estimate_number} · ${est.customer_name}`,
-        value: est.total,
-        stage: "proposal",
-        close_date: toDateOrNull(est.expiry_date) || toDateOrNull(est.date),
-        probability: 50,
-        zoho_salesperson_id: est.salesperson_id ?? null,
-        zoho_salesperson_name: est.salesperson_name ?? null,
-        owner_id: resolveOwner(est.salesperson_name, defaultOwner),
-      }));
+      .map((est) => {
+        const tax = estTaxFor(est);
+        return {
+          team_id: integration.team_id,
+          lead_id: customerToLead.get(est.customer_id) ?? null,
+          zoho_estimate_id: est.estimate_id,
+          zoho_customer_id: est.customer_id,
+          title: `${est.estimate_number} · ${est.customer_name}`,
+          value: est.total,
+          value_excl_tax: tax.sub_total || null,
+          tax_amount: tax.tax_total || null,
+          stage: "proposal",
+          close_date: toDateOrNull(est.expiry_date) || toDateOrNull(est.date),
+          probability: 50,
+          zoho_salesperson_id: est.salesperson_id ?? null,
+          zoho_salesperson_name: est.salesperson_name ?? null,
+          owner_id: resolveOwner(est.salesperson_name, defaultOwner),
+        };
+      });
 
     if (proposalOppRows.length > 0) {
       const { error: oppErr } = await sb
@@ -243,7 +309,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   });
   const { data: existingOpps } = await sb
     .from("opportunities")
-    .select("id, zoho_invoice_id, zoho_estimate_id, owner_id")
+    .select("id, zoho_invoice_id, zoho_estimate_id, owner_id, value_excl_tax")
     .eq("team_id", integration.team_id);
   const oppOwnerMapByInv = new Map(
     (existingOpps ?? [])
@@ -255,6 +321,25 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       .filter((o) => o.zoho_estimate_id)
       .map((o) => [o.zoho_estimate_id as string, o.id])
   );
+  const invoicesWithTax = new Set(
+    (existingOpps ?? [])
+      .filter((o) => o.zoho_invoice_id && o.value_excl_tax !== null)
+      .map((o) => o.zoho_invoice_id as string)
+  );
+
+  // Detail-fetch tax breakdowns for invoices missing them
+  const invIdsNeedingDetail = invoices
+    .map((inv) => inv.invoice_id)
+    .filter((id) => !invoicesWithTax.has(id));
+  const invTaxMap = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
+  const invTaxFor = (inv: ZohoInvoice) => {
+    const detail = invTaxMap.get(inv.invoice_id);
+    if (detail) return detail;
+    return {
+      sub_total: inv.sub_total ?? 0,
+      tax_total: inv.tax_total ?? 0,
+    };
+  };
 
   // Pass 1: for invoices with an estimate_id, update the existing proposal opp -> won
   const linkedInvoiceIds = new Set<string>();
@@ -263,6 +348,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     const existingOppId = oppIdByEstimate.get(inv.estimate_id);
     if (!existingOppId) continue;
     linkedInvoiceIds.add(inv.invoice_id);
+    const tax = invTaxFor(inv);
     await sb
       .from("opportunities")
       .update({
@@ -270,8 +356,8 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         zoho_customer_id: inv.customer_id,
         title: `${inv.invoice_number} · ${inv.customer_name}`,
         value: inv.total,
-        value_excl_tax: inv.sub_total ?? null,
-        tax_amount: inv.tax_total ?? null,
+        value_excl_tax: tax.sub_total || null,
+        tax_amount: tax.tax_total || null,
         stage: "won",
         close_date: toDateOrNull(inv.date),
         probability: 100,
@@ -283,23 +369,26 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
 
   // Pass 2: invoices without a linked estimate -> upsert new won opp by invoice id
   const unlinkedInvoices = invoices.filter((inv) => !linkedInvoiceIds.has(inv.invoice_id));
-  const oppRows = unlinkedInvoices.map((inv) => ({
-    team_id: integration.team_id,
-    lead_id: customerToLead.get(inv.customer_id) ?? null,
-    zoho_invoice_id: inv.invoice_id,
-    zoho_customer_id: inv.customer_id,
-    title: `${inv.invoice_number} · ${inv.customer_name}`,
-    value: inv.total,
-    value_excl_tax: inv.sub_total ?? null,
-    tax_amount: inv.tax_total ?? null,
-    stage: "won",
-    close_date: toDateOrNull(inv.date),
-    probability: 100,
-    zoho_salesperson_id: inv.salesperson_id ?? null,
-    zoho_salesperson_name: inv.salesperson_name ?? null,
-    owner_id:
-      oppOwnerMapByInv.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
-  }));
+  const oppRows = unlinkedInvoices.map((inv) => {
+    const tax = invTaxFor(inv);
+    return {
+      team_id: integration.team_id,
+      lead_id: customerToLead.get(inv.customer_id) ?? null,
+      zoho_invoice_id: inv.invoice_id,
+      zoho_customer_id: inv.customer_id,
+      title: `${inv.invoice_number} · ${inv.customer_name}`,
+      value: inv.total,
+      value_excl_tax: tax.sub_total || null,
+      tax_amount: tax.tax_total || null,
+      stage: "won",
+      close_date: toDateOrNull(inv.date),
+      probability: 100,
+      zoho_salesperson_id: inv.salesperson_id ?? null,
+      zoho_salesperson_name: inv.salesperson_name ?? null,
+      owner_id:
+        oppOwnerMapByInv.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
+    };
+  });
   if (oppRows.length > 0) {
     const { error } = await sb
       .from("opportunities")
