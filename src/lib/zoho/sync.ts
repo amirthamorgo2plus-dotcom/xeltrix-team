@@ -143,44 +143,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   }
   counts.items = itemRows.length;
 
-  // ---- Invoices -> won opportunities ----
-  const invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
-    sort_column: "created_time",
-    sort_order: "D",
-  });
-  const { data: existingOpps } = await sb
-    .from("opportunities")
-    .select("zoho_invoice_id, owner_id")
-    .eq("team_id", integration.team_id)
-    .not("zoho_invoice_id", "is", null);
-  const oppOwnerMap = new Map(
-    (existingOpps ?? []).map((o) => [o.zoho_invoice_id as string, o.owner_id])
-  );
-
-  const oppRows = invoices.map((inv) => ({
-    team_id: integration.team_id,
-    lead_id: customerToLead.get(inv.customer_id) ?? null,
-    zoho_invoice_id: inv.invoice_id,
-    zoho_customer_id: inv.customer_id,
-    title: `${inv.invoice_number} · ${inv.customer_name}`,
-    value: inv.total,
-    stage: "won",
-    close_date: toDateOrNull(inv.date),
-    probability: 100,
-    zoho_salesperson_id: inv.salesperson_id ?? null,
-    zoho_salesperson_name: inv.salesperson_name ?? null,
-    owner_id:
-      oppOwnerMap.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
-  }));
-  if (oppRows.length > 0) {
-    const { error } = await sb
-      .from("opportunities")
-      .upsert(oppRows, { onConflict: "team_id,zoho_invoice_id" });
-    if (error) throw new Error(`opportunities bulk upsert failed: ${error.message}`);
-  }
-  counts.invoices = oppRows.length;
-
-  // ---- Estimates -> quotes ----
+  // ---- Estimates -> quotes + proposal-stage opportunities ----
   let estimates: ZohoEstimate[] = [];
   try {
     estimates = await fetchAll<ZohoEstimate>(integration, "/estimates", "estimates", {
@@ -225,7 +188,119 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       .upsert(quoteRows, { onConflict: "team_id,zoho_estimate_id" });
     if (error) throw new Error(`quotes bulk upsert failed: ${error.message}`);
     counts.quotes = quoteRows.length;
+
+    // For estimates that aren't declined/expired, create a proposal-stage opp
+    // (but never overwrite a won/lost opp already there)
+    const { data: existingOppsForEsts } = await sb
+      .from("opportunities")
+      .select("zoho_estimate_id, stage")
+      .eq("team_id", integration.team_id)
+      .in(
+        "zoho_estimate_id",
+        estimates.map((e) => e.estimate_id)
+      );
+    const skipEstimateIds = new Set(
+      (existingOppsForEsts ?? [])
+        .filter((o) => o.stage === "won" || o.stage === "lost")
+        .map((o) => o.zoho_estimate_id as string)
+    );
+
+    const proposalOppRows = estimates
+      .filter(
+        (est) =>
+          !skipEstimateIds.has(est.estimate_id) &&
+          !["declined", "expired"].includes((est.status ?? "").toLowerCase())
+      )
+      .map((est) => ({
+        team_id: integration.team_id,
+        lead_id: customerToLead.get(est.customer_id) ?? null,
+        zoho_estimate_id: est.estimate_id,
+        zoho_customer_id: est.customer_id,
+        title: `${est.estimate_number} · ${est.customer_name}`,
+        value: est.total,
+        stage: "proposal",
+        close_date: toDateOrNull(est.expiry_date) || toDateOrNull(est.date),
+        probability: 50,
+        zoho_salesperson_id: est.salesperson_id ?? null,
+        zoho_salesperson_name: est.salesperson_name ?? null,
+        owner_id: resolveOwner(est.salesperson_name, defaultOwner),
+      }));
+
+    if (proposalOppRows.length > 0) {
+      const { error: oppErr } = await sb
+        .from("opportunities")
+        .upsert(proposalOppRows, { onConflict: "team_id,zoho_estimate_id" });
+      if (oppErr) throw new Error(`proposal opps upsert failed: ${oppErr.message}`);
+    }
   }
+
+  // ---- Invoices -> won opportunities (linked to proposal opp if estimate matches) ----
+  const invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
+    sort_column: "created_time",
+    sort_order: "D",
+  });
+  const { data: existingOpps } = await sb
+    .from("opportunities")
+    .select("id, zoho_invoice_id, zoho_estimate_id, owner_id")
+    .eq("team_id", integration.team_id);
+  const oppOwnerMapByInv = new Map(
+    (existingOpps ?? [])
+      .filter((o) => o.zoho_invoice_id)
+      .map((o) => [o.zoho_invoice_id as string, o.owner_id])
+  );
+  const oppIdByEstimate = new Map(
+    (existingOpps ?? [])
+      .filter((o) => o.zoho_estimate_id)
+      .map((o) => [o.zoho_estimate_id as string, o.id])
+  );
+
+  // Pass 1: for invoices with an estimate_id, update the existing proposal opp -> won
+  const linkedInvoiceIds = new Set<string>();
+  for (const inv of invoices) {
+    if (!inv.estimate_id) continue;
+    const existingOppId = oppIdByEstimate.get(inv.estimate_id);
+    if (!existingOppId) continue;
+    linkedInvoiceIds.add(inv.invoice_id);
+    await sb
+      .from("opportunities")
+      .update({
+        zoho_invoice_id: inv.invoice_id,
+        zoho_customer_id: inv.customer_id,
+        title: `${inv.invoice_number} · ${inv.customer_name}`,
+        value: inv.total,
+        stage: "won",
+        close_date: toDateOrNull(inv.date),
+        probability: 100,
+        zoho_salesperson_id: inv.salesperson_id ?? null,
+        zoho_salesperson_name: inv.salesperson_name ?? null,
+      })
+      .eq("id", existingOppId);
+  }
+
+  // Pass 2: invoices without a linked estimate -> upsert new won opp by invoice id
+  const unlinkedInvoices = invoices.filter((inv) => !linkedInvoiceIds.has(inv.invoice_id));
+  const oppRows = unlinkedInvoices.map((inv) => ({
+    team_id: integration.team_id,
+    lead_id: customerToLead.get(inv.customer_id) ?? null,
+    zoho_invoice_id: inv.invoice_id,
+    zoho_customer_id: inv.customer_id,
+    title: `${inv.invoice_number} · ${inv.customer_name}`,
+    value: inv.total,
+    stage: "won",
+    close_date: toDateOrNull(inv.date),
+    probability: 100,
+    zoho_salesperson_id: inv.salesperson_id ?? null,
+    zoho_salesperson_name: inv.salesperson_name ?? null,
+    owner_id:
+      oppOwnerMapByInv.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
+  }));
+  if (oppRows.length > 0) {
+    const { error } = await sb
+      .from("opportunities")
+      .upsert(oppRows, { onConflict: "team_id,zoho_invoice_id" });
+    if (error) throw new Error(`opportunities bulk upsert failed: ${error.message}`);
+  }
+  counts.invoices = invoices.length;
 
   await sb
     .from("integrations")

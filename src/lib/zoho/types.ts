@@ -35,6 +35,7 @@ export type ZohoInvoice = {
   due_date?: string;
   salesperson_id?: string;
   salesperson_name?: string;
+  estimate_id?: string;  // if invoice was created from an estimate
   created_time: string;
   last_modified_time: string;
 };

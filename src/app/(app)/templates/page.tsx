@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamSettings } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,13 +15,17 @@ function fmtMoney(v: number | null, currency = "INR") {
   }).format(v);
 }
 
+type StatusFilter = "all" | "active" | "inactive";
+
 export default async function TemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; status?: StatusFilter }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
+  const status: StatusFilter =
+    sp.status === "active" || sp.status === "inactive" ? sp.status : "all";
 
   const settings = await getTeamSettings();
   const currency = settings?.currency || "INR";
@@ -34,8 +39,31 @@ export default async function TemplatesPage({
   if (q) {
     query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
   }
+  if (status === "active") query = query.eq("active", true);
+  if (status === "inactive") query = query.eq("active", false);
 
   const { data: templates } = await query.limit(500);
+
+  function chip(value: StatusFilter, label: string) {
+    const isActive = status === value;
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (value !== "all") params.set("status", value);
+    const href = `/templates${params.size ? `?${params}` : ""}`;
+    return (
+      <Link
+        key={value}
+        href={href}
+        className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+          isActive
+            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900"
+        }`}
+      >
+        {label}
+      </Link>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,7 +81,10 @@ export default async function TemplatesPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <form className="mb-4 flex gap-2" action="/templates">
+          <form className="mb-3 flex gap-2" action="/templates">
+            {status !== "all" && (
+              <input type="hidden" name="status" value={status} />
+            )}
             <Input
               name="q"
               defaultValue={q}
@@ -66,7 +97,7 @@ export default async function TemplatesPage({
             >
               Search
             </button>
-            {q && (
+            {(q || status !== "all") && (
               <a
                 href="/templates"
                 className="inline-flex h-10 items-center rounded-md border border-zinc-300 px-4 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
@@ -76,10 +107,16 @@ export default async function TemplatesPage({
             )}
           </form>
 
+          <div className="mb-4 flex flex-wrap gap-2">
+            {chip("all", "All")}
+            {chip("active", "Active only")}
+            {chip("inactive", "Inactive only")}
+          </div>
+
           {!templates || templates.length === 0 ? (
             <EmptyState
               title={q ? `No templates matching "${q}"` : "No templates yet"}
-              hint={q ? "Try a different search." : "Connect Zoho Books and sync to populate."}
+              hint={q ? "Try a different search or filter." : "Connect Zoho Books and sync to populate."}
             />
           ) : (
             <div className="overflow-x-auto">

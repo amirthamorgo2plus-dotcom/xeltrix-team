@@ -7,7 +7,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
 import { TaskForm } from "./task-form";
-import { TaskStatusButton } from "./status-button";
+import { TaskStatusSelect } from "./status-select";
 import { AssigneeSelect } from "./assignee-select";
 
 const priorityTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
@@ -89,7 +89,9 @@ export default async function TasksPage() {
                   const owner = t.owner_id ? memberById.get(t.owner_id) : null;
                   return (
                     <li key={t.id} className="flex items-start gap-3 py-3">
-                      <TaskStatusButton id={t.id} status={t.status} />
+                      <div className="mt-0.5">
+                        <TaskStatusSelect id={t.id} status={t.status} />
+                      </div>
                       <div className="flex-1">
                         <div className={t.status === "done" ? "line-through text-zinc-500" : ""}>
                           {t.title}

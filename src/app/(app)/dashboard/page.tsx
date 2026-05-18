@@ -180,18 +180,45 @@ export default async function DashboardPage({
           value={pct === null ? "—" : `${pct}%`}
           hint={pct === null ? "Set targets to track" : "Achieved / Target"}
           tone={pct === null ? null : pct >= 100 ? "success" : pct >= 50 ? "warning" : "danger"}
+          href="/targets"
         />
-        <KpiCard label="Sales Achieved" value={fmtMoney(achieved, currency)} hint="Sum of won opps" />
-        <KpiCard label="Target" value={fmtMoney(target, currency)} hint="Monthly goal" />
+        <KpiCard
+          label="Sales Achieved"
+          value={fmtMoney(achieved, currency)}
+          hint="Sum of won opps"
+          href="/opportunities"
+        />
+        <KpiCard label="Target" value={fmtMoney(target, currency)} hint="Monthly goal" href="/targets" />
         <KpiCard
           label="Attendance %"
           value={attendancePct === null ? "—" : `${attendancePct}%`}
           hint={`${workedDays.toFixed(1)} / ${totalWorkingDays} working days`}
+          href="/attendance"
         />
-        <KpiCard label="Comp-off Balance" value={`${compOffSum.toFixed(1)} d`} hint="Total credit days" />
-        <KpiCard label="Pipeline Value" value={fmtMoney(pipelineValue, currency)} hint="Open stages" />
-        <KpiCard label="Open Tasks" value={String(openTasks?.length ?? 0)} hint="todo + in_progress" />
-        <KpiCard label="Open Complaints" value={String(openComplaints?.length ?? 0)} hint="Unresolved" />
+        <KpiCard
+          label="Comp-off Balance"
+          value={`${compOffSum.toFixed(1)} d`}
+          hint="Total credit days"
+          href="/attendance"
+        />
+        <KpiCard
+          label="Pipeline Value"
+          value={fmtMoney(pipelineValue, currency)}
+          hint="Open stages"
+          href="/opportunities"
+        />
+        <KpiCard
+          label="Open Tasks"
+          value={String(openTasks?.length ?? 0)}
+          hint="todo + in_progress"
+          href="/tasks"
+        />
+        <KpiCard
+          label="Open Complaints"
+          value={String(openComplaints?.length ?? 0)}
+          hint="Unresolved"
+          href="/complaints"
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
