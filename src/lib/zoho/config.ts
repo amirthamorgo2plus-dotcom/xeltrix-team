@@ -11,6 +11,7 @@ export const ZOHO_SCOPES = [
   "ZohoBooks.contacts.READ",
   "ZohoBooks.contacts.CREATE",
   "ZohoBooks.items.READ",
+  "ZohoBooks.expenses.READ",
   "ZohoBooks.settings.READ",
 ].join(",");
 

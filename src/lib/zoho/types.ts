@@ -65,6 +65,25 @@ export type ZohoEstimate = {
   last_modified_time?: string;
 };
 
+export type ZohoExpense = {
+  expense_id: string;
+  date: string;
+  account_id?: string;
+  account_name?: string;
+  paid_through_account_id?: string;
+  paid_through_account_name?: string;
+  vendor_id?: string;
+  vendor_name?: string;
+  customer_id?: string;
+  customer_name?: string;
+  total: number;
+  currency_code?: string;
+  reference_number?: string;
+  description?: string;
+  status?: string;
+  location?: string;
+};
+
 export type IntegrationRow = {
   id: string;
   team_id: string;

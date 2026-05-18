@@ -5,6 +5,7 @@ import type {
   IntegrationRow,
   ZohoContact,
   ZohoEstimate,
+  ZohoExpense,
   ZohoInvoice,
   ZohoItem,
 } from "./types";
@@ -20,6 +21,7 @@ type SyncCounts = {
   invoices: number;
   items: number;
   quotes: number;
+  expenses: number;
   warnings: string[];
 };
 
@@ -65,7 +67,7 @@ async function fetchAll<T>(
 
 export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
   const sb = adminClient();
-  const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, warnings: [] };
+  const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, expenses: 0, warnings: [] };
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
   // Map Zoho salesperson name -> Xeltrix team_members.id (configured by admin)
@@ -301,6 +303,43 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     if (error) throw new Error(`opportunities bulk upsert failed: ${error.message}`);
   }
   counts.invoices = invoices.length;
+
+  // ---- Expenses (Zoho Books → zoho_expenses) ----
+  try {
+    const expenses = await fetchAll<ZohoExpense>(integration, "/expenses", "expenses", {
+      sort_column: "date",
+      sort_order: "D",
+    });
+    if (expenses.length > 0) {
+      const expenseRows = expenses.map((e) => ({
+        team_id: integration.team_id,
+        zoho_expense_id: e.expense_id,
+        date: toDateOrNull(e.date),
+        account_id: e.account_id ?? null,
+        account_name: e.account_name ?? null,
+        paid_through_account_id: e.paid_through_account_id ?? null,
+        paid_through_account_name: e.paid_through_account_name ?? null,
+        vendor_id: e.vendor_id ?? null,
+        vendor_name: e.vendor_name ?? null,
+        customer_id: e.customer_id ?? null,
+        customer_name: e.customer_name ?? null,
+        amount: e.total ?? 0,
+        currency_code: e.currency_code ?? null,
+        reference_number: e.reference_number ?? null,
+        description: e.description ?? null,
+        status: e.status ?? null,
+        location: e.location ?? null,
+      }));
+      const { error: expErr } = await sb
+        .from("zoho_expenses")
+        .upsert(expenseRows, { onConflict: "team_id,zoho_expense_id" });
+      if (expErr) throw new Error(`expenses upsert failed: ${expErr.message}`);
+      counts.expenses = expenseRows.length;
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    counts.warnings.push(`Expenses skipped: ${msg}`);
+  }
 
   await sb
     .from("integrations")
