@@ -44,14 +44,21 @@ async function ensureFreshAccessToken(integration: IntegrationRow): Promise<stri
   const tokens = await refreshAccessToken(integration.refresh_token);
   const newExpires = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
+  // Persist new access_token AND new refresh_token (Zoho occasionally rotates).
+  // Mutate the in-memory integration too so callers downstream see the new value.
   const sb = adminClient();
-  await sb
-    .from("integrations")
-    .update({
-      access_token: tokens.access_token,
-      expires_at: newExpires,
-    })
-    .eq("id", integration.id);
+  const update: { access_token: string; expires_at: string; refresh_token?: string } = {
+    access_token: tokens.access_token,
+    expires_at: newExpires,
+  };
+  if (tokens.refresh_token && tokens.refresh_token !== integration.refresh_token) {
+    update.refresh_token = tokens.refresh_token;
+    integration.refresh_token = tokens.refresh_token;
+  }
+  integration.access_token = tokens.access_token;
+  integration.expires_at = newExpires;
+
+  await sb.from("integrations").update(update).eq("id", integration.id);
 
   return tokens.access_token;
 }
