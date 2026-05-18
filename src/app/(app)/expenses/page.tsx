@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, endOfMonth, startOfMonth, addMonths } from "date-fns";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
 import { AdvanceMappingForm } from "./mapping-form";
 import { SubmissionForm } from "./submission-form";
+import { BulkSubmissionForm } from "./bulk-form";
 import { SubmissionRow, type Submission, type ZohoMatch } from "./submission-row";
 
 const ADVANCE_PATTERN = /^Employee Advance[-\s](.+)$/i;
@@ -35,15 +37,37 @@ function daysBetween(a: string, b: string) {
   );
 }
 
+function ymOf(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function shiftYm(ym: string, delta: number) {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return ymOf(d);
+}
+
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; account?: string; tab?: string }>;
+  searchParams: Promise<{ q?: string; account?: string; tab?: string; month?: string }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const accountFilter = (sp.account ?? "").trim();
-  const tab = sp.tab === "submissions" || sp.tab === "expenses" ? sp.tab : "expenses";
+  const tab = sp.tab === "submissions" ? "submissions" : "expenses";
+
+  // month=ym (e.g. "2026-05"), "all", or empty -> default to current month
+  const today = new Date();
+  const monthFilter = sp.month === "all" ? null : sp.month ?? ymOf(today);
+  const monthRange = monthFilter
+    ? {
+        ym: monthFilter,
+        start: format(startOfMonth(new Date(`${monthFilter}-01`)), "yyyy-MM-dd"),
+        end: format(endOfMonth(new Date(`${monthFilter}-01`)), "yyyy-MM-dd"),
+        label: format(new Date(`${monthFilter}-01`), "MMMM yyyy"),
+      }
+    : null;
 
   const me = await getMyMembership();
   const canManage = isAdminOrManager(me?.role);
@@ -54,11 +78,14 @@ export default async function ExpensesPage({
   const supabase = await createClient();
 
   // ---------- Submissions ----------
-  const { data: subsRaw } = await supabase
+  let subsQuery = supabase
     .from("expense_submissions")
     .select("id, member_id, date, description, amount, category, status, notes, reject_reason, zoho_expense_id")
-    .order("date", { ascending: false })
-    .limit(500);
+    .order("date", { ascending: false });
+  if (monthRange) {
+    subsQuery = subsQuery.gte("date", monthRange.start).lte("date", monthRange.end);
+  }
+  const { data: subsRaw } = await subsQuery.limit(500);
 
   const memberNameMap = new Map(
     members.map((mm) => {
@@ -85,7 +112,7 @@ export default async function ExpensesPage({
   const verifiedSubs = submissions.filter((s) => s.status === "verified");
   const rejectedSubs = submissions.filter((s) => s.status === "rejected");
 
-  // ---------- Zoho expenses ----------
+  // ---------- Zoho expenses (filtered for the listing) ----------
   let query = supabase
     .from("zoho_expenses")
     .select(
@@ -103,48 +130,74 @@ export default async function ExpensesPage({
       `account_name.eq.${accountFilter},paid_through_account_name.eq.${accountFilter}`
     );
   }
+  if (monthRange) {
+    query = query.gte("date", monthRange.start).lte("date", monthRange.end);
+  }
   const { data: expenses } = await query.limit(500);
 
-  // All rows for advance aggregation + matching pool
-  const { data: allRows } = await supabase
+  // All rows up to end-of-month (for KPIs and cumulative outstanding)
+  let aggQuery = supabase
     .from("zoho_expenses")
-    .select(
-      "id, zoho_expense_id, account_name, paid_through_account_name, amount, date, vendor_name"
-    );
+    .select("id, zoho_expense_id, account_name, paid_through_account_name, amount, date, vendor_name");
+  if (monthRange) {
+    aggQuery = aggQuery.lte("date", monthRange.end);
+  }
+  const { data: rowsUpToEnd } = await aggQuery;
+
+  // Rows strictly within the month (for monthly KPI bucket)
+  const inMonth = (r: { date: string | null }) => {
+    if (!monthRange) return true;
+    return r.date != null && r.date >= monthRange.start && r.date <= monthRange.end;
+  };
 
   // ---------- Advance reconciliation ----------
   type AdvanceAggregate = {
     accountName: string;
-    given: number;
-    spent: number;
+    monthGiven: number;
+    monthSpent: number;
+    runningGiven: number;
+    runningSpent: number;
     lastActivity: string | null;
     txCount: number;
   };
   const agg = new Map<string, AdvanceAggregate>();
-  (allRows ?? []).forEach((r) => {
+  (rowsUpToEnd ?? []).forEach((r) => {
     const amt = Number(r.amount ?? 0);
     const date = r.date as string | null;
     const ensure = (acct: string) => {
       const e =
         agg.get(acct) ??
-        { accountName: acct, given: 0, spent: 0, lastActivity: null, txCount: 0 };
+        {
+          accountName: acct,
+          monthGiven: 0,
+          monthSpent: 0,
+          runningGiven: 0,
+          runningSpent: 0,
+          lastActivity: null,
+          txCount: 0,
+        };
       if (date && (!e.lastActivity || date > e.lastActivity)) e.lastActivity = date;
       e.txCount += 1;
       agg.set(acct, e);
       return e;
     };
     if (r.account_name && ADVANCE_PATTERN.test(r.account_name as string)) {
-      ensure(r.account_name as string).given += amt;
+      const e = ensure(r.account_name as string);
+      e.runningGiven += amt;
+      if (inMonth(r)) e.monthGiven += amt;
     }
     if (
       r.paid_through_account_name &&
       ADVANCE_PATTERN.test(r.paid_through_account_name as string)
     ) {
-      ensure(r.paid_through_account_name as string).spent += amt;
+      const e = ensure(r.paid_through_account_name as string);
+      e.runningSpent += amt;
+      if (inMonth(r)) e.monthSpent += amt;
     }
   });
   const advanceRows = Array.from(agg.values()).sort(
-    (a, b) => b.given - b.spent - (a.given - a.spent)
+    (a, b) =>
+      b.runningGiven - b.runningSpent - (a.runningGiven - a.runningSpent)
   );
 
   const memberOpts = members.map((mem) => {
@@ -172,14 +225,13 @@ export default async function ExpensesPage({
     return memberOpts.find((mo) => fuzzyMatch(stripped, mo.name)) ?? null;
   }
 
-  // ---------- Build candidate Zoho matches per pending submission ----------
   function candidatesFor(s: Submission): ZohoMatch[] {
     const advAcct = memberToAccount.get(
       members.find((mm) => memberNameMap.get(mm.id) === s.memberName)?.id ?? ""
     );
     if (!advAcct) return [];
     const matches: ZohoMatch[] = [];
-    (allRows ?? []).forEach((r) => {
+    (rowsUpToEnd ?? []).forEach((r) => {
       if (r.paid_through_account_name !== advAcct) return;
       if (!r.date) return;
       const dd = daysBetween(s.date, r.date as string);
@@ -192,7 +244,6 @@ export default async function ExpensesPage({
         vendor: (r.vendor_name as string) ?? null,
       });
     });
-    // Sort: exact-amount first, then closest date
     return matches.sort((a, b) => {
       const aMatch = Math.abs(a.amount - s.amount) < 0.5 ? 0 : 1;
       const bMatch = Math.abs(b.amount - s.amount) < 0.5 ? 0 : 1;
@@ -201,11 +252,30 @@ export default async function ExpensesPage({
     });
   }
 
-  // ---------- KPI totals ----------
-  const totalGiven = advanceRows.reduce((s, r) => s + r.given, 0);
-  const totalSpent = advanceRows.reduce((s, r) => s + r.spent, 0);
-  const totalOutstanding = totalGiven - totalSpent;
-  const totalExpenses = (allRows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  // ---------- KPIs ----------
+  const totalExpensesMonth = (rowsUpToEnd ?? [])
+    .filter(inMonth)
+    .reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const monthGiven = advanceRows.reduce((s, r) => s + r.monthGiven, 0);
+  const monthSpent = advanceRows.reduce((s, r) => s + r.monthSpent, 0);
+  const runningOutstanding = advanceRows.reduce(
+    (s, r) => s + (r.runningGiven - r.runningSpent),
+    0
+  );
+
+  // Month nav links keep current tab/search context
+  const baseParams = new URLSearchParams();
+  if (q) baseParams.set("q", q);
+  if (accountFilter) baseParams.set("account", accountFilter);
+  if (tab !== "expenses") baseParams.set("tab", tab);
+  function monthUrl(ym: string | "all") {
+    const p = new URLSearchParams(baseParams);
+    if (ym === "all") p.set("month", "all");
+    else p.set("month", ym);
+    return `/expenses?${p}`;
+  }
+  const prevYm = monthFilter ? shiftYm(monthFilter, -1) : ymOf(addMonths(today, -1));
+  const nextYm = monthFilter ? shiftYm(monthFilter, 1) : ymOf(addMonths(today, 1));
 
   return (
     <div className="flex flex-col gap-6">
@@ -213,41 +283,81 @@ export default async function ExpensesPage({
         <div>
           <h1 className="text-2xl font-semibold">Expenses</h1>
           <p className="text-sm text-zinc-500">
-            Zoho-synced expenses · employee submissions · advance reconciliation.
+            Zoho-synced expenses · employee submissions · advance reconciliation
+            {monthRange ? ` · ${monthRange.label}` : " · all time"}.
           </p>
         </div>
         <ExportButton href="/api/export/expenses" />
       </div>
 
+      {/* Month picker */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-950">
+          <Link
+            href={monthUrl(prevYm)}
+            aria-label="Previous month"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Link>
+          <span className="min-w-[140px] px-2 text-center text-sm font-medium tabular-nums">
+            {monthRange ? monthRange.label : "All time"}
+          </span>
+          <Link
+            href={monthUrl(nextYm)}
+            aria-label="Next month"
+            className="inline-flex h-8 w-8 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Link>
+        </div>
+        <Link
+          href={monthUrl(ymOf(today))}
+          className="rounded-md border border-zinc-200 bg-white px-3 py-1.5 text-xs hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-800"
+        >
+          This month
+        </Link>
+        <Link
+          href={monthUrl("all")}
+          className={`rounded-md border px-3 py-1.5 text-xs ${
+            !monthFilter
+              ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-zinc-200 bg-white hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:bg-zinc-800"
+          }`}
+        >
+          All time
+        </Link>
+      </div>
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Total expenses"
-          value={fmtMoney(totalExpenses, currency)}
-          hint="All-time, all accounts"
+          value={fmtMoney(totalExpensesMonth, currency)}
+          hint={monthRange ? monthRange.label : "All-time"}
         />
         <KpiCard
           label="Advances given"
-          value={fmtMoney(totalGiven, currency)}
-          hint="To all employees"
+          value={fmtMoney(monthGiven, currency)}
+          hint={monthRange ? "This month" : "All-time"}
         />
         <KpiCard
           label="Advances spent"
-          value={fmtMoney(totalSpent, currency)}
+          value={fmtMoney(monthSpent, currency)}
           tone="success"
-          hint="Cleared by expenses"
+          hint={monthRange ? "Cleared this month" : "Cleared all-time"}
         />
         <KpiCard
           label="Outstanding"
-          value={fmtMoney(totalOutstanding, currency)}
-          tone={totalOutstanding > 0 ? "warning" : "success"}
-          hint="Pending settlement"
+          value={fmtMoney(runningOutstanding, currency)}
+          tone={runningOutstanding > 0 ? "warning" : "success"}
+          hint={monthRange ? `As of ${monthRange.label}` : "Current balance"}
         />
       </div>
 
       {/* Tabs */}
       <div className="inline-flex rounded-md border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-950">
         <Link
-          href="/expenses?tab=expenses"
+          href={monthUrl(monthFilter ?? "all").replace("tab=submissions", "tab=expenses")}
           className={`rounded px-3 py-1 text-sm transition-colors ${
             tab === "expenses"
               ? "bg-emerald-500/15 font-medium text-emerald-700 dark:text-emerald-300"
@@ -257,7 +367,13 @@ export default async function ExpensesPage({
           Zoho expenses
         </Link>
         <Link
-          href="/expenses?tab=submissions"
+          href={(() => {
+            const p = new URLSearchParams(baseParams);
+            p.set("tab", "submissions");
+            if (monthFilter) p.set("month", monthFilter);
+            else p.set("month", "all");
+            return `/expenses?${p}`;
+          })()}
           className={`rounded px-3 py-1 text-sm transition-colors ${
             tab === "submissions"
               ? "bg-emerald-500/15 font-medium text-emerald-700 dark:text-emerald-300"
@@ -276,6 +392,7 @@ export default async function ExpensesPage({
       {tab === "submissions" ? (
         <>
           <SubmissionForm />
+          <BulkSubmissionForm />
 
           <Card>
             <CardHeader>
@@ -290,7 +407,14 @@ export default async function ExpensesPage({
             </CardHeader>
             <CardContent>
               {pendingSubs.length === 0 ? (
-                <EmptyState title="No pending submissions" />
+                <EmptyState
+                  title="No pending submissions"
+                  hint={
+                    monthRange
+                      ? `for ${monthRange.label}. Try All time.`
+                      : undefined
+                  }
+                />
               ) : (
                 <ul>
                   {pendingSubs.map((s) => (
@@ -363,8 +487,12 @@ export default async function ExpensesPage({
                   <thead className="text-left text-xs uppercase text-zinc-500">
                     <tr>
                       <th className="pb-2 pr-4">Account</th>
-                      <th className="pb-2 pr-4 text-right">Given</th>
-                      <th className="pb-2 pr-4 text-right">Spent</th>
+                      <th className="pb-2 pr-4 text-right">
+                        Given {monthRange ? "(month)" : ""}
+                      </th>
+                      <th className="pb-2 pr-4 text-right">
+                        Spent {monthRange ? "(month)" : ""}
+                      </th>
                       <th className="pb-2 pr-4 text-right">Outstanding</th>
                       <th className="pb-2 pr-4">Tx</th>
                       <th className="pb-2 pr-4">Last</th>
@@ -374,17 +502,19 @@ export default async function ExpensesPage({
                   </thead>
                   <tbody>
                     {advanceRows.map((r) => {
-                      const outstanding = r.given - r.spent;
+                      const outstanding = r.runningGiven - r.runningSpent;
+                      const given = monthRange ? r.monthGiven : r.runningGiven;
+                      const spent = monthRange ? r.monthSpent : r.runningSpent;
                       const mapped = accountToMember.get(r.accountName) ?? null;
                       const suggested = !mapped ? autoSuggest(r.accountName) : null;
                       return (
                         <tr key={r.accountName} className="border-t border-zinc-200 dark:border-zinc-800">
                           <td className="py-2 pr-4 font-medium">{r.accountName}</td>
                           <td className="py-2 pr-4 text-right tabular-nums">
-                            {fmtMoney(r.given, currency)}
+                            {fmtMoney(given, currency)}
                           </td>
                           <td className="py-2 pr-4 text-right tabular-nums">
-                            {fmtMoney(r.spent, currency)}
+                            {fmtMoney(spent, currency)}
                           </td>
                           <td
                             className={`py-2 pr-4 text-right tabular-nums font-medium ${
@@ -435,12 +565,19 @@ export default async function ExpensesPage({
           <Card>
             <CardHeader>
               <CardTitle>
-                Expenses ({expenses?.length ?? 0}{q || accountFilter ? " filtered" : ""})
+                Expenses ({expenses?.length ?? 0}
+                {q || accountFilter ? " filtered" : ""}
+                {monthRange ? ` · ${monthRange.label}` : ""})
               </CardTitle>
             </CardHeader>
             <CardContent>
               <form className="mb-4 flex flex-wrap gap-2" action="/expenses">
                 <input type="hidden" name="tab" value="expenses" />
+                {monthFilter ? (
+                  <input type="hidden" name="month" value={monthFilter} />
+                ) : (
+                  <input type="hidden" name="month" value="all" />
+                )}
                 <input
                   name="q"
                   defaultValue={q}
@@ -458,7 +595,7 @@ export default async function ExpensesPage({
                 </button>
                 {(q || accountFilter) && (
                   <Link
-                    href="/expenses"
+                    href={monthUrl(monthFilter ?? "all")}
                     className="inline-flex h-10 items-center rounded-md border border-zinc-300 px-4 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
                   >
                     Clear
@@ -473,11 +610,19 @@ export default async function ExpensesPage({
 
               {!expenses || expenses.length === 0 ? (
                 <EmptyState
-                  title={q || accountFilter ? "No matching expenses" : "No expenses synced yet"}
+                  title={
+                    q || accountFilter
+                      ? "No matching expenses"
+                      : monthRange
+                        ? `No expenses in ${monthRange.label}`
+                        : "No expenses synced yet"
+                  }
                   hint={
                     q || accountFilter
                       ? "Try a different search."
-                      : "Disconnect & reconnect Zoho in /integrations to grant the expenses scope, then click Sync now."
+                      : monthRange
+                        ? "Try a different month, or All time."
+                        : "Disconnect & reconnect Zoho in /integrations to grant the expenses scope, then click Sync now."
                   }
                 />
               ) : (

@@ -31,6 +31,36 @@ export async function setEmployeeAdvanceMapping(
   revalidatePath("/expenses");
 }
 
+export async function submitBulkExpenses(
+  entries: { date: string; description: string; amount: number; category?: string | null }[]
+) {
+  const m = await getMyMembership();
+  if (!m) throw new Error("Not in a team.");
+
+  const clean = entries
+    .filter((e) => e.date && e.description && e.amount > 0)
+    .map((e) => ({
+      team_id: m.team_id,
+      member_id: m.id,
+      date: e.date,
+      description: e.description.slice(0, 200),
+      amount: e.amount,
+      category: e.category || null,
+      status: "pending",
+    }));
+
+  if (clean.length === 0) {
+    throw new Error("No valid rows to submit.");
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("expense_submissions").insert(clean);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/expenses");
+  return { inserted: clean.length };
+}
+
 export async function submitExpense(
   _prev: { error?: string } | undefined,
   formData: FormData
