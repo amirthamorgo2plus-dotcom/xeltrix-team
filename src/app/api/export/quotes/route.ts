@@ -10,7 +10,9 @@ export async function GET() {
   const [{ data, error }, members] = await Promise.all([
     supabase
       .from("quotes")
-      .select("number, customer_name, status, value, currency, date, expiry_date, owner_id, notes")
+      .select(
+        "number, customer_name, status, value, currency, date, expiry_date, owner_id, notes, zoho_salesperson_name"
+      )
       .order("date", { ascending: false }),
     memberNameLookup(),
   ]);
@@ -20,6 +22,7 @@ export async function GET() {
   const rows = (data ?? []).map((q) => ({
     number: q.number,
     customer: q.customer_name,
+    salesperson: q.zoho_salesperson_name,
     status: q.status,
     value: q.value,
     currency: q.currency,
@@ -32,6 +35,7 @@ export async function GET() {
   const csv = toCsv(rows, [
     { key: "number", header: "Number" },
     { key: "customer", header: "Customer" },
+    { key: "salesperson", header: "Salesperson" },
     { key: "status", header: "Status" },
     { key: "value", header: "Value" },
     { key: "currency", header: "Currency" },

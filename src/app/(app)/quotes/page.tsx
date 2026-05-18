@@ -37,7 +37,7 @@ export default async function QuotesPage({
   const supabase = await createClient();
   let q = supabase
     .from("quotes")
-    .select("id, number, status, value, currency, date, expiry_date, customer_name, lead_id")
+    .select("id, number, status, value, currency, date, expiry_date, customer_name, lead_id, zoho_salesperson_name")
     .order("date", { ascending: false });
 
   if (sp.status) q = q.eq("status", sp.status);
@@ -133,6 +133,7 @@ export default async function QuotesPage({
                   <tr>
                     <th className="pb-2 pr-4">Number</th>
                     <th className="pb-2 pr-4">Customer</th>
+                    <th className="pb-2 pr-4">Salesperson</th>
                     <th className="pb-2 pr-4 text-right">Value</th>
                     <th className="pb-2 pr-4">Date</th>
                     <th className="pb-2 pr-4">Expiry</th>
@@ -148,6 +149,9 @@ export default async function QuotesPage({
                       <tr key={qt.id} className="border-t border-zinc-200 dark:border-zinc-800">
                         <td className="py-2 pr-4 font-mono text-xs">{qt.number}</td>
                         <td className="py-2 pr-4 font-medium">{qt.customer_name}</td>
+                        <td className="py-2 pr-4 text-zinc-500">
+                          {qt.zoho_salesperson_name ?? "—"}
+                        </td>
                         <td className="py-2 pr-4 text-right tabular-nums">
                           {fmtMoney(Number(qt.value), qt.currency || currency)}
                         </td>
