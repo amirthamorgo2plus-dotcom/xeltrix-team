@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
+import { RangeFilter } from "@/components/range-filter";
+import { resolveRange } from "@/lib/date-range";
 
 function fmtMoney(v: number | null | undefined, currency = "INR") {
   if (v == null) return "—";
@@ -28,19 +30,22 @@ const statusTone: Record<string, "muted" | "info" | "success" | "warning" | "dan
 export default async function QuotesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; range?: string }>;
 }) {
   const sp = await searchParams;
+  const range = resolveRange(sp.range ?? "all");
   const settings = await getTeamSettings();
   const currency = settings?.currency || "INR";
 
   const supabase = await createClient();
   let q = supabase
     .from("quotes")
-    .select("id, number, status, value, currency, date, expiry_date, customer_name, lead_id, zoho_salesperson_name")
+    .select("id, number, status, value, value_excl_tax, currency, date, expiry_date, customer_name, lead_id, zoho_salesperson_name")
     .order("date", { ascending: false });
 
   if (sp.status) q = q.eq("status", sp.status);
+  if (range.start) q = q.gte("date", range.start);
+  if (range.end) q = q.lte("date", range.end);
   const { data: quotes } = await q.limit(500);
 
   // KPI summary
@@ -68,6 +73,8 @@ export default async function QuotesPage({
         </div>
         <ExportButton href="/api/export/quotes" />
       </div>
+
+      <RangeFilter basePath="/quotes" current={range.key} extraParams={{ status: sp.status }} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
@@ -134,7 +141,8 @@ export default async function QuotesPage({
                     <th className="pb-2 pr-4">Number</th>
                     <th className="pb-2 pr-4">Customer</th>
                     <th className="pb-2 pr-4">Salesperson</th>
-                    <th className="pb-2 pr-4 text-right">Value</th>
+                    <th className="pb-2 pr-4 text-right">Incl. tax</th>
+                    <th className="pb-2 pr-4 text-right">Excl. tax</th>
                     <th className="pb-2 pr-4">Date</th>
                     <th className="pb-2 pr-4">Expiry</th>
                     <th className="pb-2">Status</th>
@@ -154,6 +162,9 @@ export default async function QuotesPage({
                         </td>
                         <td className="py-2 pr-4 text-right tabular-nums">
                           {fmtMoney(Number(qt.value), qt.currency || currency)}
+                        </td>
+                        <td className="py-2 pr-4 text-right tabular-nums text-zinc-500">
+                          {fmtMoney(Number(qt.value_excl_tax ?? qt.value ?? 0), qt.currency || currency)}
                         </td>
                         <td className="py-2 pr-4 text-zinc-500">
                           {qt.date ? format(parseISO(qt.date), "dd MMM yyyy") : "—"}

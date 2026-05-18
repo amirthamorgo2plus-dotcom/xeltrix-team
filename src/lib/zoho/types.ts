@@ -30,7 +30,9 @@ export type ZohoInvoice = {
   customer_name: string;
   invoice_number: string;
   status: string;       // draft | sent | viewed | overdue | paid | void
-  total: number;
+  total: number;        // incl. tax
+  sub_total?: number;   // excl. tax
+  tax_total?: number;
   date: string;         // YYYY-MM-DD
   due_date?: string;
   salesperson_id?: string;
@@ -55,7 +57,9 @@ export type ZohoEstimate = {
   customer_id: string;
   customer_name: string;
   status: string;       // draft | sent | viewed | accepted | declined | invoiced | expired
-  total: number;
+  total: number;        // incl. tax
+  sub_total?: number;   // excl. tax
+  tax_total?: number;
   currency_code?: string;
   date: string;
   expiry_date?: string;

@@ -52,6 +52,13 @@ export async function triggerSync() {
       } catch { /* ignore */ }
       revalidatePath("/integrations");
       revalidatePath("/dashboard");
+      revalidatePath("/leads");
+      revalidatePath("/opportunities");
+      revalidatePath("/quotes");
+      revalidatePath("/salespersons");
+      revalidatePath("/expenses");
+      revalidatePath("/templates");
+      revalidatePath("/follow-ups");
       return { ok: true as const, ...counts };
     } catch (e) {
       const msg = e instanceof Error ? e.message : "unknown_error";

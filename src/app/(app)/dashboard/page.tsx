@@ -6,6 +6,8 @@ import { KpiCard } from "@/components/kpi-card";
 import { TargetChart } from "@/components/target-chart";
 import { EmptyState } from "@/components/empty-state";
 import { DashboardFilters } from "./filters";
+import { RangeFilter } from "@/components/range-filter";
+import { resolveRange } from "@/lib/date-range";
 
 function fmtMoney(v: number, currency: string) {
   return new Intl.NumberFormat("en-IN", {
@@ -27,15 +29,19 @@ function isOffDay(date: Date, holidayClosed: Set<string>) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; member?: string }>;
+  searchParams: Promise<{ month?: string; member?: string; range?: string }>;
 }) {
   const sp = await searchParams;
+  // Legacy: month=yyyy-mm still supported. New: range=this_month|this_fy|...
+  const range = sp.range
+    ? resolveRange(sp.range)
+    : resolveRange(sp.month ? `${sp.month}` : "this_month");
   const monthIso = sp.month ?? firstDayOfMonth().slice(0, 7);
   const monthDate = parseISO(`${monthIso}-01`);
   const monthStart = startOfMonth(monthDate);
   const monthEnd = endOfMonth(monthDate);
-  const monthFirst = format(monthStart, "yyyy-MM-dd");
-  const monthLast = format(monthEnd, "yyyy-MM-dd");
+  const monthFirst = range.start ?? format(monthStart, "yyyy-MM-dd");
+  const monthLast = range.end ?? format(monthEnd, "yyyy-MM-dd");
 
   const me = await getMyMembership();
   const members = await getTeamMembers();
@@ -66,7 +72,7 @@ export default async function DashboardPage({
       .in("member_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
     supabase
       .from("opportunities")
-      .select("stage, value, owner_id, close_date")
+      .select("stage, value, value_excl_tax, owner_id, close_date")
       .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
     supabase
       .from("holidays")
@@ -96,17 +102,19 @@ export default async function DashboardPage({
 
   // KPIs
   const target = (tvaRows ?? []).reduce((s, r) => s + Number(r.target ?? 0), 0);
-  // Compute Sales Achieved DIRECTLY from won opps in the selected month —
-  // independent of whether targets have been set
-  const achieved = (pipelineRows ?? [])
-    .filter(
-      (o) =>
-        o.stage === "won" &&
-        o.close_date &&
-        o.close_date >= monthFirst &&
-        o.close_date <= monthLast
-    )
-    .reduce((s, o) => s + Number(o.value ?? 0), 0);
+  // Compute Sales Achieved DIRECTLY from won opps in the selected range
+  const wonInRange = (pipelineRows ?? []).filter(
+    (o) =>
+      o.stage === "won" &&
+      o.close_date &&
+      o.close_date >= monthFirst &&
+      o.close_date <= monthLast
+  );
+  const achieved = wonInRange.reduce((s, o) => s + Number(o.value ?? 0), 0);
+  const achievedExcl = wonInRange.reduce(
+    (s, o) => s + Number(o.value_excl_tax ?? o.value ?? 0),
+    0
+  );
   const pct = target > 0 ? Math.round((achieved / target) * 100) : null;
 
   // Attendance %: (worked_days) / (working_days)
@@ -133,10 +141,15 @@ export default async function DashboardPage({
     .filter((b) => memberScopeSet.has(b.member_id))
     .reduce((s, b) => s + Number(b.balance ?? 0), 0);
 
-  // Pipeline value (not won/lost)
-  const pipelineValue = (pipelineRows ?? [])
-    .filter((o) => o.stage !== "won" && o.stage !== "lost")
-    .reduce((s, o) => s + Number(o.value ?? 0), 0);
+  // Pipeline value (not won/lost) — both incl. and excl. tax
+  const pipelineRowsOpen = (pipelineRows ?? []).filter(
+    (o) => o.stage !== "won" && o.stage !== "lost"
+  );
+  const pipelineValue = pipelineRowsOpen.reduce((s, o) => s + Number(o.value ?? 0), 0);
+  const pipelineValueExcl = pipelineRowsOpen.reduce(
+    (s, o) => s + Number(o.value_excl_tax ?? o.value ?? 0),
+    0
+  );
 
   // Chart data
   const chartData = members
@@ -174,6 +187,12 @@ export default async function DashboardPage({
         />
       </div>
 
+      <RangeFilter
+        basePath="/dashboard"
+        current={range.key}
+        extraParams={{ member: memberFilter ?? undefined }}
+      />
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Achievement %"
@@ -183,10 +202,11 @@ export default async function DashboardPage({
           href="/targets"
         />
         <KpiCard
-          label="Sales Achieved"
+          label="Sales (incl. tax)"
           value={fmtMoney(achieved, currency)}
-          hint="Sum of won opps"
+          hint={`Excl. tax: ${fmtMoney(achievedExcl, currency)}`}
           href="/opportunities"
+          tone="success"
         />
         <KpiCard label="Target" value={fmtMoney(target, currency)} hint="Monthly goal" href="/targets" />
         <KpiCard
@@ -202,9 +222,9 @@ export default async function DashboardPage({
           href="/attendance"
         />
         <KpiCard
-          label="Pipeline Value"
+          label="Pipeline (incl. tax)"
           value={fmtMoney(pipelineValue, currency)}
-          hint="Open stages"
+          hint={`Excl. tax: ${fmtMoney(pipelineValueExcl, currency)}`}
           href="/opportunities"
         />
         <KpiCard

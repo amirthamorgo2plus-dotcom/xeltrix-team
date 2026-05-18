@@ -9,15 +9,37 @@ export async function createComplaint(_prev: { error?: string } | undefined, for
   if (!m) return { error: "Not in a team" };
 
   const customer_name = String(formData.get("customer_name") ?? "").trim();
+  const customer_email = String(formData.get("customer_email") ?? "").trim() || null;
   const subject = String(formData.get("subject") ?? "").trim();
   if (!customer_name || !subject) return { error: "Customer and subject are required." };
 
   const supabase = await createClient();
+
+  // If this customer name doesn't match an existing lead, create one
+  const { data: existingLead } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("team_id", m.team_id)
+    .ilike("name", customer_name)
+    .limit(1)
+    .maybeSingle();
+
+  if (!existingLead) {
+    await supabase.from("leads").insert({
+      team_id: m.team_id,
+      owner_id: m.id,
+      name: customer_name,
+      email: customer_email,
+      source: "complaint",
+      status: "new",
+    });
+  }
+
   const { error } = await supabase.from("complaints").insert({
     team_id: m.team_id,
     owner_id: m.id,
     customer_name,
-    customer_email: String(formData.get("customer_email") ?? "").trim() || null,
+    customer_email,
     subject,
     description: String(formData.get("description") ?? "").trim() || null,
     severity: String(formData.get("severity") ?? "medium"),
@@ -26,6 +48,7 @@ export async function createComplaint(_prev: { error?: string } | undefined, for
 
   if (error) return { error: error.message };
   revalidatePath("/complaints");
+  revalidatePath("/leads");
   return {};
 }
 

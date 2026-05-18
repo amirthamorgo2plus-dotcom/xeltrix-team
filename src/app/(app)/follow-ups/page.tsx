@@ -1,12 +1,14 @@
 import { format, isPast } from "date-fns";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
 import { FollowUpForm } from "./follow-up-form";
 import { DoneButton } from "./done-button";
+import { RowActions } from "./row-actions";
 
 type FollowUp = {
   id: string;
@@ -19,6 +21,16 @@ type FollowUp = {
   related_id: string | null;
   auto_source: string | null;
 };
+
+type TabKey = "all" | "lead" | "opportunity" | "quote" | "complaint";
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "opportunity", label: "Opportunities" },
+  { key: "quote", label: "Quotes" },
+  { key: "complaint", label: "Complaints" },
+  { key: "lead", label: "Leads" },
+];
 
 function sourceLabel(s: string | null): string | null {
   if (!s) return null;
@@ -36,17 +48,33 @@ function sourceLabel(s: string | null): string | null {
   }
 }
 
-export default async function FollowUpsPage() {
+function typeOf(f: FollowUp): TabKey {
+  return (f.related_type ?? "lead") as TabKey;
+}
+
+export default async function FollowUpsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; show?: string }>;
+}) {
+  const sp = await searchParams;
+  const tab: TabKey = (TABS.find((t) => t.key === sp.tab)?.key as TabKey) ?? "all";
+  const showDone = sp.show === "done";
+
   const supabase = await createClient();
-  const [{ data: items }, { data: leads }, { data: opps }, { data: complaints }] = await Promise.all([
-    supabase
-      .from("follow_ups")
-      .select("id, due_at, channel, notes, done_at, lead_id, related_type, related_id, auto_source")
-      .order("due_at", { ascending: true }),
-    supabase.from("leads").select("id, name").order("name"),
-    supabase.from("opportunities").select("id, title"),
-    supabase.from("complaints").select("id, subject"),
-  ]);
+  const [{ data: items }, { data: leads }, { data: opps }, { data: complaints }] =
+    await Promise.all([
+      supabase
+        .from("follow_ups")
+        .select("id, due_at, channel, notes, done_at, lead_id, related_type, related_id, auto_source")
+        .order("due_at", { ascending: true }),
+      supabase.from("leads").select("id, name").order("name"),
+      supabase.from("opportunities").select("id, title"),
+      supabase.from("complaints").select("id, subject"),
+    ]);
+
+  const m = await getMyMembership();
+  const canManage = isAdminOrManager(m?.role);
 
   const leadName = new Map((leads ?? []).map((l) => [l.id, l.name]));
   const oppTitle = new Map((opps ?? []).map((o) => [o.id, o.title]));
@@ -55,17 +83,10 @@ export default async function FollowUpsPage() {
   function renderSubject(f: FollowUp) {
     const type = f.related_type ?? "lead";
     if (type === "opportunity" && f.related_id) {
-      const title = oppTitle.get(f.related_id);
-      return {
-        text: title ?? "(opportunity)",
-        href: `/opportunities`,
-      };
+      return { text: oppTitle.get(f.related_id) ?? "(opportunity)", href: `/opportunities` };
     }
     if (type === "complaint" && f.related_id) {
-      return {
-        text: complaintSubject.get(f.related_id) ?? "(complaint)",
-        href: `/complaints`,
-      };
+      return { text: complaintSubject.get(f.related_id) ?? "(complaint)", href: `/complaints` };
     }
     if (type === "quote" && f.related_id) {
       return { text: "(quote)", href: "/quotes" };
@@ -75,9 +96,20 @@ export default async function FollowUpsPage() {
     return { text: "(no link)", href: null as string | null };
   }
 
-  const followups: FollowUp[] = (items ?? []) as FollowUp[];
-  const open = followups.filter((i) => !i.done_at);
-  const done = followups.filter((i) => i.done_at);
+  const all: FollowUp[] = (items ?? []) as FollowUp[];
+  const filtered = tab === "all" ? all : all.filter((i) => typeOf(i) === tab);
+  const open = filtered.filter((i) => !i.done_at);
+  const done = filtered.filter((i) => i.done_at);
+
+  const counts: Record<TabKey, number> = {
+    all: all.filter((i) => !i.done_at).length,
+    lead: all.filter((i) => !i.done_at && typeOf(i) === "lead").length,
+    opportunity: all.filter((i) => !i.done_at && typeOf(i) === "opportunity").length,
+    quote: all.filter((i) => !i.done_at && typeOf(i) === "quote").length,
+    complaint: all.filter((i) => !i.done_at && typeOf(i) === "complaint").length,
+  };
+
+  const list = showDone ? done : open;
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,7 +117,7 @@ export default async function FollowUpsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Follow-ups</h1>
           <p className="text-sm text-zinc-500">
-            {open.length} pending · {done.length} done · auto-created from new opps & complaints
+            {open.length} pending · {done.length} done · auto-created from new opps &amp; complaints
           </p>
         </div>
         <ExportButton href="/api/export/follow-ups" />
@@ -93,30 +125,80 @@ export default async function FollowUpsPage() {
 
       <FollowUpForm leads={leads ?? []} />
 
+      <div className="flex flex-wrap items-center gap-2">
+        {TABS.map((t) => {
+          const active = t.key === tab;
+          const showParam = showDone ? "&show=done" : "";
+          return (
+            <Link
+              key={t.key}
+              href={`/follow-ups?tab=${t.key}${showParam}`}
+              className={`inline-flex items-center gap-1 rounded-md border px-3 py-1 text-xs ${
+                active
+                  ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+              }`}
+            >
+              {t.label}
+              <span
+                className={`rounded-full px-1.5 text-[10px] ${
+                  active ? "bg-white/20" : "bg-zinc-200 dark:bg-zinc-800"
+                }`}
+              >
+                {counts[t.key]}
+              </span>
+            </Link>
+          );
+        })}
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            href={`/follow-ups?tab=${tab}`}
+            className={`rounded-md border px-3 py-1 text-xs ${
+              !showDone
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            }`}
+          >
+            Pending
+          </Link>
+          <Link
+            href={`/follow-ups?tab=${tab}&show=done`}
+            className={`rounded-md border px-3 py-1 text-xs ${
+              showDone
+                ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
+                : "border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            }`}
+          >
+            Done
+          </Link>
+        </div>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Pending</CardTitle>
+          <CardTitle>
+            {showDone ? "Done" : "Pending"} · {TABS.find((t) => t.key === tab)?.label}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {open.length === 0 ? (
-            <EmptyState title="No pending follow-ups" />
+          {list.length === 0 ? (
+            <EmptyState
+              title={showDone ? "Nothing done in this segment yet" : "No pending follow-ups"}
+            />
           ) : (
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {open.map((f) => {
+              {list.map((f) => {
                 const due = new Date(f.due_at);
-                const overdue = isPast(due);
+                const overdue = !f.done_at && isPast(due);
                 const subj = renderSubject(f);
                 const source = sourceLabel(f.auto_source);
                 return (
                   <li key={f.id} className="flex items-start gap-3 py-3">
-                    <DoneButton id={f.id} />
+                    {!f.done_at && <DoneButton id={f.id} />}
                     <div className="flex-1">
                       <div className="font-medium">
                         {subj.href ? (
-                          <Link
-                            href={subj.href}
-                            className="hover:underline"
-                          >
+                          <Link href={subj.href} className="hover:underline">
                             {subj.text}
                           </Link>
                         ) : (
@@ -125,7 +207,7 @@ export default async function FollowUpsPage() {
                       </div>
                       {f.notes && <div className="text-xs text-zinc-500">{f.notes}</div>}
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <Badge tone={overdue ? "danger" : "info"}>
+                        <Badge tone={overdue ? "danger" : f.done_at ? "muted" : "info"}>
                           {format(due, "dd MMM, HH:mm")}
                         </Badge>
                         {f.channel && <Badge tone="muted">{f.channel}</Badge>}
@@ -142,12 +224,30 @@ export default async function FollowUpsPage() {
                             {f.related_type}
                           </Badge>
                         )}
+                        {f.done_at && (
+                          <span className="text-xs text-zinc-500">
+                            done {format(new Date(f.done_at), "dd MMM")}
+                          </span>
+                        )}
                         {source && (
                           <span className="text-[10px] uppercase tracking-wider text-zinc-400">
                             {source}
                           </span>
                         )}
                       </div>
+                      {canManage && (
+                        <div className="mt-2">
+                          <RowActions
+                            id={f.id}
+                            isDone={!!f.done_at}
+                            defaults={{
+                              due_at: f.due_at,
+                              channel: f.channel,
+                              notes: f.notes,
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </li>
                 );
@@ -156,29 +256,6 @@ export default async function FollowUpsPage() {
           )}
         </CardContent>
       </Card>
-
-      {done.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Done</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {done.map((f) => {
-                const subj = renderSubject(f);
-                return (
-                  <li key={f.id} className="py-2 text-sm text-zinc-500">
-                    <span className="line-through">{subj.text}</span>
-                    <span className="ml-2 text-xs">
-                      done {format(new Date(f.done_at!), "dd MMM")}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -42,7 +42,7 @@ export const getTeamMembers = cache(async () => {
 
   const { data: members } = await supabase
     .from("team_members")
-    .select("id, role, active, user_id")
+    .select("id, role, active, user_id, zoho_salesperson_name, zoho_advance_account_name")
     .eq("team_id", m.team_id)
     .eq("active", true)
     .order("role");

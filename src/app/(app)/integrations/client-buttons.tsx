@@ -1,12 +1,14 @@
 "use client";
 
 import { useTransition, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { disconnectZoho, triggerSync } from "./actions";
 
 export function SyncNowButton() {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const router = useRouter();
   return (
     <span className="flex items-center gap-3">
       <Button
@@ -15,9 +17,10 @@ export function SyncNowButton() {
           start(async () => {
             const r = await triggerSync();
             if (r?.ok) {
-              const summary = `Synced ${r.customers ?? 0} customers, ${r.items ?? 0} items, ${r.invoices ?? 0} invoices, ${r.quotes ?? 0} quotes`;
+              const summary = `Synced ${r.customers ?? 0} customers, ${r.items ?? 0} items, ${r.invoices ?? 0} invoices, ${r.quotes ?? 0} quotes, ${(r as { expenses?: number }).expenses ?? 0} expenses`;
               const warnings = (r as { warnings?: string[] }).warnings ?? [];
               setMsg(warnings.length ? `${summary} — ${warnings.join("; ")}` : summary);
+              router.refresh();
             } else {
               setMsg(r?.error ? `Error: ${r.error}` : "Sync failed");
             }
