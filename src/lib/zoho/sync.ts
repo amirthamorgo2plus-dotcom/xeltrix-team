@@ -72,10 +72,19 @@ async function fetchTaxBreakdowns(
   integration: IntegrationRow,
   resource: "invoices" | "estimates",
   ids: string[],
-  concurrency = 5
-): Promise<Map<string, { sub_total: number; tax_total: number }>> {
+  concurrency = 3
+): Promise<{
+  map: Map<string, { sub_total: number; tax_total: number }>;
+  attempted: number;
+  succeeded: number;
+  failed: number;
+  errors: string[];
+}> {
   const out = new Map<string, { sub_total: number; tax_total: number }>();
   const key = resource === "invoices" ? "invoice" : "estimate";
+  let succeeded = 0;
+  let failed = 0;
+  const errors: string[] = [];
 
   for (let i = 0; i < ids.length; i += concurrency) {
     const batch = ids.slice(i, i + concurrency);
@@ -86,22 +95,37 @@ async function fetchTaxBreakdowns(
             integration,
             `/${resource}/${id}`
           );
-          return { id, data: res[key] };
-        } catch {
-          return { id, data: null };
+          const data = res[key];
+          if (!data) {
+            return { id, ok: false as const, error: `no '${key}' key in response` };
+          }
+          if (data.sub_total === undefined && data.tax_total === undefined) {
+            // Detail came back but no breakdown fields — unexpected
+            return { id, ok: false as const, error: `${resource}/${id}: missing sub_total/tax_total` };
+          }
+          return {
+            id,
+            ok: true as const,
+            sub_total: Number(data.sub_total ?? 0),
+            tax_total: Number(data.tax_total ?? 0),
+          };
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          return { id, ok: false as const, error: `${resource}/${id}: ${msg}` };
         }
       })
     );
-    results.forEach(({ id, data }) => {
-      if (data) {
-        out.set(id, {
-          sub_total: Number(data.sub_total ?? 0),
-          tax_total: Number(data.tax_total ?? 0),
-        });
+    results.forEach((r) => {
+      if (r.ok) {
+        out.set(r.id, { sub_total: r.sub_total, tax_total: r.tax_total });
+        succeeded++;
+      } else {
+        failed++;
+        if (errors.length < 3) errors.push(r.error);
       }
     });
   }
-  return out;
+  return { map: out, attempted: ids.length, succeeded, failed, errors };
 }
 
 export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
@@ -215,10 +239,16 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     const estIdsNeedingDetail = estimates
       .map((e) => e.estimate_id)
       .filter((id) => !quotesWithTax.has(id));
-    const estTaxMap = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
+    const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
+    counts.warnings.push(
+      `Estimate details: ${estDetail.succeeded}/${estDetail.attempted} ok, ${estDetail.failed} failed`
+    );
+    if (estDetail.errors.length > 0) {
+      counts.warnings.push(`Est errors: ${estDetail.errors.join(" | ")}`);
+    }
     // Merge: prefer fresh tax data, fall back to whatever list response had
     const estTaxFor = (est: ZohoEstimate) => {
-      const detail = estTaxMap.get(est.estimate_id);
+      const detail = estDetail.map.get(est.estimate_id);
       if (detail) return detail;
       return {
         sub_total: est.sub_total ?? 0,
@@ -331,9 +361,15 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   const invIdsNeedingDetail = invoices
     .map((inv) => inv.invoice_id)
     .filter((id) => !invoicesWithTax.has(id));
-  const invTaxMap = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
+  const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
+  counts.warnings.push(
+    `Invoice details: ${invDetail.succeeded}/${invDetail.attempted} ok, ${invDetail.failed} failed`
+  );
+  if (invDetail.errors.length > 0) {
+    counts.warnings.push(`Inv errors: ${invDetail.errors.join(" | ")}`);
+  }
   const invTaxFor = (inv: ZohoInvoice) => {
-    const detail = invTaxMap.get(inv.invoice_id);
+    const detail = invDetail.map.get(inv.invoice_id);
     if (detail) return detail;
     return {
       sub_total: inv.sub_total ?? 0,
