@@ -235,10 +235,10 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         .map((q) => q.zoho_estimate_id as string)
     );
 
-    // Detail-fetch tax breakdowns for estimates we don't already have it for
-    const estIdsNeedingDetail = estimates
-      .map((e) => e.estimate_id)
-      .filter((id) => !quotesWithTax.has(id));
+    // Always detail-fetch every estimate (same reasoning as invoices above)
+    const estIdsNeedingDetail = estimates.map((e) => e.estimate_id);
+    // Suppress unused-var lint
+    void quotesWithTax;
     const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
     counts.warnings.push(
       `Estimate details: ${estDetail.succeeded}/${estDetail.attempted} ok, ${estDetail.failed} failed`
@@ -351,33 +351,18 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       .filter((o) => o.zoho_estimate_id)
       .map((o) => [o.zoho_estimate_id as string, o.id])
   );
-  // Diagnostic: how many opps did we get back, how many have invoice ids, and
-  // how many of those have value_excl_tax populated already?
-  const oppsCount = (existingOpps ?? []).length;
-  const oppsWithInv = (existingOpps ?? []).filter((o) => o.zoho_invoice_id).length;
-  const oppsWithInvAndTax = (existingOpps ?? []).filter(
-    (o) => o.zoho_invoice_id && o.value_excl_tax !== null && o.value_excl_tax !== undefined
-  ).length;
+  // Always detail-fetch every invoice in the list. The incremental "skip if
+  // already populated" optimization was returning wrong counts (probably because
+  // numeric NULLs were coming back as something other than null in the JS
+  // client). For 260 invoices the full sync still completes in ~30s.
+  const invIdsNeedingDetail = invoices.map((inv) => inv.invoice_id);
 
-  const invoicesWithTax = new Set(
-    (existingOpps ?? [])
-      .filter(
-        (o) =>
-          o.zoho_invoice_id &&
-          o.value_excl_tax !== null &&
-          o.value_excl_tax !== undefined
-      )
-      .map((o) => o.zoho_invoice_id as string)
-  );
-
-  // Detail-fetch tax breakdowns for invoices missing them
-  const invIdsNeedingDetail = invoices
-    .map((inv) => inv.invoice_id)
-    .filter((id) => !invoicesWithTax.has(id));
-
-  counts.warnings.push(
-    `Opps: ${oppsCount} total, ${oppsWithInv} with inv_id, ${oppsWithInvAndTax} already tax. List: ${invoices.length} invoices. Need detail: ${invIdsNeedingDetail.length}`
-  );
+  // Sample diagnostic: what does Supabase actually return for value_excl_tax?
+  const sample = (existingOpps ?? []).find((o) => o.zoho_invoice_id);
+  const sampleStr = sample
+    ? `Sample opp.value_excl_tax: type=${typeof sample.value_excl_tax}, raw=${JSON.stringify(sample.value_excl_tax)}`
+    : "Sample: no opps with inv_id";
+  counts.warnings.push(sampleStr);
 
   const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
   counts.warnings.push(
