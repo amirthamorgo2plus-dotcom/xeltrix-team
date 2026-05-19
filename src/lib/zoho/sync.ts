@@ -351,9 +351,22 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       .filter((o) => o.zoho_estimate_id)
       .map((o) => [o.zoho_estimate_id as string, o.id])
   );
+  // Diagnostic: how many opps did we get back, how many have invoice ids, and
+  // how many of those have value_excl_tax populated already?
+  const oppsCount = (existingOpps ?? []).length;
+  const oppsWithInv = (existingOpps ?? []).filter((o) => o.zoho_invoice_id).length;
+  const oppsWithInvAndTax = (existingOpps ?? []).filter(
+    (o) => o.zoho_invoice_id && o.value_excl_tax !== null && o.value_excl_tax !== undefined
+  ).length;
+
   const invoicesWithTax = new Set(
     (existingOpps ?? [])
-      .filter((o) => o.zoho_invoice_id && o.value_excl_tax !== null)
+      .filter(
+        (o) =>
+          o.zoho_invoice_id &&
+          o.value_excl_tax !== null &&
+          o.value_excl_tax !== undefined
+      )
       .map((o) => o.zoho_invoice_id as string)
   );
 
@@ -361,6 +374,11 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   const invIdsNeedingDetail = invoices
     .map((inv) => inv.invoice_id)
     .filter((id) => !invoicesWithTax.has(id));
+
+  counts.warnings.push(
+    `Opps: ${oppsCount} total, ${oppsWithInv} with inv_id, ${oppsWithInvAndTax} already tax. List: ${invoices.length} invoices. Need detail: ${invIdsNeedingDetail.length}`
+  );
+
   const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
   counts.warnings.push(
     `Invoice details: ${invDetail.succeeded}/${invDetail.attempted} ok, ${invDetail.failed} failed`
