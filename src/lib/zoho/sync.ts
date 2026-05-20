@@ -235,10 +235,19 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         .map((q) => q.zoho_estimate_id as string)
     );
 
-    // Always detail-fetch every estimate (same reasoning as invoices above)
-    const estIdsNeedingDetail = estimates.map((e) => e.estimate_id);
-    // Suppress unused-var lint
-    void quotesWithTax;
+    // Incremental fetch — only fetch estimates that don't yet have value_excl_tax > 0
+    const estsWithTax = new Set(
+      (existingQuotes ?? [])
+        .filter((q) => {
+          const v = q.value_excl_tax;
+          return v != null && Number(v) > 0;
+        })
+        .map((q) => q.zoho_estimate_id as string)
+    );
+    void quotesWithTax; // legacy local, unused
+    const estIdsNeedingDetail = estimates
+      .map((e) => e.estimate_id)
+      .filter((id) => !estsWithTax.has(id));
     const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
     counts.warnings.push(
       `Estimate details: ${estDetail.succeeded}/${estDetail.attempted} ok, ${estDetail.failed} failed`
@@ -351,18 +360,32 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       .filter((o) => o.zoho_estimate_id)
       .map((o) => [o.zoho_estimate_id as string, o.id])
   );
-  // Always detail-fetch every invoice in the list. The incremental "skip if
-  // already populated" optimization was returning wrong counts (probably because
-  // numeric NULLs were coming back as something other than null in the JS
-  // client). For 260 invoices the full sync still completes in ~30s.
-  const invIdsNeedingDetail = invoices.map((inv) => inv.invoice_id);
+  // Incremental: only detail-fetch invoices whose existing opp has no
+  // value_excl_tax > 0 yet. Stricter check (> 0 instead of !== null) handles
+  // the case where Supabase returns numeric columns as strings or zeros.
+  const invoicesWithTax = new Set(
+    (existingOpps ?? [])
+      .filter((o) => {
+        if (!o.zoho_invoice_id) return false;
+        const v = o.value_excl_tax;
+        return v != null && Number(v) > 0;
+      })
+      .map((o) => o.zoho_invoice_id as string)
+  );
 
-  // Sample diagnostic: what does Supabase actually return for value_excl_tax?
+  const invIdsNeedingDetail = invoices
+    .map((inv) => inv.invoice_id)
+    .filter((id) => !invoicesWithTax.has(id));
+
+  // One-line diagnostic of actual DB state
   const sample = (existingOpps ?? []).find((o) => o.zoho_invoice_id);
   const sampleStr = sample
     ? `Sample opp.value_excl_tax: type=${typeof sample.value_excl_tax}, raw=${JSON.stringify(sample.value_excl_tax)}`
     : "Sample: no opps with inv_id";
   counts.warnings.push(sampleStr);
+  counts.warnings.push(
+    `Opps: ${(existingOpps ?? []).length} total, ${invoicesWithTax.size} already tax. Need detail: ${invIdsNeedingDetail.length}`
+  );
 
   const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
   counts.warnings.push(
