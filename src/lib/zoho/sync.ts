@@ -314,11 +314,27 @@ export async function syncFromZoho(
       return row;
     });
 
-    const { error } = await sb
-      .from("quotes")
-      .upsert(quoteRows, { onConflict: "team_id,zoho_estimate_id" });
-    if (error) throw new Error(`quotes bulk upsert failed: ${error.message}`);
-    counts.quotes = quoteRows.length;
+    {
+      const withTax = quoteRows.filter(
+        (r) => (r as { value_excl_tax?: unknown }).value_excl_tax !== undefined
+      );
+      const withoutTax = quoteRows.filter(
+        (r) => (r as { value_excl_tax?: unknown }).value_excl_tax === undefined
+      );
+      if (withoutTax.length > 0) {
+        const { error } = await sb
+          .from("quotes")
+          .upsert(withoutTax, { onConflict: "team_id,zoho_estimate_id" });
+        if (error) throw new Error(`quotes upsert (no tax) failed: ${error.message}`);
+      }
+      if (withTax.length > 0) {
+        const { error } = await sb
+          .from("quotes")
+          .upsert(withTax, { onConflict: "team_id,zoho_estimate_id" });
+        if (error) throw new Error(`quotes upsert (with tax) failed: ${error.message}`);
+      }
+      counts.quotes = quoteRows.length;
+    }
 
     // For estimates that aren't declined/expired, create a proposal-stage opp
     // (but never overwrite a won/lost opp already there)
@@ -366,10 +382,24 @@ export async function syncFromZoho(
       });
 
     if (proposalOppRows.length > 0) {
-      const { error: oppErr } = await sb
-        .from("opportunities")
-        .upsert(proposalOppRows, { onConflict: "team_id,zoho_estimate_id" });
-      if (oppErr) throw new Error(`proposal opps upsert failed: ${oppErr.message}`);
+      const withTax = proposalOppRows.filter(
+        (r) => (r as { value_excl_tax?: unknown }).value_excl_tax !== undefined
+      );
+      const withoutTax = proposalOppRows.filter(
+        (r) => (r as { value_excl_tax?: unknown }).value_excl_tax === undefined
+      );
+      if (withoutTax.length > 0) {
+        const { error: oppErr } = await sb
+          .from("opportunities")
+          .upsert(withoutTax, { onConflict: "team_id,zoho_estimate_id" });
+        if (oppErr) throw new Error(`proposal opps upsert (no tax) failed: ${oppErr.message}`);
+      }
+      if (withTax.length > 0) {
+        const { error: oppErr } = await sb
+          .from("opportunities")
+          .upsert(withTax, { onConflict: "team_id,zoho_estimate_id" });
+        if (oppErr) throw new Error(`proposal opps upsert (with tax) failed: ${oppErr.message}`);
+      }
     }
   }
 
@@ -493,10 +523,27 @@ export async function syncFromZoho(
     return row;
   });
   if (oppRows.length > 0) {
-    const { error } = await sb
-      .from("opportunities")
-      .upsert(oppRows, { onConflict: "team_id,zoho_invoice_id" });
-    if (error) throw new Error(`opportunities bulk upsert failed: ${error.message}`);
+    // Split: rows with fresh tax data get those columns; rows without
+    // omit them entirely so existing populated tax stays intact during
+    // bulk ON CONFLICT DO UPDATE.
+    const withTax = oppRows.filter(
+      (r) => (r as { value_excl_tax?: unknown }).value_excl_tax !== undefined
+    );
+    const withoutTax = oppRows.filter(
+      (r) => (r as { value_excl_tax?: unknown }).value_excl_tax === undefined
+    );
+    if (withoutTax.length > 0) {
+      const { error } = await sb
+        .from("opportunities")
+        .upsert(withoutTax, { onConflict: "team_id,zoho_invoice_id" });
+      if (error) throw new Error(`opps upsert (no tax) failed: ${error.message}`);
+    }
+    if (withTax.length > 0) {
+      const { error } = await sb
+        .from("opportunities")
+        .upsert(withTax, { onConflict: "team_id,zoho_invoice_id" });
+      if (error) throw new Error(`opps upsert (with tax) failed: ${error.message}`);
+    }
   }
   counts.invoices = invoices.length;
 
