@@ -128,10 +128,20 @@ async function fetchTaxBreakdowns(
   return { map: out, attempted: ids.length, succeeded, failed, errors };
 }
 
-export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCounts> {
+export async function syncFromZoho(
+  integration: IntegrationRow,
+  options: { since?: string } = {}
+): Promise<SyncCounts> {
   const sb = adminClient();
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, expenses: 0, warnings: [] };
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
+
+  // last_modified_time filter so each sync only pulls changes since the
+  // given date. Defaults to today (IST) — full backfill by passing an old date.
+  const sinceDate = options.since ?? new Date().toISOString().slice(0, 10);
+  const lastModifiedSince = `${sinceDate}T00:00:00+0530`;
+  const sinceFilter = { last_modified_time: lastModifiedSince };
+  counts.warnings.push(`Window: changes since ${sinceDate}`);
 
   // Map Zoho salesperson name -> Xeltrix team_members.id (configured by admin)
   const { data: mappedMembers } = await sb
@@ -149,6 +159,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   // ---- Contacts -> leads ----
   const contacts = await fetchAll<ZohoContact>(integration, "/contacts", "contacts", {
     contact_type: "customer",
+    ...sinceFilter,
   });
 
   const { data: existingLeads } = await sb
@@ -189,7 +200,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   );
 
   // ---- Items -> opportunity_templates ----
-  const items = await fetchAll<ZohoItem>(integration, "/items", "items");
+  const items = await fetchAll<ZohoItem>(integration, "/items", "items", sinceFilter);
   const itemRows = items.map((it) => ({
     team_id: integration.team_id,
     zoho_item_id: it.item_id,
@@ -214,6 +225,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     estimates = await fetchAll<ZohoEstimate>(integration, "/estimates", "estimates", {
       sort_column: "created_time",
       sort_order: "D",
+      ...sinceFilter,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -355,6 +367,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
   const invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
     sort_column: "created_time",
     sort_order: "D",
+    ...sinceFilter,
   });
   const { data: existingOpps } = await sb
     .from("opportunities")
@@ -477,6 +490,7 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
     const expenses = await fetchAll<ZohoExpense>(integration, "/expenses", "expenses", {
       sort_column: "date",
       sort_order: "D",
+      ...sinceFilter,
     });
     if (expenses.length > 0) {
       const expenseRows = expenses.map((e) => ({

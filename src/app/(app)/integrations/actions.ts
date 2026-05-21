@@ -29,7 +29,7 @@ export async function disconnectZoho() {
   revalidatePath("/integrations");
 }
 
-export async function triggerSync() {
+export async function triggerSync(since?: string) {
   try {
     const m = await getMyMembership();
     if (!m || (m.role !== "admin" && m.role !== "manager")) {
@@ -42,7 +42,7 @@ export async function triggerSync() {
     }
 
     try {
-      const counts = await syncFromZoho(integration);
+      const counts = await syncFromZoho(integration, { since });
       // best-effort: clear any prior error
       try {
         await adminClient()
