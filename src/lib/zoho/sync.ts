@@ -245,9 +245,19 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
         .map((q) => q.zoho_estimate_id as string)
     );
     void quotesWithTax; // legacy local, unused
-    const estIdsNeedingDetail = estimates
+    const allEstIdsNeedingDetail = estimates
       .map((e) => e.estimate_id)
       .filter((id) => !estsWithTax.has(id));
+
+    // Cap detail-fetch per run (see INVOICE_DETAIL_CAP rationale above)
+    const ESTIMATE_DETAIL_CAP = 40;
+    const estIdsNeedingDetail = allEstIdsNeedingDetail.slice(0, ESTIMATE_DETAIL_CAP);
+    const estRemaining = allEstIdsNeedingDetail.length - estIdsNeedingDetail.length;
+    if (estRemaining > 0) {
+      counts.warnings.push(
+        `Tax backfill: ${estIdsNeedingDetail.length} estimates this run, ${estRemaining} remaining.`
+      );
+    }
     const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
     counts.warnings.push(
       `Estimate details: ${estDetail.succeeded}/${estDetail.attempted} ok, ${estDetail.failed} failed`
@@ -373,19 +383,22 @@ export async function syncFromZoho(integration: IntegrationRow): Promise<SyncCou
       .map((o) => o.zoho_invoice_id as string)
   );
 
-  const invIdsNeedingDetail = invoices
+  const allInvIdsNeedingDetail = invoices
     .map((inv) => inv.invoice_id)
     .filter((id) => !invoicesWithTax.has(id));
 
-  // One-line diagnostic of actual DB state
-  const sample = (existingOpps ?? []).find((o) => o.zoho_invoice_id);
-  const sampleStr = sample
-    ? `Sample opp.value_excl_tax: type=${typeof sample.value_excl_tax}, raw=${JSON.stringify(sample.value_excl_tax)}`
-    : "Sample: no opps with inv_id";
-  counts.warnings.push(sampleStr);
-  counts.warnings.push(
-    `Opps: ${(existingOpps ?? []).length} total, ${invoicesWithTax.size} already tax. Need detail: ${invIdsNeedingDetail.length}`
-  );
+  // Cap detail-fetch per run to stay under Vercel's 60s function timeout
+  // (and to be gentle on Zoho's 1000-calls/day quota during backfill).
+  // After this chunk lands in DB, the next Sync click picks up where we left off.
+  const INVOICE_DETAIL_CAP = 60;
+  const invIdsNeedingDetail = allInvIdsNeedingDetail.slice(0, INVOICE_DETAIL_CAP);
+  const invRemaining = allInvIdsNeedingDetail.length - invIdsNeedingDetail.length;
+
+  if (invRemaining > 0) {
+    counts.warnings.push(
+      `Tax backfill: processing ${invIdsNeedingDetail.length} invoices this run, ${invRemaining} remaining — click Sync again to continue.`
+    );
+  }
 
   const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
   counts.warnings.push(
