@@ -277,35 +277,42 @@ export async function syncFromZoho(
     if (estDetail.errors.length > 0) {
       counts.warnings.push(`Est errors: ${estDetail.errors.join(" | ")}`);
     }
-    // Merge: prefer fresh tax data, fall back to whatever list response had
+    // Returns fresh detail-fetched tax if available, else undefined
+    // (so we don't null-out previously populated values).
     const estTaxFor = (est: ZohoEstimate) => {
       const detail = estDetail.map.get(est.estimate_id);
-      if (detail) return detail;
-      return {
-        sub_total: est.sub_total ?? 0,
-        tax_total: est.tax_total ?? 0,
-      };
+      if (detail && (detail.sub_total > 0 || detail.tax_total > 0)) return detail;
+      if ((est.sub_total ?? 0) > 0 || (est.tax_total ?? 0) > 0) {
+        return { sub_total: est.sub_total ?? 0, tax_total: est.tax_total ?? 0 };
+      }
+      return undefined;
     };
 
-    const quoteRows = estimates.map((est) => ({
-      team_id: integration.team_id,
-      lead_id: customerToLead.get(est.customer_id) ?? null,
-      zoho_estimate_id: est.estimate_id,
-      number: est.estimate_number,
-      status: est.status,
-      value: est.total,
-      value_excl_tax: estTaxFor(est).sub_total || null,
-      tax_amount: estTaxFor(est).tax_total || null,
-      currency: est.currency_code ?? null,
-      date: toDateOrNull(est.date),
-      expiry_date: toDateOrNull(est.expiry_date),
-      customer_id: est.customer_id,
-      customer_name: est.customer_name,
-      zoho_salesperson_id: est.salesperson_id ?? null,
-      zoho_salesperson_name: est.salesperson_name ?? null,
-      owner_id:
-        quoteOwnerMap.get(est.estimate_id) ?? resolveOwner(est.salesperson_name, defaultOwner),
-    }));
+    const quoteRows = estimates.map((est) => {
+      const tax = estTaxFor(est);
+      const row: Record<string, unknown> = {
+        team_id: integration.team_id,
+        lead_id: customerToLead.get(est.customer_id) ?? null,
+        zoho_estimate_id: est.estimate_id,
+        number: est.estimate_number,
+        status: est.status,
+        value: est.total,
+        currency: est.currency_code ?? null,
+        date: toDateOrNull(est.date),
+        expiry_date: toDateOrNull(est.expiry_date),
+        customer_id: est.customer_id,
+        customer_name: est.customer_name,
+        zoho_salesperson_id: est.salesperson_id ?? null,
+        zoho_salesperson_name: est.salesperson_name ?? null,
+        owner_id:
+          quoteOwnerMap.get(est.estimate_id) ?? resolveOwner(est.salesperson_name, defaultOwner),
+      };
+      if (tax) {
+        row.value_excl_tax = tax.sub_total;
+        row.tax_amount = tax.tax_total;
+      }
+      return row;
+    });
 
     const { error } = await sb
       .from("quotes")
@@ -337,15 +344,13 @@ export async function syncFromZoho(
       )
       .map((est) => {
         const tax = estTaxFor(est);
-        return {
+        const row: Record<string, unknown> = {
           team_id: integration.team_id,
           lead_id: customerToLead.get(est.customer_id) ?? null,
           zoho_estimate_id: est.estimate_id,
           zoho_customer_id: est.customer_id,
           title: `${est.estimate_number} · ${est.customer_name}`,
           value: est.total,
-          value_excl_tax: tax.sub_total || null,
-          tax_amount: tax.tax_total || null,
           stage: "proposal",
           close_date: toDateOrNull(est.expiry_date) || toDateOrNull(est.date),
           probability: 50,
@@ -353,6 +358,11 @@ export async function syncFromZoho(
           zoho_salesperson_name: est.salesperson_name ?? null,
           owner_id: resolveOwner(est.salesperson_name, defaultOwner),
         };
+        if (tax) {
+          row.value_excl_tax = tax.sub_total;
+          row.tax_amount = tax.tax_total;
+        }
+        return row;
       });
 
     if (proposalOppRows.length > 0) {
@@ -420,13 +430,15 @@ export async function syncFromZoho(
   if (invDetail.errors.length > 0) {
     counts.warnings.push(`Inv errors: ${invDetail.errors.join(" | ")}`);
   }
+  // Returns the fresh detail-fetched tax if available, else undefined
+  // (so we don't overwrite previously-populated DB values with NULL).
   const invTaxFor = (inv: ZohoInvoice) => {
     const detail = invDetail.map.get(inv.invoice_id);
-    if (detail) return detail;
-    return {
-      sub_total: inv.sub_total ?? 0,
-      tax_total: inv.tax_total ?? 0,
-    };
+    if (detail && (detail.sub_total > 0 || detail.tax_total > 0)) return detail;
+    if ((inv.sub_total ?? 0) > 0 || (inv.tax_total ?? 0) > 0) {
+      return { sub_total: inv.sub_total ?? 0, tax_total: inv.tax_total ?? 0 };
+    }
+    return undefined;
   };
 
   // Pass 1: for invoices with an estimate_id, update the existing proposal opp -> won
@@ -437,37 +449,35 @@ export async function syncFromZoho(
     if (!existingOppId) continue;
     linkedInvoiceIds.add(inv.invoice_id);
     const tax = invTaxFor(inv);
-    await sb
-      .from("opportunities")
-      .update({
-        zoho_invoice_id: inv.invoice_id,
-        zoho_customer_id: inv.customer_id,
-        title: `${inv.invoice_number} · ${inv.customer_name}`,
-        value: inv.total,
-        value_excl_tax: tax.sub_total || null,
-        tax_amount: tax.tax_total || null,
-        stage: "won",
-        close_date: toDateOrNull(inv.date),
-        probability: 100,
-        zoho_salesperson_id: inv.salesperson_id ?? null,
-        zoho_salesperson_name: inv.salesperson_name ?? null,
-      })
-      .eq("id", existingOppId);
+    const updatePayload: Record<string, unknown> = {
+      zoho_invoice_id: inv.invoice_id,
+      zoho_customer_id: inv.customer_id,
+      title: `${inv.invoice_number} · ${inv.customer_name}`,
+      value: inv.total,
+      stage: "won",
+      close_date: toDateOrNull(inv.date),
+      probability: 100,
+      zoho_salesperson_id: inv.salesperson_id ?? null,
+      zoho_salesperson_name: inv.salesperson_name ?? null,
+    };
+    if (tax) {
+      updatePayload.value_excl_tax = tax.sub_total;
+      updatePayload.tax_amount = tax.tax_total;
+    }
+    await sb.from("opportunities").update(updatePayload).eq("id", existingOppId);
   }
 
   // Pass 2: invoices without a linked estimate -> upsert new won opp by invoice id
   const unlinkedInvoices = invoices.filter((inv) => !linkedInvoiceIds.has(inv.invoice_id));
   const oppRows = unlinkedInvoices.map((inv) => {
     const tax = invTaxFor(inv);
-    return {
+    const row: Record<string, unknown> = {
       team_id: integration.team_id,
       lead_id: customerToLead.get(inv.customer_id) ?? null,
       zoho_invoice_id: inv.invoice_id,
       zoho_customer_id: inv.customer_id,
       title: `${inv.invoice_number} · ${inv.customer_name}`,
       value: inv.total,
-      value_excl_tax: tax.sub_total || null,
-      tax_amount: tax.tax_total || null,
       stage: "won",
       close_date: toDateOrNull(inv.date),
       probability: 100,
@@ -476,6 +486,11 @@ export async function syncFromZoho(
       owner_id:
         oppOwnerMapByInv.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
     };
+    if (tax) {
+      row.value_excl_tax = tax.sub_total;
+      row.tax_amount = tax.tax_total;
+    }
+    return row;
   });
   if (oppRows.length > 0) {
     const { error } = await sb
