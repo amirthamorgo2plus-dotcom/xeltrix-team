@@ -203,9 +203,9 @@ export default async function DashboardPage({
         />
         <KpiCard
           label="Sales"
-          value={fmtMoney(achieved, currency)}
-          secondary={{ label: "Excl. tax", value: fmtMoney(achievedExcl, currency) }}
-          hint="Incl. tax · won opps"
+          value={fmtMoney(achievedExcl, currency)}
+          secondary={{ label: "Incl. tax", value: fmtMoney(achieved, currency) }}
+          hint="Won opps"
           href="/opportunities"
           tone="success"
         />
@@ -224,9 +224,9 @@ export default async function DashboardPage({
         />
         <KpiCard
           label="Pipeline"
-          value={fmtMoney(pipelineValue, currency)}
-          secondary={{ label: "Excl. tax", value: fmtMoney(pipelineValueExcl, currency) }}
-          hint="Incl. tax · open stages"
+          value={fmtMoney(pipelineValueExcl, currency)}
+          secondary={{ label: "Incl. tax", value: fmtMoney(pipelineValue, currency) }}
+          hint="Open stages"
           href="/opportunities"
         />
         <KpiCard
