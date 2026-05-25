@@ -44,6 +44,17 @@ function toDateOrNull(v: string | undefined | null): string | null {
   return s === "" ? null : s;
 }
 
+// Map Zoho invoice status -> our pipeline stage.
+// Drafts/voids must NOT be counted as won — Zoho's Sales by Salesperson
+// report excludes them, so our dashboard should too.
+function invoiceStageFor(status: string | undefined): string {
+  const s = (status ?? "").toLowerCase().trim();
+  if (s === "void" || s === "cancelled") return "lost";
+  if (s === "draft") return "proposal";
+  // paid, sent, viewed, partially_paid, overdue, unpaid, etc.
+  return "won";
+}
+
 async function fetchAll<T>(
   integration: IntegrationRow,
   path: string,
@@ -479,14 +490,15 @@ export async function syncFromZoho(
     if (!existingOppId) continue;
     linkedInvoiceIds.add(inv.invoice_id);
     const tax = invTaxFor(inv);
+    const stage = invoiceStageFor(inv.status);
     const updatePayload: Record<string, unknown> = {
       zoho_invoice_id: inv.invoice_id,
       zoho_customer_id: inv.customer_id,
       title: `${inv.invoice_number} · ${inv.customer_name}`,
       value: inv.total,
-      stage: "won",
+      stage,
       close_date: toDateOrNull(inv.date),
-      probability: 100,
+      probability: stage === "won" ? 100 : stage === "lost" ? 0 : 50,
       zoho_salesperson_id: inv.salesperson_id ?? null,
       zoho_salesperson_name: inv.salesperson_name ?? null,
     };
@@ -501,6 +513,7 @@ export async function syncFromZoho(
   const unlinkedInvoices = invoices.filter((inv) => !linkedInvoiceIds.has(inv.invoice_id));
   const oppRows = unlinkedInvoices.map((inv) => {
     const tax = invTaxFor(inv);
+    const stage = invoiceStageFor(inv.status);
     const row: Record<string, unknown> = {
       team_id: integration.team_id,
       lead_id: customerToLead.get(inv.customer_id) ?? null,
@@ -508,9 +521,9 @@ export async function syncFromZoho(
       zoho_customer_id: inv.customer_id,
       title: `${inv.invoice_number} · ${inv.customer_name}`,
       value: inv.total,
-      stage: "won",
+      stage,
       close_date: toDateOrNull(inv.date),
-      probability: 100,
+      probability: stage === "won" ? 100 : stage === "lost" ? 0 : 50,
       zoho_salesperson_id: inv.salesperson_id ?? null,
       zoho_salesperson_name: inv.salesperson_name ?? null,
       owner_id:
