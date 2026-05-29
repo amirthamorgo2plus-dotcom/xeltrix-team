@@ -13,13 +13,14 @@ export async function addTaskComment(
 
   const taskId = String(formData.get("task_id") ?? "").trim();
   const body = String(formData.get("body") ?? "").trim();
+  const attachment_url = String(formData.get("attachment_url") ?? "").trim() || null;
   const mentionedRaw = String(formData.get("mentioned_ids") ?? "").trim();
   const mentioned_ids = mentionedRaw
     ? mentionedRaw.split(",").map((s) => s.trim()).filter(Boolean)
     : [];
 
   if (!taskId) return { error: "Missing task id." };
-  if (!body) return { error: "Comment is empty." };
+  if (!body && !attachment_url) return { error: "Add a message or an image." };
 
   const supabase = await createClient();
   const { error } = await supabase.from("comments").insert({
@@ -27,7 +28,8 @@ export async function addTaskComment(
     subject_type: "task",
     subject_id: taskId,
     author_id: m.id,
-    body,
+    body: body || "(image)",
+    attachment_url,
     mentioned_ids,
   });
 

@@ -2,7 +2,9 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
-import { MessageSquare, Trash2, AtSign } from "lucide-react";
+import { MessageSquare, Trash2, AtSign, ImagePlus, X } from "lucide-react";
+import imageCompression from "browser-image-compression";
+import { createClient } from "@/lib/supabase/client";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { addTaskComment, deleteTaskComment } from "./comment-actions";
@@ -12,6 +14,7 @@ export type TaskComment = {
   body: string;
   author_id: string;
   mentioned_ids: string[];
+  attachment_url: string | null;
   created_at: string;
 };
 
@@ -79,7 +82,19 @@ export function TaskComments({
                       {format(new Date(c.created_at), "dd MMM, HH:mm")}
                     </span>
                   </div>
-                  <CommentBody body={c.body} mentionedIds={c.mentioned_ids} members={members} />
+                  {c.body && c.body !== "(image)" && (
+                    <CommentBody body={c.body} mentionedIds={c.mentioned_ids} members={members} />
+                  )}
+                  {c.attachment_url && (
+                    <a href={c.attachment_url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={c.attachment_url}
+                        alt="attachment"
+                        className="mt-1 max-h-48 rounded border border-zinc-200 object-cover dark:border-zinc-800"
+                      />
+                    </a>
+                  )}
                 </div>
                 {canDelete && (
                   <DeleteButton id={c.id} />
@@ -165,7 +180,52 @@ function CommentForm({
   const textRef = useRef<HTMLTextAreaElement>(null);
   const [mentioned, setMentioned] = useState<Set<string>>(new Set());
   const [text, setText] = useState("");
+  const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [state, action, pending] = useActionState(addTaskComment, undefined);
+
+  async function uploadImage(file: File) {
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const compressed = await imageCompression(file, {
+        maxWidthOrHeight: 1280,
+        maxSizeMB: 0.3,
+        useWebWorker: true,
+      });
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not signed in");
+      const ext = compressed.type === "image/png" ? "png" : "jpg";
+      const path = `${taskId}/${user.id}-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("comment-images")
+        .upload(path, compressed, { contentType: compressed.type });
+      if (upErr) throw upErr;
+      const { data: pub } = supabase.storage.from("comment-images").getPublicUrl(path);
+      setAttachmentUrl(pub.publicUrl);
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handlePaste(e: React.ClipboardEvent) {
+    const item = Array.from(e.clipboardData.items).find((i) =>
+      i.type.startsWith("image/")
+    );
+    if (item) {
+      const file = item.getAsFile();
+      if (file) {
+        e.preventDefault();
+        uploadImage(file);
+      }
+    }
+  }
 
   function toggleMention(member: Member) {
     setMentioned((prev) => {
@@ -193,21 +253,44 @@ function CommentForm({
           ref.current?.reset();
           setMentioned(new Set());
           setText("");
+          setAttachmentUrl(null);
         }
       }}
       className="flex flex-col gap-2"
     >
       <input type="hidden" name="task_id" value={taskId} />
       <input type="hidden" name="mentioned_ids" value={Array.from(mentioned).join(",")} />
+      <input type="hidden" name="attachment_url" value={attachmentUrl ?? ""} />
       <textarea
         ref={textRef}
         name="body"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Type a message…"
+        onPaste={handlePaste}
+        placeholder="Type a message… (paste a screenshot to attach)"
         rows={2}
         className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950"
       />
+
+      {attachmentUrl && (
+        <div className="relative inline-block w-fit">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={attachmentUrl}
+            alt="preview"
+            className="max-h-32 rounded border border-zinc-200 object-cover dark:border-zinc-800"
+          />
+          <button
+            type="button"
+            onClick={() => setAttachmentUrl(null)}
+            className="absolute -right-2 -top-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-zinc-900 text-white shadow"
+            aria-label="Remove image"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1 text-xs text-zinc-500">
           <AtSign className="h-3 w-3" /> Tag:
@@ -230,10 +313,32 @@ function CommentForm({
             </button>
           );
         })}
-        <Button size="sm" type="submit" disabled={pending || !text.trim()} className="ml-auto">
+
+        <label className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-900">
+          <ImagePlus className="h-3.5 w-3.5" />
+          {uploading ? "Uploading…" : "Image"}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadImage(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+
+        <Button
+          size="sm"
+          type="submit"
+          disabled={pending || uploading || (!text.trim() && !attachmentUrl)}
+        >
           {pending ? "Sending…" : "Send"}
         </Button>
       </div>
+      {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
       {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
     </form>
   );

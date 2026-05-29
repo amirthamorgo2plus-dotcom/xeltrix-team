@@ -80,7 +80,7 @@ export default async function TasksPage() {
       .order("due_at", { ascending: true, nullsFirst: false }),
     supabase
       .from("comments")
-      .select("id, subject_id, body, author_id, mentioned_ids, created_at")
+      .select("id, subject_id, body, author_id, mentioned_ids, attachment_url, created_at")
       .eq("subject_type", "task")
       .order("created_at", { ascending: true }),
   ]);
@@ -98,6 +98,7 @@ export default async function TasksPage() {
       body: c.body as string,
       author_id: c.author_id as string,
       mentioned_ids: (c.mentioned_ids as string[]) ?? [],
+      attachment_url: (c.attachment_url as string) ?? null,
       created_at: c.created_at as string,
     });
     commentsByTask.set(c.subject_id as string, arr);
