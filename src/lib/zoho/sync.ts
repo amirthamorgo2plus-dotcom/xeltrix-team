@@ -157,6 +157,12 @@ export async function syncFromZoho(
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, expenses: 0, warnings: [] };
   // Wall-clock budget for detail-fetches so we never blow the 60s function limit.
   const DETAIL_DEADLINE = Date.now() + 45_000;
+  // First day of the current month — current-month docs are ALWAYS re-fetched
+  // fresh (small set, ~12s) so the visible month never drifts from stale cache.
+  const CURRENT_MONTH_START = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  })();
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
   // last_modified_time filter so each sync only pulls changes since the
@@ -287,8 +293,16 @@ export async function syncFromZoho(
     );
     void quotesWithTax; // legacy local, unused
     const estIdsNeedingDetail = estimates
-      .map((e) => e.estimate_id)
-      .filter((id) => !estsWithTax.has(id));
+      .filter((e) => {
+        const isCurrentMonth = (toDateOrNull(e.date) ?? "") >= CURRENT_MONTH_START;
+        return !estsWithTax.has(e.estimate_id) || isCurrentMonth;
+      })
+      .sort((a, b) => {
+        const aCM = (toDateOrNull(a.date) ?? "") >= CURRENT_MONTH_START ? 0 : 1;
+        const bCM = (toDateOrNull(b.date) ?? "") >= CURRENT_MONTH_START ? 0 : 1;
+        return aCM - bCM;
+      })
+      .map((e) => e.estimate_id);
 
     const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail, {
       deadlineMs: DETAIL_DEADLINE,
@@ -463,9 +477,20 @@ export async function syncFromZoho(
       .map((o) => o.zoho_invoice_id as string)
   );
 
+  // Needs detail if: missing tax yet, OR it's in the current month
+  // (always re-fetched fresh to correct any stale value). Current-month
+  // invoices are sorted first so they always complete within the budget.
   const invIdsNeedingDetail = invoices
-    .map((inv) => inv.invoice_id)
-    .filter((id) => !invoicesWithTax.has(id));
+    .filter((inv) => {
+      const isCurrentMonth = (toDateOrNull(inv.date) ?? "") >= CURRENT_MONTH_START;
+      return !invoicesWithTax.has(inv.invoice_id) || isCurrentMonth;
+    })
+    .sort((a, b) => {
+      const aCM = (toDateOrNull(a.date) ?? "") >= CURRENT_MONTH_START ? 0 : 1;
+      const bCM = (toDateOrNull(b.date) ?? "") >= CURRENT_MONTH_START ? 0 : 1;
+      return aCM - bCM;
+    })
+    .map((inv) => inv.invoice_id);
 
   // Time-budgeted (not count-capped): fetch as many as fit before the
   // 45s deadline. A normal month finishes in one run; only a full-history
