@@ -8,7 +8,13 @@ import { disconnectZoho, triggerSync } from "./actions";
 export function SyncNowButton() {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
-  const [since, setSince] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [since, setSince] = useState<string>(() => {
+    // Default to 35 days ago so a normal sync always covers the full
+    // current month (and recent edits) — not just today.
+    const d = new Date();
+    d.setDate(d.getDate() - 35);
+    return d.toISOString().slice(0, 10);
+  });
   const router = useRouter();
 
   return (
@@ -43,7 +49,7 @@ export function SyncNowButton() {
       </Button>
       <div className="flex flex-col text-xs">
         <span className="text-zinc-500">
-          Default: today. To backfill history, change the date to an earlier one (e.g. 2024-01-01).
+          Default: last 35 days (covers this month). For full history, set to 2024-01-01 and click a few times.
         </span>
         {msg && <span className="text-zinc-600 dark:text-zinc-400">{msg}</span>}
       </div>

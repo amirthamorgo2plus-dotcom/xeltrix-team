@@ -83,21 +83,29 @@ async function fetchTaxBreakdowns(
   integration: IntegrationRow,
   resource: "invoices" | "estimates",
   ids: string[],
-  concurrency = 3
+  opts: { concurrency?: number; deadlineMs?: number } = {}
 ): Promise<{
   map: Map<string, { sub_total: number; tax_total: number }>;
   attempted: number;
   succeeded: number;
   failed: number;
+  skipped: number;
   errors: string[];
 }> {
+  const concurrency = opts.concurrency ?? 3;
+  const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
   const out = new Map<string, { sub_total: number; tax_total: number }>();
   const key = resource === "invoices" ? "invoice" : "estimate";
   let succeeded = 0;
   let failed = 0;
+  let processed = 0;
   const errors: string[] = [];
 
   for (let i = 0; i < ids.length; i += concurrency) {
+    // Stop if we're about to blow the Vercel function timeout; remaining
+    // ids get picked up on the next sync (they still lack value_excl_tax).
+    if (Date.now() > deadline) break;
+    processed = i;
     const batch = ids.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map(async (id) => {
@@ -135,8 +143,10 @@ async function fetchTaxBreakdowns(
         if (errors.length < 3) errors.push(r.error);
       }
     });
+    processed = Math.min(i + concurrency, ids.length);
   }
-  return { map: out, attempted: ids.length, succeeded, failed, errors };
+  const skipped = ids.length - processed;
+  return { map: out, attempted: processed, succeeded, failed, skipped, errors };
 }
 
 export async function syncFromZoho(
@@ -145,11 +155,19 @@ export async function syncFromZoho(
 ): Promise<SyncCounts> {
   const sb = adminClient();
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, expenses: 0, warnings: [] };
+  // Wall-clock budget for detail-fetches so we never blow the 60s function limit.
+  const DETAIL_DEADLINE = Date.now() + 45_000;
   const defaultOwner = await getDefaultOwnerId(integration.team_id);
 
   // last_modified_time filter so each sync only pulls changes since the
-  // given date. Defaults to today (IST) — full backfill by passing an old date.
-  const sinceDate = options.since ?? new Date().toISOString().slice(0, 10);
+  // given date. Default = 35 days ago (covers the whole current month
+  // reliably). Pass an older date to backfill full history.
+  const defaultSince = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 35);
+    return d.toISOString().slice(0, 10);
+  })();
+  const sinceDate = options.since ?? defaultSince;
   const lastModifiedSince = `${sinceDate}T00:00:00+0530`;
   const sinceFilter = { last_modified_time: lastModifiedSince };
   counts.warnings.push(`Window: changes since ${sinceDate}`);
@@ -268,20 +286,18 @@ export async function syncFromZoho(
         .map((q) => q.zoho_estimate_id as string)
     );
     void quotesWithTax; // legacy local, unused
-    const allEstIdsNeedingDetail = estimates
+    const estIdsNeedingDetail = estimates
       .map((e) => e.estimate_id)
       .filter((id) => !estsWithTax.has(id));
 
-    // Cap detail-fetch per run (see INVOICE_DETAIL_CAP rationale above)
-    const ESTIMATE_DETAIL_CAP = 40;
-    const estIdsNeedingDetail = allEstIdsNeedingDetail.slice(0, ESTIMATE_DETAIL_CAP);
-    const estRemaining = allEstIdsNeedingDetail.length - estIdsNeedingDetail.length;
-    if (estRemaining > 0) {
+    const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail, {
+      deadlineMs: DETAIL_DEADLINE,
+    });
+    if (estDetail.skipped > 0) {
       counts.warnings.push(
-        `Tax backfill: ${estIdsNeedingDetail.length} estimates this run, ${estRemaining} remaining.`
+        `Estimate tax: ${estDetail.skipped} skipped (time budget) — click Sync again.`
       );
     }
-    const estDetail = await fetchTaxBreakdowns(integration, "estimates", estIdsNeedingDetail);
     counts.warnings.push(
       `Estimate details: ${estDetail.succeeded}/${estDetail.attempted} ok, ${estDetail.failed} failed`
     );
@@ -447,24 +463,21 @@ export async function syncFromZoho(
       .map((o) => o.zoho_invoice_id as string)
   );
 
-  const allInvIdsNeedingDetail = invoices
+  const invIdsNeedingDetail = invoices
     .map((inv) => inv.invoice_id)
     .filter((id) => !invoicesWithTax.has(id));
 
-  // Cap detail-fetch per run to stay under Vercel's 60s function timeout
-  // (and to be gentle on Zoho's 1000-calls/day quota during backfill).
-  // After this chunk lands in DB, the next Sync click picks up where we left off.
-  const INVOICE_DETAIL_CAP = 60;
-  const invIdsNeedingDetail = allInvIdsNeedingDetail.slice(0, INVOICE_DETAIL_CAP);
-  const invRemaining = allInvIdsNeedingDetail.length - invIdsNeedingDetail.length;
-
-  if (invRemaining > 0) {
+  // Time-budgeted (not count-capped): fetch as many as fit before the
+  // 45s deadline. A normal month finishes in one run; only a full-history
+  // backfill leaves a remainder for the next Sync click.
+  const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail, {
+    deadlineMs: DETAIL_DEADLINE,
+  });
+  if (invDetail.skipped > 0) {
     counts.warnings.push(
-      `Tax backfill: processing ${invIdsNeedingDetail.length} invoices this run, ${invRemaining} remaining — click Sync again to continue.`
+      `Tax backfill: ${invDetail.skipped} invoices remaining (time budget) — click Sync again to continue.`
     );
   }
-
-  const invDetail = await fetchTaxBreakdowns(integration, "invoices", invIdsNeedingDetail);
   counts.warnings.push(
     `Invoice details: ${invDetail.succeeded}/${invDetail.attempted} ok, ${invDetail.failed} failed`
   );
