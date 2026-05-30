@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiCard } from "@/components/kpi-card";
 import { TargetChart } from "@/components/target-chart";
 import { EmptyState } from "@/components/empty-state";
+import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { DashboardFilters } from "./filters";
 import { RangeFilter } from "@/components/range-filter";
 import { resolveRange } from "@/lib/date-range";
@@ -242,6 +243,8 @@ export default async function DashboardPage({
           href="/complaints"
         />
       </div>
+
+      <QuoteOfTheDay />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
