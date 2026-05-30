@@ -16,6 +16,7 @@ import {
   UserCog,
   Wallet,
   Receipt,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 
@@ -41,6 +42,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/salespersons",  label: "Salespersons",  icon: UserCog },
   { href: "/templates",     label: "Templates",     icon: Package },
   { href: "/expenses",      label: "Expenses",      icon: Receipt },
+  { href: "/visits",        label: "Visits",        icon: MapPin },
   { href: "/payments",      label: "Payments",      icon: Wallet,  adminOnly: true },
   { href: "/integrations",  label: "Integrations",  icon: Plug,    adminOnly: true },
   { href: "/profile",       label: "Profile",       icon: User },
