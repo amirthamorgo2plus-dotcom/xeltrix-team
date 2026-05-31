@@ -1,264 +1,519 @@
-# Xeltrix Team — Project Handoff
+# Xeltrix Team — Complete Project Reference
 
-Team CRM, attendance, sales dashboard for **Xeltrix Chemicals Private Limited**. 7-member team. Single team for now, schema is multi-tenant capable.
+**Last updated**: end of May 2026 session
 
-## Live URLs
+A reference document covering everything about this project — architecture, schema, features, troubleshooting, and how to use it with any AI tool for ongoing maintenance.
 
-- **App:** https://xeltrix-team.vercel.app
-- **GitHub:** https://github.com/amirthamorgo2plus-dotcom/xeltrix-team
-- **Supabase dashboard:** https://supabase.com/dashboard/project/owxdawbdvofnfdgcceun
-- **Vercel dashboard:** https://vercel.com/dashboard (project: `xeltrix-team`)
-- **Resend dashboard:** https://resend.com (domain: `xeltrixchem.com`)
-- **Zoho API console:** https://api-console.zoho.in
+---
 
-## Tech Stack
+## 1. What it is
 
-- Frontend: **Next.js 16** (App Router) + TypeScript + **Tailwind v4** (no `tailwind.config.js`)
-- DB / Auth / Storage: **Supabase** (Postgres, magic-link auth, public avatars bucket)
-- SMTP: **Resend** with `xeltrixchem.com` domain verified
-- Hosting: **Vercel Hobby** (free)
-- Cron: Vercel Cron — 1 job, daily 02:00 UTC (07:30 IST)
-- Charts: Recharts
-- Form state: React 19 `useActionState` + Server Actions
+A custom internal web app for **Xeltrix Chemicals Private Limited** that runs the whole company's day-to-day:
 
-> **Important:** Next.js 16 renamed `middleware.ts` to `proxy.ts`. Read `node_modules/next/dist/docs/` before writing framework-specific code.
+- CRM (leads, opportunities, quotes from Zoho)
+- Tasks with comments + @-mentions + screenshot attachments
+- Follow-ups (auto-created when quotes/complaints arrive)
+- Attendance + comp-off
+- Field rep check-ins with map (Visits)
+- Recurring payments tracker
+- Zoho expense reconciliation + employee advance management
+- Sales dashboard with tax breakdowns
+- Quote of the day, notifications, and more
 
-## Features Shipped
+7-member team. Single Supabase tenant.
 
-| Page | What it does |
+---
+
+## 2. URLs / Access
+
+| | |
 |---|---|
-| `/login` | Magic-link sign in (Resend SMTP) |
-| `/dashboard` | 8 KPI cards (Achievement %, Sales, Attendance %, Comp-off, Pipeline, Open Tasks/Complaints) + Target-vs-Achieved bar chart, filter by member + month |
-| `/leads` | CRUD, status pipeline, CSV export |
-| `/opportunities` | Kanban (6 stages), inline stage change, auto-push to Zoho on won |
-| `/quotes` | Zoho Estimates, expiry warnings, status filter, CSV export |
-| `/tasks` | Today / Upcoming / Overdue / Done buckets, assignee picker, inline reassignment, CSV export |
-| `/follow-ups` | Pending / Done, due date, channel, CSV export |
-| `/complaints` | Severity, status workflow, CSV export |
-| `/attendance` | Self check-in/out, comp-off balance, manager mark-on-behalf, monthly grid |
-| `/calendar` | 6×7 month grid with holidays, leaves, tasks, follow-ups |
-| `/holidays` | Admin CRUD, 11 seeded for 2026 |
-| `/targets` | Monthly targets per member, achievement leaderboard |
-| `/salespersons` | Map Zoho salespersons → team members, bulk-reassigns owners |
-| `/templates` | Browse 553 Zoho items as searchable catalog |
-| `/profile` | Edit name/phone/timezone, avatar upload (client-compressed to 512px JPEG) |
-| `/notifications` | List, mark all read (bell in header with unread count) |
-| `/integrations` | Connect/disconnect Zoho, manual Sync now, last-error display |
+| Live app | https://xeltrix-team.vercel.app |
+| GitHub repo | https://github.com/amirthamorgo2plus-dotcom/xeltrix-team |
+| Supabase project | https://supabase.com/dashboard/project/owxdawbdvofnfdgcceun |
+| Vercel project | https://vercel.com/dashboard (xeltrix-team) |
+| Resend (SMTP) | https://resend.com — domain `xeltrixchem.com` |
+| Zoho API console | https://api-console.zoho.in (India region) |
+| Local dev folder | `C:\Users\anith\Clade- Copy trading\xeltrix-team` |
 
-## Database Schema (Postgres / Supabase)
+---
 
-**Identity:** `teams`, `team_members` (role: admin/manager/member, `zoho_salesperson_name`), `team_settings` (jsonb config), `profiles`
+## 3. Tech Stack
 
-**Sales:** `leads`, `opportunities` (zoho_invoice_id, zoho_customer_id, zoho_salesperson_*), `quotes`, `follow_ups`, `opportunity_templates`
-
-**Ops:** `tasks`, `complaints`, `actions` (audit log, currently unused), `notifications`
-
-**Attendance:** `holidays`, `attendance`, `leave_ledger` (comp-off, **no expiry** per company rule), `targets`
-
-**Integrations:** `integrations` (OAuth tokens per team)
-
-### Key SQL Helpers
-
-- `is_working_day(team, date)` — Sunday + 1st Saturday + listed-holiday → off
-- `award_comp_off()` — trigger on attendance, credits `leave_ledger` when working an off-day
-- `auth_user_team_ids()`, `auth_is_team_admin()` — RLS helpers (security definer)
-- `bootstrap_xeltrix(user_id)` — one-shot team setup with 11 holidays
-- `add_team_member(email, role)` — onboarding helper
-- Views: `v_leave_balance`, `v_sales_by_month`, `v_target_vs_achieved`
-
-## Migrations (run in order in Supabase SQL Editor)
-
-```
-00001_init_schema.sql            base tables
-00002_functions_triggers.sql     helpers, is_working_day, comp-off trigger
-00003_rls_policies.sql           RLS on all tables
-00004_storage.sql                avatars bucket + policies
-00005_seed.sql                   bootstrap_xeltrix + add_team_member + 2026 holidays
-00006_tighten_attendance_rls.sql members only edit today's attendance row
-00007_zoho_integration.sql       integrations + opportunity_templates
-00008_zoho_unique_constraints.sql  proper unique constraints (partial indexes broke upsert)
-00009_quotes.sql                 quotes table for Zoho Estimates
-00010_zoho_salesperson.sql       salesperson columns for mapping
-```
-
-## Vercel Env Vars (Production + Preview)
-
-```
-NEXT_PUBLIC_SUPABASE_URL=https://owxdawbdvofnfdgcceun.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<jwt-with-role-anon>
-SUPABASE_SERVICE_ROLE_KEY=<jwt-with-role-service_role>   # bypasses RLS
-CRON_SECRET=<random-string>                              # auth for cron
-ZOHO_CLIENT_ID=<from api-console.zoho.in>
-ZOHO_CLIENT_SECRET=<from api-console.zoho.in>
-ZOHO_ORG_ID=60059194216                                  # avoids /organizations API
-```
-
-`.env.local` for local dev contains the first two. Never commit secrets.
-
-## Zoho Books Integration
-
-- **Region:** India (`accounts.zoho.in`, `zohoapis.in/books/v3`)
-- **OAuth client:** registered at api-console.zoho.in, server-based application
-- **Redirect URI:** `https://xeltrix-team.vercel.app/api/zoho/callback`
-- **Scopes:** `ZohoBooks.invoices.READ + .CREATE`, `.estimates.READ`, `.contacts.READ + .CREATE`, `.items.READ`, `.settings.READ`
-- **Org ID:** `60059194216` (hardcoded via env to skip `/organizations` API)
-
-### What syncs
-
-| Zoho entity | Maps to | Notes |
-|---|---|---|
-| Contacts (customer type) | `leads` (qualified) | `zoho_customer_id` |
-| Items | `opportunity_templates` | `zoho_item_id` |
-| Invoices | `opportunities` (stage=won) | `zoho_invoice_id`, close_date = invoice date |
-| Estimates | `quotes` | `zoho_estimate_id` |
-
-**Owner attribution** flows through `zoho_salesperson_name` → `team_members.zoho_salesperson_name` mapping configured at `/salespersons`. Falls back to admin if unmapped.
-
-### Push direction
-
-When you flip an opportunity to `won` and it has no `zoho_invoice_id`, `pushWonOpportunityToZoho()` runs in the background and creates a draft Zoho invoice (auto-creating the Zoho contact if needed).
-
-## Critical Configuration / Behaviour
-
-- **Working days:** Sundays + 1st Saturday off; everything else working (including other Saturdays). Comp-off awarded for working any off day.
-- **Comp-off never expires** (per company rule).
-- **Currency:** INR.
-- **Time zone:** Asia/Kolkata default on profiles.
-- **Auth callback redirect URLs** (Supabase Auth → URL Configuration):
-  - Site URL: `https://xeltrix-team.vercel.app`
-  - Redirects: `/auth/callback`, `/**`, `https://xeltrix-team-*-xeltrix.vercel.app/**`
-
-## Known Issues / TODOs
-
-| Issue | Action |
+| Layer | Technology |
 |---|---|
-| Resend API key was pasted in chat | Rotate at resend.com/api-keys → update Vercel SMTP password |
-| CRON_SECRET was generated in chat | Rotate via `[Guid]::NewGuid().ToString("N") * 2` in PowerShell |
-| Maruthu has a placeholder email | Update real email in Supabase Auth → Users → edit |
-| 5 of 7 team members not yet invited | Supabase Auth → Add user → invite → `add_team_member()` |
-| Targets not yet set | `/targets` for each member → dashboard Achievement % will activate |
-| Older Zoho invoices may have null salesperson | Tag them in Zoho and re-sync, OR reassign manually in app |
-| `actions` table exists but unused | No mutation currently logs to it |
-| Notification triggers not built | Table exists, bell shows count, but nothing fires automatically |
-| Soft delete not implemented | Hard-deletes currently |
+| Frontend | Next.js 16 (App Router) + TypeScript + Tailwind v4 |
+| **Important** | Next.js 16 renamed `middleware.ts` to `proxy.ts` — be careful when copying advice from older Next.js docs |
+| UI components | Custom (in `src/components/ui/`) — Button, Input, Select, Card, Badge, Avatar, etc. |
+| Forms | React 19 `useActionState` + Server Actions |
+| Charts | Recharts |
+| Map | Leaflet + react-leaflet + OpenStreetMap tiles (free, no API key) |
+| Image compression | `browser-image-compression` (client-side, for avatars + comment attachments) |
+| Database | Supabase Postgres |
+| Auth | Supabase Auth (magic link, no password) |
+| File storage | Supabase Storage (buckets: `avatars`, `comment-images`) |
+| Email | Resend SMTP, sender `noreply@xeltrixchem.com` |
+| Hosting | Vercel Hobby (free) |
+| Cron | Vercel Cron (2 free slots used: daily Zoho sync, daily auto-close-visits) |
+| External integration | Zoho Books (India region) |
 
-## Future Enhancements (priority order)
+`.npmrc` contains `legacy-peer-deps=true` (needed because react-leaflet 4 has React 19 peer-dep conflict).
 
-### High value, low effort
+---
 
-1. **Notification triggers** — fire on task assignment, follow-up due, complaint opened, target hit. Postgres trigger → `notifications` table → Realtime sub on bell.
-2. **Customer 360 view** — clicking a lead opens timeline: opps + quotes + tasks + invoices + activity log.
-3. **Real-time dashboard updates** — Supabase Realtime channel so KPIs refresh live when a teammate marks something won.
-4. **Bulk actions** — multi-select on lists for bulk delete / reassign / status.
-5. **Opportunity template picker** — when adding an opp, autocomplete from synced Zoho items to fill title + value.
-
-### Medium value
-
-6. **Quote → Opportunity converter** button.
-7. **Global search** bar across leads, customers, invoices, tasks.
-8. **Email digests** — daily summary of overdue tasks + expiring quotes (Resend already configured).
-9. **Calendar drag-and-drop** — reschedule tasks/follow-ups by dragging.
-10. **WhatsApp integration** — send quote PDFs and reminders via WhatsApp Business API (huge for sales follow-up in India).
-11. **Excel-style bulk edit** — paste rows into table for fast data entry.
-
-### Architectural / scale
-
-12. **Audit log activation** — instrument every mutation to write to `actions` table.
-13. **Role-based RLS** — currently any team member can CRUD anything. Restrict edit-others to admin/manager.
-14. **Soft delete** + restore.
-15. **Multi-tenant UI** — currently single team. Expose team picker if you add more.
-16. **Performance: server-side pagination** — current cap is 500 rows per list; will degrade past that.
-17. **Backups** — Supabase Pro has daily backups, or set up manual `pg_dump` cron to S3.
-
-### Integration expansions
-
-18. **Two-way customer sync** — push Xeltrix-created leads to Zoho Contacts.
-19. **Webhooks from Zoho** — real-time push instead of daily cron (need Zoho Pro plan).
-20. **Payment status sync** — when invoice paid in Zoho, surface `payment_status` on the opportunity.
-21. **Google Calendar / Outlook sync** for meetings tied to follow-ups.
-22. **Gmail integration** — auto-log emails sent to leads.
-
-### Polish
-
-23. **Dark mode toggle** (currently auto via prefers-color-scheme).
-24. **Keyboard shortcuts** — `n` for new task, `/` for search, etc.
-25. **Mobile improvements** — Kanban scroll, larger tap targets.
-26. **Custom domain** — point `app.xeltrixchem.com` at Vercel.
-
-## Free Tier Limits to Watch
-
-| Service | Limit | When you'd hit it |
-|---|---|---|
-| Supabase egress | 2 GB / month | Heavy daily browsing by all 7 members |
-| Supabase DB | 500 MB | Years away at current data growth |
-| Vercel bandwidth | 100 GB / month | Way far away for 7 users |
-| Vercel function timeout | 60 s | Already extended via maxDuration; if Zoho data grows 10× we'll need to batch differently |
-| Resend emails | 3,000 / month | Comfortable |
-| Vercel cron jobs | 2 / project | Using 1 |
-
-## Repo File Map
+## 4. Folder structure
 
 ```
 xeltrix-team/
-├── proxy.ts                    # Auth session refresh (renamed from middleware)
-├── vercel.json                 # Cron config
-├── HANDOFF.md                  # This file
-├── README.md                   # Setup instructions
-├── supabase/migrations/        # 10 SQL files, run in order
+├── .env.local                  (local secrets; never committed)
+├── .npmrc                      (legacy-peer-deps=true for leaflet)
+├── proxy.ts                    (Next.js 16 middleware — session refresh)
+├── vercel.json                 (cron schedules)
+├── HANDOFF.md                  (this file)
+├── supabase/migrations/        (20 SQL files, numbered)
 └── src/
     ├── app/
-    │   ├── (app)/              # Protected route group, all 14 pages
-    │   ├── auth/               # /callback, /signout
-    │   ├── login/              # Login form + magic link action
-    │   ├── api/
-    │   │   ├── export/         # CSV exporters (leads, tasks, etc.)
-    │   │   └── zoho/           # /connect, /callback, /sync
-    │   ├── layout.tsx          # Root layout
-    │   └── globals.css         # Tailwind v4 entry
+    │   ├── (app)/              (protected route group, requires login)
+    │   │   ├── dashboard/      (KPIs + quote card + target chart)
+    │   │   ├── leads/          (customer CRUD + Zoho-synced)
+    │   │   ├── opportunities/  (Kanban pipeline)
+    │   │   ├── quotes/         (Zoho estimates)
+    │   │   ├── tasks/          (with comments + screenshots)
+    │   │   ├── follow-ups/     (with tabs by source)
+    │   │   ├── complaints/     (with combobox customer selector)
+    │   │   ├── attendance/     (check-in/out, monthly grid)
+    │   │   ├── calendar/       (month grid: tasks + leaves + holidays)
+    │   │   ├── holidays/       (admin CRUD)
+    │   │   ├── targets/        (monthly per-member)
+    │   │   ├── salespersons/   (map Zoho salesperson → team member)
+    │   │   ├── templates/      (Zoho items catalog, with status filter)
+    │   │   ├── payments/       (recurring expenses, admin only)
+    │   │   ├── expenses/       (Zoho expenses + employee advances)
+    │   │   ├── visits/         (field rep check-ins + monthly summary)
+    │   │   ├── notifications/  (bell list)
+    │   │   ├── integrations/   (Zoho connect/sync)
+    │   │   ├── profile/        (personal details + avatar)
+    │   │   └── layout.tsx      (sidebar + header)
+    │   ├── auth/callback/      (magic link handler)
+    │   ├── login/              (magic link form)
+    │   └── api/
+    │       ├── export/*/route.ts        (CSV exports for each entity)
+    │       ├── cron/
+    │       │   └── auto-close-visits/   (8 PM IST daily)
+    │       └── zoho/
+    │           ├── connect/    (OAuth start)
+    │           ├── callback/   (OAuth return)
+    │           └── sync/       (manual + cron-triggered sync)
     ├── components/
-    │   ├── ui/                 # Button, Input, Select, Card, Avatar, Badge, etc.
-    │   ├── nav/                # Sidebar, MobileNav, NotificationBell
-    │   └── *.tsx               # KpiCard, TargetChart, EmptyState, ExportButton
+    │   ├── ui/                 (atomic UI primitives)
+    │   ├── nav/                (sidebar + mobile nav + bell)
+    │   ├── kpi-card.tsx
+    │   ├── range-filter.tsx    (this_month / FY / etc.)
+    │   ├── target-chart.tsx
+    │   ├── quote-of-the-day.tsx
+    │   └── ...
     └── lib/
-        ├── supabase/           # browser, server, proxy clients
-        ├── zoho/               # config, oauth, client, sync, types
-        ├── data.ts             # cached user/team helpers
-        ├── csv.ts              # CSV export utilities
-        ├── export-helpers.ts   # memberNameLookup
-        └── utils.ts            # cn() helper
-
-```
-
-## How to Pick Up Work in a New Chat
-
-If this conversation gets too long and you need a fresh thread:
-
-1. Tell the new Claude: *"I'm continuing the Xeltrix Team project. Read `HANDOFF.md` in the repo for context."*
-2. Share the GitHub URL: `https://github.com/amirthamorgo2plus-dotcom/xeltrix-team`
-3. Mention your latest goal (e.g., "I want to add notification triggers").
-
-Everything you need is in the repo. Migrations are idempotent (drop trigger if exists, etc.) so safe to re-run.
-
-## Reset / Recovery Commands
-
-```sql
--- See current sync state
-select last_synced_at, last_sync_error from integrations;
-
--- Force a fresh sync from scratch (deletes synced rows)
--- Use with care!
--- delete from opportunities where zoho_invoice_id is not null;
--- delete from quotes where zoho_estimate_id is not null;
--- delete from leads where zoho_customer_id is not null;
-
--- See team roster
-select tm.role, p.full_name, u.email
-from team_members tm
-join auth.users u on u.id = tm.user_id
-left join profiles p on p.id = tm.user_id
-order by tm.role, u.email;
+        ├── supabase/           (browser + server + proxy clients)
+        ├── zoho/               (sync, OAuth, types, config)
+        ├── data.ts             (cached server helpers: getUser, getMyProfile, getMyMembership, getTeamMembers, getTeamSettings)
+        ├── date-range.ts       (resolveRange for filters)
+        ├── csv.ts              (CSV export helpers)
+        └── utils.ts            (cn helper)
 ```
 
 ---
 
-Built incrementally over a single working session. All commits on `main`. Last commit at handoff: see `git log --oneline -5`.
+## 5. Database schema
+
+20 migrations under `supabase/migrations/`. Each is idempotent (uses `if not exists` etc.). Run them in order in Supabase SQL Editor when setting up a fresh DB or after pulling new code.
+
+| # | File | What it does |
+|---|---|---|
+| 00001 | `init_schema.sql` | All base tables (teams, members, leads, opportunities, tasks, etc.) |
+| 00002 | `functions_triggers.sql` | `is_working_day()`, comp-off trigger, RLS helpers |
+| 00003 | `rls_policies.sql` | Row Level Security on every table |
+| 00004 | `storage.sql` | `avatars` storage bucket |
+| 00005 | `seed.sql` | `bootstrap_xeltrix()`, `add_team_member()`, 2026 holidays |
+| 00006 | `tighten_attendance_rls.sql` | Members can only edit today's row |
+| 00007 | `zoho_integration.sql` | `integrations` + `opportunity_templates` |
+| 00008 | `zoho_unique_constraints.sql` | Fix upsert constraints |
+| 00009 | `quotes.sql` | Quotes table |
+| 00010 | `zoho_salesperson.sql` | Salesperson tracking columns |
+| 00011 | `expenses.sql` | Recurring payments (expense_items + expense_payments) |
+| 00012 | `relations_and_auto_followups.sql` | Quote↔opp link, follow-up auto-triggers |
+| 00013 | `fix_estimate_unique.sql` | Fix partial index breaking upsert |
+| 00014 | `zoho_expenses.sql` | Sync Zoho expenses, employee advance mapping |
+| 00015 | `expense_submissions.sql` | Employee self-submit expenses |
+| 00016 | `tax_amounts.sql` | `value_excl_tax` + `tax_amount` on opps & quotes |
+| 00017 | `task_comments.sql` | Polymorphic comments + @-mention notification trigger |
+| 00018 | `comment_attachments.sql` | Image attachments on comments + `comment-images` bucket |
+| 00019 | `visits.sql` | Field rep visits + lead lat/lng |
+| 00020 | `quotes.sql` (productivity quotes) | Quote of the day |
+
+### Key tables
+
+| Table | Purpose |
+|---|---|
+| `teams` | Multi-tenant container (one team in production) |
+| `team_members` | role: admin/manager/member; has `zoho_salesperson_name`, `zoho_advance_account_name` for mapping |
+| `team_settings` | `config` jsonb (currency, working hours, etc.) |
+| `profiles` | Per-user: full_name, phone, timezone, avatar_url. **UPSERT on save**, not UPDATE |
+| `leads` | Customers (synced from Zoho Contacts). Has `latitude`, `longitude`, `address` for visits |
+| `opportunities` | Sales pipeline. Has `zoho_invoice_id`, `zoho_estimate_id`, `value`, `value_excl_tax`, `tax_amount`, `stage`, `close_date` |
+| `quotes` | Zoho estimates. Has `value_excl_tax`, `tax_amount` |
+| `tasks` | Title, due_at, priority, status, owner_id |
+| `comments` | Polymorphic (subject_type + subject_id), body, mentioned_ids[], attachment_url |
+| `follow_ups` | Has `related_type` (lead/opportunity/complaint/quote), `auto_source`, `related_id` |
+| `complaints` | customer_name, severity, status |
+| `holidays` | team_id + date + name |
+| `attendance` | member + date + status (present/absent/half/leave/wfh/holiday_worked) |
+| `leave_ledger` | Comp-off accounting, no expiry |
+| `targets` | Per member, per month |
+| `notifications` | user_id, type, title, body, link, read_at — bell uses this |
+| `integrations` | OAuth tokens per team (Zoho) |
+| `expense_items` + `expense_payments` | Recurring monthly bills |
+| `zoho_expenses` | Mirror of Zoho expenses |
+| `expense_submissions` | Self-service rep expense entries pending admin verification |
+| `visits` | Field check-ins (member, lead, check_in_at/lat/lng, check_out_*) |
+| `quotes` (productivity) | Quote of the day pool |
+
+### RLS pattern
+
+Every table has Row Level Security. Common policies:
+- **Read**: visible to team members OR globally (where applicable)
+- **Insert**: own records only OR admin/manager
+- **Update**: own pending records OR admin/manager
+- **Delete**: own records OR admin/manager
+
+Helper functions in `00002`:
+- `auth_user_team_ids()` — array of team ids the current user belongs to
+- `auth_is_team_admin(team_id)` — true if user is admin/manager of that team
+
+---
+
+## 6. Environment variables (Vercel)
+
+Production + Preview. Never commit.
+
+| Variable | Source |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API → URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role (bypasses RLS) |
+| `CRON_SECRET` | Random string (gates `/api/cron/*`) |
+| `ZOHO_CLIENT_ID` | api-console.zoho.in → your app |
+| `ZOHO_CLIENT_SECRET` | Same |
+| `ZOHO_ORG_ID` | 60059194216 |
+
+---
+
+## 7. Features (every page, top to bottom)
+
+### `/login`
+Magic-link auth. Type email → click link in inbox → land at `/dashboard`. Uses Resend SMTP.
+
+### `/dashboard`
+8 KPI cards (Achievement %, Sales, Target, Attendance %, Comp-off, Pipeline, Open Tasks, Open Complaints). Range filter (This month / This FY / etc.). Target vs Achieved chart. Quote of the day card.
+
+### `/leads`
+CRUD + Zoho-synced. Now has `latitude`, `longitude`, `address` columns for smart visit sorting.
+
+### `/opportunities`
+Kanban with 6 stages: prospecting / qualification / proposal / negotiation / won / lost.
+- Synced from Zoho: invoices → won opps, estimates → proposal opps
+- Stage-mapping logic in sync handles draft / void invoices (don't get counted as won)
+- "won opps" reflects only real sales matching Zoho's Sales by Salesperson report
+
+### `/quotes`
+Estimates synced from Zoho. Columns: Number, Customer, Salesperson, Incl. tax, Excl. tax, Date, Expiry, Status. Filters by status and range.
+
+### `/tasks`
+Buckets: Overdue / Today / Upcoming / Done. Each task:
+- Status dropdown (todo / in_progress / done / cancelled)
+- Assignee dropdown
+- 💬 Comments thread (click to expand)
+  - Tag chips for @-mentions
+  - Paste a screenshot to attach (auto-uploads to `comment-images`)
+  - Author/admin can delete
+
+### `/follow-ups`
+Tabs: All / Opportunities / Quotes / Complaints / Leads with per-tab counts. Pending / Done toggle. Inline edit + delete (admin/manager). Auto-created via Postgres triggers when:
+- Opp created or moves to negotiation
+- Complaint opened
+
+### `/complaints`
+Customer field is a combobox (datalist) of leads — auto-fills email when name matches, creates a new lead if name is brand new. Severity (low/medium/high/critical), status workflow, range filter.
+
+### `/attendance`
+Self check-in/out. Comp-off balance display. Manager mark-on-behalf form. Monthly grid (rows = members, cols = days). Color-coded by status.
+
+### `/calendar`
+6×7 month grid showing holidays, leaves, tasks due, follow-ups due.
+
+### `/holidays`
+Admin CRUD. Seeded with 11 holidays for 2026.
+
+### `/targets`
+Set per-member monthly target. Leaderboard with target vs achieved %.
+
+### `/salespersons`
+Map Zoho salesperson names → Xeltrix team members. Auto-suggests via fuzzy name match. Saving the mapping bulk-reassigns existing opps + quotes.
+
+### `/templates`
+Zoho items catalog. Search + status filter chips (All / Active / Inactive).
+
+### `/payments` (admin only)
+Recurring monthly bills (Rent, EB, Salaries, etc.). 21 seeded items across 7 categories. Monthly view + yearly dashboard with bar / donut / tables.
+
+### `/expenses` (whole team)
+Three things in one page:
+1. **Zoho expenses tab** — all expenses synced from Zoho with search + advance reconciliation table (Given / Spent / Outstanding per employee advance account, auto-suggests employee via fuzzy match)
+2. **Submissions tab** — employees self-submit (with bulk-paste of handwritten ledger entries that get parsed); admin verifies against Zoho matches
+3. Month filter + advance mapping
+
+### `/visits` (whole team)
+Daily view:
+- Active visit card (if you're checked in) → Check out button
+- Big Check in button (only 9 AM–8 PM IST)
+- Asks for GPS, shows customer dropdown (smart-sorted by distance), inline "Add new customer" form
+- Map (Leaflet/OSM) with pins for everyone's check-ins, green polyline between in & out
+- Today's list with avatars + customer + time-on-site
+
+Filters: Date picker + Employee dropdown. Daily / Monthly summary tabs.
+
+Cron auto-closes open visits at 8 PM IST (uses check-in location as end).
+
+### `/visits/summary`
+Monthly view per employee. KPIs: Total visits, Unique customers, New customers added, Time on site. Per-employee table (click to drill in). Top customers visited. New customers added list.
+
+### `/notifications`
+Bell list with mark-all-read. Bell badge in header.
+
+### `/integrations`
+Zoho connect/disconnect/sync now. Date picker for sync window (defaults to 35 days ago). Last sync timestamp + last sync error. Permanently shows the "current month always re-fetched fresh" guard in action.
+
+### `/profile`
+Edit full_name, phone, timezone, avatar. **UPSERTs** so it works even if the profile row didn't exist (was a bug, now fixed).
+
+---
+
+## 8. Integrations
+
+### Zoho Books (India region)
+- Region: `accounts.zoho.in`, `zohoapis.in/books/v3`
+- OAuth scopes: invoices.READ + CREATE, estimates.READ, contacts.READ + CREATE, items.READ, expenses.READ, settings.READ
+- Org ID: 60059194216 (hardcoded via env)
+- **Pulls**: contacts → leads, items → templates, invoices → won opportunities, estimates → quotes + proposal opps, expenses → zoho_expenses
+- **Pushes**: opportunity stage = won → creates draft invoice in Zoho
+- **Sync strategy**: 35-day window by default. Detail-fetch each invoice for `sub_total`/`tax_total` (list endpoint doesn't include these). 45-second wall-clock budget per sync run, current month always re-fetched fresh, older months incremental. Vercel cron at 02:00 UTC = 07:30 IST.
+
+### Resend SMTP
+- Domain `xeltrixchem.com` verified
+- Sender: `noreply@xeltrixchem.com`
+- Used by Supabase Auth for magic links
+
+### Vercel
+- Hobby (free) plan
+- 2/2 cron slots used (Zoho sync + visit auto-close)
+- 60s function timeout
+- ~100 GB bandwidth/month (way under)
+- Build minutes 6,000/month (way under)
+- Builds take ~3 min (leaflet install is slow on cold builds)
+
+---
+
+## 9. How to make safe changes
+
+### Adding a new page
+1. Create folder under `src/app/(app)/your-page/`
+2. Add `page.tsx` (server component)
+3. Add to sidebar at `src/components/nav/nav-items.ts`
+4. Mark `adminOnly: true` if it's restricted
+5. Run `npm run build` locally before pushing
+
+### Adding a new database column
+1. Create a new migration file: `supabase/migrations/NNNNN_short_name.sql`
+2. Always use `if not exists` (idempotent)
+3. Add RLS policies if needed
+4. Run the migration in Supabase SQL Editor
+5. Update the relevant TypeScript queries and types
+
+### Updating a server action
+- Server actions are in `[page-folder]/actions.ts`
+- Always re-fetch the user/membership at the start to check permissions
+- Use UPSERT instead of UPDATE when the target row might not exist
+- Call `revalidatePath(...)` after writes so the cache invalidates
+
+### Adding to Vercel
+- `npm install <package>` locally
+- Verify build passes
+- Commit + push
+- Vercel auto-deploys
+
+---
+
+## 10. Common issues and fixes
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Sidebar entry missing | Old browser cache | Hard refresh (Ctrl+Shift+R) |
+| "Login every time" | Cookies blocked for site | Chrome → settings/cookies → allow `[*.]vercel.app` and `[*.]supabase.co` |
+| "missing_code" on /login | Supabase URL Config wrong | Auth → URL Configuration → Site URL = production URL; Redirect URLs include `/auth/callback` and `/**` |
+| "This page couldn't load" after deploy | Vercel build failed | Check Vercel deployments → click failed one → expand Build Logs |
+| Dashboard numbers don't match Zoho | Stale tax data | Open `/integrations`, click Sync now. Current month is re-fetched every sync; older months incremental |
+| Sync hits 429 | Zoho daily rate limit (1000 calls free tier) | Wait until midnight IST; sync runs again the next day |
+| Profile save not persisting | Was a known bug | Now uses UPSERT — should work; if not, check RLS allows insert |
+| Build fails on Vercel: ERESOLVE peer dep | react-leaflet 4 / React 19 conflict | `.npmrc` has `legacy-peer-deps=true` — make sure it's committed |
+| Comments not showing image | Migration 00018 not run | Run it in Supabase SQL Editor |
+| Visits page not loading | Migration 00019 not run | Run it in Supabase SQL Editor |
+| Quote card empty | Migration 00020 not run | Run it in Supabase SQL Editor |
+
+---
+
+## 11. Pending migrations to run (if fresh deploy)
+
+In order:
+```
+00001 through 00018 — already run in production
+00019_visits.sql — RUN THIS
+00020_quotes.sql — RUN THIS
+```
+
+Migrations 00019 and 00020 are the most recent. Anything you're missing → just paste the file into Supabase SQL Editor and run.
+
+---
+
+## 12. Useful SQL queries
+
+```sql
+-- Team roster
+select tm.role, p.full_name, u.email
+from team_members tm
+join auth.users u on u.id = tm.user_id
+left join profiles p on p.id = tm.user_id
+order by tm.role, p.full_name;
+
+-- Today's visits
+select tm.id, p.full_name as member, l.name as customer,
+       v.check_in_at, v.check_out_at, v.notes
+from visits v
+join team_members tm on tm.id = v.member_id
+left join profiles p on p.id = tm.user_id
+left join leads l on l.id = v.lead_id
+where v.check_in_at >= current_date
+order by v.check_in_at desc;
+
+-- This month's sales by member (incl + excl tax)
+select tm.id, p.full_name,
+       count(*) as won_count,
+       sum(o.value)::numeric(14,2) as incl_tax,
+       sum(o.value_excl_tax)::numeric(14,2) as excl_tax
+from opportunities o
+join team_members tm on tm.id = o.owner_id
+left join profiles p on p.id = tm.user_id
+where o.stage = 'won'
+  and o.close_date >= date_trunc('month', current_date)
+group by tm.id, p.full_name
+order by incl_tax desc nulls last;
+
+-- Employee advance balance
+select tm.zoho_advance_account_name as advance_account,
+       p.full_name as employee,
+       sum(case when ze.account_name = tm.zoho_advance_account_name
+                then ze.amount else 0 end) as given,
+       sum(case when ze.paid_through_account_name = tm.zoho_advance_account_name
+                then ze.amount else 0 end) as spent,
+       sum(case when ze.account_name = tm.zoho_advance_account_name
+                then ze.amount else 0 end) -
+       sum(case when ze.paid_through_account_name = tm.zoho_advance_account_name
+                then ze.amount else 0 end) as outstanding
+from team_members tm
+left join profiles p on p.id = tm.user_id
+join zoho_expenses ze on
+   ze.account_name = tm.zoho_advance_account_name
+   or ze.paid_through_account_name = tm.zoho_advance_account_name
+where tm.zoho_advance_account_name is not null
+group by tm.zoho_advance_account_name, p.full_name;
+
+-- Tasks with no comments older than 7 days (stale)
+select t.title, t.due_at, p.full_name as owner
+from tasks t
+left join team_members tm on tm.id = t.owner_id
+left join profiles p on p.id = tm.user_id
+where t.status in ('todo', 'in_progress')
+  and t.created_at < now() - interval '7 days'
+  and not exists (
+    select 1 from comments c
+    where c.subject_type = 'task' and c.subject_id = t.id
+  )
+order by t.due_at;
+```
+
+---
+
+## 13. Open / planned items
+
+### Ready to build
+- WhatsApp Business API integration (Nakaraj's photo OCR for expenses)
+- Customer profitability (cross-link expenses to opps)
+- Native mobile app (Capacitor wrapper for continuous GPS tracking)
+- Bell email digests (Resend, daily summary)
+- Public help page at `/help`
+
+### Nice-to-have
+- Cursor / drag-to-reorder kanban
+- Recharts replaced by smaller library for faster builds
+- Mobile-only "Today's plan" screen optimized for field reps
+- Visit ↔ Opportunity linking
+
+---
+
+## 14. Maintenance routine
+
+- **Daily**: morning, click Sync now on `/integrations` if you've added invoices to Zoho since yesterday's cron run
+- **Weekly**: check `/expenses` → Submissions tab → verify any pending employee submissions
+- **Monthly**: review `/visits/summary` for the past month, set targets for next month in `/targets`
+- **Quarterly**: rotate `CRON_SECRET` and `Resend API key` in Vercel env vars
+
+---
+
+## 15. Asking AI tools for help with this project
+
+When pasting code into a free AI (ChatGPT, free Claude, etc.) for help:
+
+1. **Open with this doc** — give context first (paste sections 1–8 into your conversation)
+2. **Show file paths** — say "Edit `src/app/(app)/visits/page.tsx`" so the AI doesn't guess
+3. **Paste only relevant code** — the offending function or component, not the whole file
+4. **Tell it the goal in one sentence** — "Add a column to the employee summary table showing weekend visits"
+5. **For errors** — paste the exact error, not "it's broken"
+
+The AI will give you code snippets. You:
+- Open the file in VS Code
+- Replace or add the code
+- Save
+- Run `npm run build` to verify
+- If build passes: `git add . && git commit -m "msg" && git push`
+- Vercel auto-deploys in ~3 min
+
+---
+
+## 16. Today's session changelog (May 2026)
+
+Major additions:
+- **Task comments** with @-mentions + screenshot attachments (`00017`, `00018`)
+- **Field visits** with Leaflet map, smart customer ordering, auto-close at 8 PM (`00019`)
+- **Visits monthly summary** at `/visits/summary` with per-employee table + top customers
+- **Quote of the day** card on dashboard (`00020`)
+- **Tax accuracy permanence**: time-budgeted detail-fetch + current-month-always-fresh guard so dashboard matches Zoho exactly
+- **Zoho invoice status mapping** (draft → proposal, void → lost) — fixed over-counting in Sales KPI
+- **Profile save bug fix** (UPDATE → UPSERT, persists for users created before the trigger existed)
+- **Range filters** with India FY support on dashboard, opps, quotes, salespersons, complaints
+- **Visits filters**: date + employee on daily list
+- **Add new customer inline** from check-in flow
+- **Sync date filter** with default 35-day window (instead of "today only")
+
+---
+
+## End of reference
+
+For active development sessions, this file is the single source of truth. Update it when you add a new feature or change behavior significantly.
