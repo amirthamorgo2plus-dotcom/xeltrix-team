@@ -101,3 +101,39 @@ export async function deleteVisit(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/visits");
 }
+
+// Quick-add a new customer (lead) from the check-in flow.
+// Returns the new lead id so the client can immediately attach the visit.
+export async function quickAddLead(formData: FormData): Promise<{ id: string }> {
+  const m = await getMyMembership();
+  if (!m) throw new Error("Not in a team.");
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) throw new Error("Customer name is required.");
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  const latRaw = formData.get("lat");
+  const lngRaw = formData.get("lng");
+  const lat = latRaw ? Number(latRaw) : null;
+  const lng = lngRaw ? Number(lngRaw) : null;
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .insert({
+      team_id: m.team_id,
+      owner_id: m.id,
+      name,
+      phone,
+      source: "visit",
+      status: "new",
+      latitude: Number.isFinite(lat) ? lat : null,
+      longitude: Number.isFinite(lng) ? lng : null,
+    })
+    .select("id")
+    .single();
+
+  if (error) throw new Error(error.message);
+  revalidatePath("/visits");
+  revalidatePath("/leads");
+  return { id: data.id as string };
+}

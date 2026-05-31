@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { MapPin, Loader2, Search } from "lucide-react";
+import { MapPin, Loader2, Search, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { checkIn } from "./actions";
+import { checkIn, quickAddLead } from "./actions";
 
 type Lead = {
   id: string;
@@ -51,6 +51,13 @@ export function CheckInButton({
   const [pending, start] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Local list of leads (can grow when a new customer is added inline)
+  const [leadList, setLeadList] = useState<Lead[]>(leads);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [adding, setAdding] = useState(false);
+
   function requestLocation() {
     setPosError(null);
     setGettingPos(true);
@@ -75,7 +82,7 @@ export function CheckInButton({
 
   // Sort leads by distance from current GPS, then alphabetically
   const sortedLeads = useMemo(() => {
-    const filtered = leads.filter((l) =>
+    const filtered = leadList.filter((l) =>
       l.name.toLowerCase().includes(search.toLowerCase().trim())
     );
     if (!pos) return filtered.sort((a, b) => a.name.localeCompare(b.name));
@@ -91,7 +98,42 @@ export function CheckInButton({
       if (bHas) return 1;
       return a.name.localeCompare(b.name);
     });
-  }, [leads, pos, search]);
+  }, [leadList, pos, search]);
+
+  async function handleAddNewCustomer() {
+    if (!newName.trim()) {
+      setActionError("Customer name is required.");
+      return;
+    }
+    setAdding(true);
+    setActionError(null);
+    try {
+      const fd = new FormData();
+      fd.set("name", newName.trim());
+      if (newPhone.trim()) fd.set("phone", newPhone.trim());
+      if (pos) {
+        fd.set("lat", String(pos.lat));
+        fd.set("lng", String(pos.lng));
+      }
+      const res = await quickAddLead(fd);
+      // Add to local list with current pos so smart-sort still works
+      const newLead: Lead = {
+        id: res.id,
+        name: newName.trim(),
+        latitude: pos?.lat ?? null,
+        longitude: pos?.lng ?? null,
+      };
+      setLeadList((prev) => [newLead, ...prev]);
+      setLeadId(res.id);
+      setNewName("");
+      setNewPhone("");
+      setShowNewForm(false);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to add customer.");
+    } finally {
+      setAdding(false);
+    }
+  }
 
   function distanceLabel(l: Lead) {
     if (!pos || l.latitude == null || l.longitude == null) return null;
@@ -165,6 +207,55 @@ export function CheckInButton({
                 />
               </div>
               <div className="mt-2 max-h-44 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setShowNewForm((v) => !v)}
+                  className="flex w-full items-center gap-2 border-b border-zinc-200 bg-emerald-50/50 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-100/50 dark:border-zinc-800 dark:bg-emerald-950/20 dark:text-emerald-300"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add new customer
+                </button>
+                {showNewForm && (
+                  <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+                    <Input
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      placeholder="Customer name *"
+                      autoFocus
+                    />
+                    <Input
+                      value={newPhone}
+                      onChange={(e) => setNewPhone(e.target.value)}
+                      placeholder="Phone (optional)"
+                      type="tel"
+                    />
+                    <div className="text-[10px] text-zinc-500">
+                      Will save with your current GPS as the customer&apos;s
+                      location (used for distance sorting next time).
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={adding || !newName.trim()}
+                        onClick={handleAddNewCustomer}
+                      >
+                        {adding ? "Saving…" : "Save customer"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={adding}
+                        onClick={() => {
+                          setShowNewForm(false);
+                          setNewName("");
+                          setNewPhone("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <label className="flex cursor-pointer items-center gap-2 border-b border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800">
                   <input
                     type="radio"
