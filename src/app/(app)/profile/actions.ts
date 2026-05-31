@@ -11,12 +11,26 @@ export async function updateProfile(
   const user = await getUser();
   if (!user) return { error: "Not signed in." };
 
+  const full_name = String(formData.get("full_name") ?? "").trim() || null;
+  const phone = String(formData.get("phone") ?? "").trim() || null;
+  const timezone =
+    String(formData.get("timezone") ?? "").trim() || "Asia/Kolkata";
+
   const supabase = await createClient();
-  const { error } = await supabase.from("profiles").update({
-    full_name: String(formData.get("full_name") ?? "").trim() || null,
-    phone: String(formData.get("phone") ?? "").trim() || null,
-    timezone: String(formData.get("timezone") ?? "Asia/Kolkata"),
-  }).eq("id", user.id);
+
+  // UPSERT — creates the row if the profile is missing (e.g. user was added
+  // before the handle_new_user trigger existed) and updates it otherwise.
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(
+      {
+        id: user.id,
+        full_name,
+        phone,
+        timezone,
+      },
+      { onConflict: "id" }
+    );
 
   if (error) return { error: error.message };
   revalidatePath("/profile");
@@ -28,10 +42,13 @@ export async function saveAvatarUrl(url: string | null) {
   if (!user) throw new Error("Not signed in");
 
   const supabase = await createClient();
+  // UPSERT here too, so an avatar can be set even if the row is brand new.
   const { error } = await supabase
     .from("profiles")
-    .update({ avatar_url: url })
-    .eq("id", user.id);
+    .upsert(
+      { id: user.id, avatar_url: url },
+      { onConflict: "id" }
+    );
 
   if (error) throw new Error(error.message);
   revalidatePath("/profile");
