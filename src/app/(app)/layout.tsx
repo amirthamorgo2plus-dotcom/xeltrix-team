@@ -5,6 +5,7 @@ import { getMyProfile, getMyMembership } from "@/lib/data";
 import { Sidebar } from "@/components/nav/sidebar";
 import { MobileNav } from "@/components/nav/mobile-nav";
 import { NotificationBell } from "@/components/nav/notification-bell";
+import { WorldClocks } from "@/components/nav/world-clocks";
 import { Avatar } from "@/components/ui/avatar";
 
 export default async function AppLayout({
@@ -40,6 +41,7 @@ export default async function AppLayout({
             </Link>
           </div>
           <div className="flex items-center gap-2">
+            <WorldClocks />
             <NotificationBell />
             <form action="/auth/signout" method="post">
               <button
