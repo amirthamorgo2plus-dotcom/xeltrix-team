@@ -51,7 +51,7 @@ A custom internal web app for **Xeltrix Chemicals Private Limited** that runs th
 | Image compression | `browser-image-compression` (client-side, for avatars + comment attachments) |
 | Database | Supabase Postgres |
 | Auth | Supabase Auth (magic link, no password) |
-| File storage | Supabase Storage (buckets: `avatars`, `comment-images`) |
+| File storage | Supabase Storage (buckets: `avatars`, `comment-images`, `quote-images`) |
 | Email | Resend SMTP, sender `noreply@xeltrixchem.com` |
 | Hosting | Vercel Hobby (free) |
 | Cron | Vercel Cron (2 free slots used: daily Zoho sync, daily auto-close-visits) |
@@ -125,7 +125,7 @@ xeltrix-team/
 
 ## 5. Database schema
 
-20 migrations under `supabase/migrations/`. Each is idempotent (uses `if not exists` etc.). Run them in order in Supabase SQL Editor when setting up a fresh DB or after pulling new code.
+21 migrations under `supabase/migrations/`. Each is idempotent (uses `if not exists` etc.). Run them in order in Supabase SQL Editor when setting up a fresh DB or after pulling new code.
 
 | # | File | What it does |
 |---|---|---|
@@ -149,6 +149,7 @@ xeltrix-team/
 | 00018 | `comment_attachments.sql` | Image attachments on comments + `comment-images` bucket |
 | 00019 | `visits.sql` | Field rep visits + lead lat/lng |
 | 00020 | `daily_quotes.sql` (productivity quotes) | Quote of the day — table is `daily_quotes` (NOT `quotes`, which is Zoho estimates from 00009) |
+| 00021 | `quote_images.sql` | Image quote of the day: `daily_quotes.body` made nullable + `quote-images` storage bucket |
 
 ### Key tables
 
@@ -175,7 +176,7 @@ xeltrix-team/
 | `zoho_expenses` | Mirror of Zoho expenses |
 | `expense_submissions` | Self-service rep expense entries pending admin verification |
 | `visits` | Field check-ins (member, lead, check_in_at/lat/lng, check_out_*) |
-| `daily_quotes` | Quote of the day pool (separate from `quotes`/Zoho estimates) |
+| `daily_quotes` | Quote of the day pool (separate from `quotes`/Zoho estimates). `body` nullable; `image_url` holds admin-uploaded images |
 
 ### RLS pattern
 
@@ -213,7 +214,7 @@ Production + Preview. Never commit.
 Magic-link auth. Type email → click link in inbox → land at `/dashboard`. Uses Resend SMTP.
 
 ### `/dashboard`
-8 KPI cards (Achievement %, Sales, Target, Attendance %, Comp-off, Pipeline, Open Tasks, Open Complaints). Range filter (This month / This FY / etc.). Target vs Achieved chart. Quote of the day card.
+8 KPI cards (Achievement %, Sales, Target, Attendance %, Comp-off, Pipeline, Open Tasks, Open Complaints). Range filter (This month / This FY / etc.). Target vs Achieved chart. Quote of the day card — shows the latest admin-uploaded image as a thumbnail (click to enlarge in a lightbox); admins get an inline upload/replace/remove control; falls back to a rotating text quote until an image is uploaded.
 
 ### `/leads`
 CRUD + Zoho-synced. Now has `latitude`, `longitude`, `address` columns for smart visit sorting.
@@ -374,9 +375,8 @@ Edit full_name, phone, timezone, avatar. **UPSERTs** so it works even if the pro
 
 In order:
 ```
-00001 through 00018 — already run in production
-00019_visits.sql — RUN THIS
-00020_daily_quotes.sql — RUN THIS (creates `daily_quotes`; do NOT confuse with the `quotes` estimates table)
+00001 through 00020 — already run in production (00019 visits + 00020 daily_quotes confirmed run)
+00021_quote_images.sql — RUN THIS (body nullable + quote-images bucket; needed for image quote-of-the-day)
 ```
 
 Migrations 00019 and 00020 are the most recent. Anything you're missing → just paste the file into Supabase SQL Editor and run.
