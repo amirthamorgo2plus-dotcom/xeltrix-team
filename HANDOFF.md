@@ -148,7 +148,7 @@ xeltrix-team/
 | 00017 | `task_comments.sql` | Polymorphic comments + @-mention notification trigger |
 | 00018 | `comment_attachments.sql` | Image attachments on comments + `comment-images` bucket |
 | 00019 | `visits.sql` | Field rep visits + lead lat/lng |
-| 00020 | `quotes.sql` (productivity quotes) | Quote of the day |
+| 00020 | `daily_quotes.sql` (productivity quotes) | Quote of the day — table is `daily_quotes` (NOT `quotes`, which is Zoho estimates from 00009) |
 
 ### Key tables
 
@@ -175,7 +175,7 @@ xeltrix-team/
 | `zoho_expenses` | Mirror of Zoho expenses |
 | `expense_submissions` | Self-service rep expense entries pending admin verification |
 | `visits` | Field check-ins (member, lead, check_in_at/lat/lng, check_out_*) |
-| `quotes` (productivity) | Quote of the day pool |
+| `daily_quotes` | Quote of the day pool (separate from `quotes`/Zoho estimates) |
 
 ### RLS pattern
 
@@ -366,7 +366,7 @@ Edit full_name, phone, timezone, avatar. **UPSERTs** so it works even if the pro
 | Build fails on Vercel: ERESOLVE peer dep | react-leaflet 4 / React 19 conflict | `.npmrc` has `legacy-peer-deps=true` — make sure it's committed |
 | Comments not showing image | Migration 00018 not run | Run it in Supabase SQL Editor |
 | Visits page not loading | Migration 00019 not run | Run it in Supabase SQL Editor |
-| Quote card empty | Migration 00020 not run | Run it in Supabase SQL Editor |
+| Quote card empty | Migration 00020 not run (creates `daily_quotes`) | Run `00020_daily_quotes.sql` in Supabase SQL Editor |
 
 ---
 
@@ -376,7 +376,7 @@ In order:
 ```
 00001 through 00018 — already run in production
 00019_visits.sql — RUN THIS
-00020_quotes.sql — RUN THIS
+00020_daily_quotes.sql — RUN THIS (creates `daily_quotes`; do NOT confuse with the `quotes` estimates table)
 ```
 
 Migrations 00019 and 00020 are the most recent. Anything you're missing → just paste the file into Supabase SQL Editor and run.

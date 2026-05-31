@@ -1,6 +1,9 @@
--- Quote of the day for the dashboard
+-- Quote of the day for the dashboard.
+-- NOTE: this is the productivity-quote pool. It is intentionally NOT the
+-- `quotes` table from 00009 (that one mirrors Zoho estimates). They are
+-- different things — keep this named `daily_quotes` to avoid colliding.
 
-create table quotes (
+create table if not exists daily_quotes (
   id          uuid primary key default gen_random_uuid(),
   team_id     uuid references teams(id) on delete cascade,
   body        text not null,
@@ -9,18 +12,20 @@ create table quotes (
   active      boolean not null default true,
   created_at  timestamptz default now()
 );
-create index on quotes(team_id, active);
+create index if not exists daily_quotes_team_active_idx on daily_quotes(team_id, active);
 
-alter table quotes enable row level security;
+alter table daily_quotes enable row level security;
 
 -- Read: any team member OR rows with no team_id (global defaults)
-create policy "quotes_read_team_or_global" on quotes
+drop policy if exists "daily_quotes_read_team_or_global" on daily_quotes;
+create policy "daily_quotes_read_team_or_global" on daily_quotes
   for select using (
     team_id is null or team_id = any (auth_user_team_ids())
   );
 
 -- Write: admin/manager of the row's team
-create policy "quotes_write_admin" on quotes
+drop policy if exists "daily_quotes_write_admin" on daily_quotes;
+create policy "daily_quotes_write_admin" on daily_quotes
   for all using (
     team_id is not null and auth_is_team_admin(team_id)
   )
@@ -30,8 +35,11 @@ create policy "quotes_write_admin" on quotes
 
 -- Seed: a few productivity / sales classics. team_id = null marks them
 -- as global defaults visible to every team.
-insert into quotes (team_id, body, author) values
-  (null,
+-- Guarded so re-running the migration doesn't duplicate the pool.
+insert into daily_quotes (team_id, body, author)
+select v.team_id, v.body, v.author
+from (values
+  (null::uuid,
     'If you want to be more productive, you need to become master of your minutes.',
     'Crystal Paine'),
   (null,
@@ -66,4 +74,6 @@ insert into quotes (team_id, body, author) values
     'Jim Rohn'),
   (null,
     'Don''t count the days, make the days count.',
-    'Muhammad Ali');
+    'Muhammad Ali')
+) as v(team_id, body, author)
+where not exists (select 1 from daily_quotes);

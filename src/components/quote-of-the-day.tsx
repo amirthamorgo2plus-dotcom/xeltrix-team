@@ -21,7 +21,7 @@ function indexForToday(poolSize: number): number {
 export async function QuoteOfTheDay() {
   const supabase = await createClient();
   const { data } = await supabase
-    .from("quotes")
+    .from("daily_quotes")
     .select("id, body, author, image_url")
     .eq("active", true)
     .order("id"); // stable order so the day-key picks the same one
