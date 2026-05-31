@@ -10,6 +10,8 @@ import { CheckInButton } from "./check-in-button";
 import { CheckOutButton } from "./check-out-button";
 import { VisitMap } from "./visit-map";
 import { VisitRowActions } from "./visit-row-actions";
+import { GeocodeCustomersButton } from "./geocode-customers-button";
+import type { MapPin } from "./visit-map-impl";
 
 const WORK_HOURS = { start: 9, end: 20 };
 
@@ -63,7 +65,7 @@ function todayIsoIST(): string {
 export default async function VisitsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ date?: string; member?: string }>;
+  searchParams: Promise<{ date?: string; member?: string; customers?: string }>;
 }) {
   const sp = await searchParams;
   const me = await getMyMembership();
@@ -73,6 +75,7 @@ export default async function VisitsPage({
   const dateFilter = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayIsoIST();
   const memberFilter = sp.member && sp.member !== "all" ? sp.member : null;
   const isToday = dateFilter === todayIsoIST();
+  const showCustomers = sp.customers === "1";
 
   // Build day window in IST -> UTC ISO
   const dayStartUtc = new Date(`${dateFilter}T00:00:00+05:30`).toISOString();
@@ -207,12 +210,43 @@ export default async function VisitsPage({
     longitude: num(l.longitude as number | string | null),
   }));
 
+  const customerPins: MapPin[] = showCustomers
+    ? leadOptions
+        .filter((l) => l.latitude != null && l.longitude != null)
+        .map((l) => ({
+          id: `cust-${l.id}`,
+          lat: l.latitude as number,
+          lng: l.longitude as number,
+          label: l.name,
+          kind: "customer" as const,
+        }))
+    : [];
+  const allPins: MapPin[] = showCustomers ? [...customerPins, ...pins] : pins;
+
+  let pendingGeocode = 0;
+  if (canManage) {
+    const { count } = await supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .is("latitude", null)
+      .is("geocode_status", null)
+      .not("address", "is", null);
+    pendingGeocode = count ?? 0;
+  }
+
   function buildUrl(overrides: Record<string, string | null>) {
     const params = new URLSearchParams();
     const date = "date" in overrides ? overrides.date : dateFilter;
     const member = "member" in overrides ? overrides.member : memberFilter;
+    const customers =
+      "customers" in overrides
+        ? overrides.customers
+        : showCustomers
+          ? "1"
+          : null;
     if (date && date !== todayIsoIST()) params.set("date", date);
     if (member) params.set("member", member);
+    if (customers) params.set("customers", customers);
     const qs = params.toString();
     return `/visits${qs ? `?${qs}` : ""}`;
   }
@@ -372,22 +406,35 @@ export default async function VisitsPage({
               : format(new Date(`${dateFilter}T00:00:00`), "dd MMM")}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          {pins.length === 0 ? (
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Link
+              href={buildUrl({ customers: showCustomers ? null : "1" })}
+              className="inline-flex h-8 items-center rounded-md border border-zinc-300 px-3 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            >
+              {showCustomers ? "Hide customers" : "Show all customers"}
+            </Link>
+            {canManage && <GeocodeCustomersButton pending={pendingGeocode} />}
+          </div>
+          {allPins.length === 0 ? (
             <EmptyState
-              title="No visits for this filter"
-              hint={isToday ? "Pins appear here once team members check in." : "Try a different date."}
+              title="Nothing to show for this filter"
+              hint={
+                isToday
+                  ? "Pins appear here once team members check in."
+                  : "Try a different date, or toggle customers on."
+              }
             />
           ) : (
             <VisitMap
-              pins={pins}
+              pins={allPins}
               routePath={routeMode ? routePath : undefined}
             />
           )}
           {!routeMode && (
-            <p className="mt-3 text-xs text-zinc-400">
+            <p className="text-xs text-zinc-400">
               Tip: pick one employee above to see their numbered route and
-              travel stats for the day.
+              travel stats. Gray dots are customers.
             </p>
           )}
         </CardContent>

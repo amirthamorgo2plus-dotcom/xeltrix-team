@@ -12,6 +12,15 @@ export type ZohoOrganization = {
   currency_code: string;
 };
 
+export type ZohoAddress = {
+  address?: string;
+  street2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+};
+
 export type ZohoContact = {
   contact_id: string;
   contact_name: string;
@@ -22,6 +31,8 @@ export type ZohoContact = {
   status?: string;
   created_time?: string;
   last_modified_time?: string;
+  billing_address?: ZohoAddress;
+  shipping_address?: ZohoAddress;
 };
 
 export type ZohoInvoice = {

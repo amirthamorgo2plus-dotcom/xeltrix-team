@@ -206,6 +206,21 @@ export async function syncFromZoho(
     (existingLeads ?? []).map((l) => [l.zoho_customer_id as string, l.owner_id])
   );
 
+  const formatAddress = (a?: {
+    address?: string;
+    street2?: string;
+    city?: string;
+    state?: string;
+    zip?: string;
+    country?: string;
+  }): string | null => {
+    if (!a) return null;
+    const parts = [a.address, a.street2, a.city, a.state, a.zip, a.country]
+      .map((p) => (p ?? "").trim())
+      .filter(Boolean);
+    return parts.length ? parts.join(", ") : null;
+  };
+
   const leadRows = contacts.map((c) => ({
     team_id: integration.team_id,
     zoho_customer_id: c.contact_id,
@@ -224,6 +239,30 @@ export async function syncFromZoho(
     if (error) throw new Error(`leads bulk upsert failed: ${error.message}`);
   }
   counts.customers = leadRows.length;
+
+  // Store Zoho addresses (billing preferred) for geocoding. These rows already
+  // exist from the upsert above, so this hits the update path and only touches
+  // the address column — it won't clobber GPS addresses set on-site.
+  const addressRows = contacts
+    .map((c) => {
+      const address =
+        formatAddress(c.billing_address) ?? formatAddress(c.shipping_address);
+      return address
+        ? { team_id: integration.team_id, zoho_customer_id: c.contact_id, address }
+        : null;
+    })
+    .filter(Boolean) as Array<{
+    team_id: string;
+    zoho_customer_id: string;
+    address: string;
+  }>;
+
+  if (addressRows.length > 0) {
+    const { error } = await sb
+      .from("leads")
+      .upsert(addressRows, { onConflict: "team_id,zoho_customer_id" });
+    if (error) throw new Error(`lead address upsert failed: ${error.message}`);
+  }
 
   const { data: refreshedLeads } = await sb
     .from("leads")

@@ -150,6 +150,7 @@ xeltrix-team/
 | 00019 | `visits.sql` | Field rep visits + lead lat/lng |
 | 00020 | `daily_quotes.sql` (productivity quotes) | Quote of the day — table is `daily_quotes` (NOT `quotes`, which is Zoho estimates from 00009) |
 | 00021 | `quote_images.sql` | Image quote of the day: `daily_quotes.body` made nullable + `quote-images` storage bucket |
+| 00022 | `lead_geocode.sql` | `leads.geocoded_at` + `geocode_status` for plotting customers on the visits map |
 
 ### Key tables
 
@@ -284,6 +285,10 @@ Filters: Date picker + Employee dropdown. Daily / Monthly summary tabs.
 
 Cron auto-closes open visits at 8 PM IST (uses check-in location as end).
 
+**Route mode**: pick a date + a single employee → the day's visits are numbered (1→2→3) and connected by a route polyline, with a stats card (stops, approx straight-line distance, time on site, travel+idle). Distance is straight-line between check-ins, not road distance (we only capture point check-ins, not continuous GPS).
+
+**Customers on map**: "Show all customers" toggle plots every geocoded customer as a gray dot. Coordinates come from the Zoho address → geocoding pipeline: the sync imports `billing_address`/`shipping_address` into `leads.address`, and admins click **Geocode customers** (calls `/api/geocode-leads`, ~20 per click, rate-limited to ~1/sec via OSM Nominatim) to fill `leads.latitude/longitude`. `geocode_status` = ok/failed/null tracks progress. Note: addresses populate from the contact object on sync — if Zoho's list response omits them, a future detail-fetch fallback may be needed.
+
 ### `/visits/summary`
 Monthly view per employee. KPIs: Total visits, Unique customers, New customers added, Time on site. Per-employee table (click to drill in). Top customers visited. New customers added list.
 
@@ -377,6 +382,7 @@ In order:
 ```
 00001 through 00020 — already run in production (00019 visits + 00020 daily_quotes confirmed run)
 00021_quote_images.sql — RUN THIS (body nullable + quote-images bucket; needed for image quote-of-the-day)
+00022_lead_geocode.sql — RUN THIS (geocode columns on leads; needed for customers-on-map)
 ```
 
 Migrations 00019 and 00020 are the most recent. Anything you're missing → just paste the file into Supabase SQL Editor and run.
