@@ -32,6 +32,29 @@ function num(v: number | string | null): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Straight-line distance between two coords, in km.
+function haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number }
+): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function fmtDuration(mins: number): string {
+  if (mins <= 0) return "0m";
+  const h = Math.floor(mins / 60);
+  const m = Math.round(mins % 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 function todayIsoIST(): string {
   const istNow = new Date(Date.now() + 5.5 * 60 * 60 * 1000);
   return istNow.toISOString().slice(0, 10);
@@ -112,9 +135,16 @@ export default async function VisitsPage({
     .limit(1);
   const myActiveVisit = activeRows?.[0] as Visit | undefined;
 
-  // Build map pins from the filtered visits
-  const pins = (visits ?? [])
-    .map((v: Visit) => {
+  // In route mode (a single employee selected), order the day's visits
+  // chronologically, number them, and connect them into a route.
+  const routeMode = !!memberFilter;
+  const chrono = [...(visits ?? [])].sort(
+    (a, b) =>
+      new Date(a.check_in_at).getTime() - new Date(b.check_in_at).getTime()
+  ) as Visit[];
+
+  const pins = (routeMode ? chrono : visits ?? [])
+    .map((v: Visit, i: number) => {
       const lat = num(v.check_in_lat);
       const lng = num(v.check_in_lng);
       if (lat == null || lng == null) return null;
@@ -130,6 +160,7 @@ export default async function VisitsPage({
         subtitle: `${memberName} · ${format(new Date(v.check_in_at), "HH:mm")}`,
         paired:
           outLat != null && outLng != null ? { lat: outLat, lng: outLng } : null,
+        order: routeMode ? i + 1 : undefined,
       };
     })
     .filter(Boolean) as Array<{
@@ -139,7 +170,35 @@ export default async function VisitsPage({
       label: string;
       subtitle: string;
       paired: { lat: number; lng: number } | null;
+      order?: number;
     }>;
+
+  const routePath: Array<[number, number]> = routeMode
+    ? pins.map((p) => [p.lat, p.lng] as [number, number])
+    : [];
+
+  // Route efficiency stats (only meaningful for a single employee's day).
+  let routeKm = 0;
+  for (let i = 1; i < pins.length; i++) {
+    routeKm += haversineKm(pins[i - 1], pins[i]);
+  }
+  const onSiteMins = chrono.reduce(
+    (s, v) =>
+      v.check_out_at
+        ? s +
+          differenceInMinutes(new Date(v.check_out_at), new Date(v.check_in_at))
+        : s,
+    0
+  );
+  const firstIn = chrono.length ? new Date(chrono[0].check_in_at) : null;
+  const lastOut = chrono.length
+    ? new Date(
+        chrono[chrono.length - 1].check_out_at ?? new Date().toISOString()
+      )
+    : null;
+  const spanMins =
+    firstIn && lastOut ? Math.max(0, differenceInMinutes(lastOut, firstIn)) : 0;
+  const offSiteMins = Math.max(0, spanMins - onSiteMins);
 
   const leadOptions = (leads ?? []).map((l) => ({
     id: l.id as string,
@@ -261,9 +320,57 @@ export default async function VisitsPage({
         isToday && <CheckInButton leads={leadOptions} workHours={WORK_HOURS} />
       )}
 
+      {routeMode && pins.length >= 2 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              Route · {memberInfo.get(memberFilter!)?.name ?? "member"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <div>
+                <div className="text-2xl font-semibold">{pins.length}</div>
+                <div className="text-xs text-zinc-500">Stops</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold">
+                  {routeKm.toFixed(1)} km
+                </div>
+                <div className="text-xs text-zinc-500">
+                  Route distance (approx)
+                </div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold">
+                  {fmtDuration(onSiteMins)}
+                </div>
+                <div className="text-xs text-zinc-500">Time on site</div>
+              </div>
+              <div>
+                <div className="text-2xl font-semibold">
+                  {fmtDuration(offSiteMins)}
+                </div>
+                <div className="text-xs text-zinc-500">Travel + idle</div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-zinc-400">
+              Distance is straight-line between consecutive check-ins (not road
+              distance). Numbered pins show the visit order, so a zig-zag route
+              or long travel/idle time stands out.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>Map · {isToday ? "today" : format(new Date(`${dateFilter}T00:00:00`), "dd MMM")}</CardTitle>
+          <CardTitle>
+            {routeMode ? "Route map" : "Map"} ·{" "}
+            {isToday
+              ? "today"
+              : format(new Date(`${dateFilter}T00:00:00`), "dd MMM")}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {pins.length === 0 ? (
@@ -272,7 +379,16 @@ export default async function VisitsPage({
               hint={isToday ? "Pins appear here once team members check in." : "Try a different date."}
             />
           ) : (
-            <VisitMap pins={pins} />
+            <VisitMap
+              pins={pins}
+              routePath={routeMode ? routePath : undefined}
+            />
+          )}
+          {!routeMode && (
+            <p className="mt-3 text-xs text-zinc-400">
+              Tip: pick one employee above to see their numbered route and
+              travel stats for the day.
+            </p>
           )}
         </CardContent>
       </Card>
