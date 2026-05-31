@@ -54,15 +54,14 @@ export default async function VisitsSummaryPage({
     sp.month && /^\d{4}-\d{2}$/.test(sp.month) ? sp.month : ymToday();
   const memberFilter = sp.member && sp.member !== "all" ? sp.member : null;
 
-  // Month window in IST
+  // Month window in IST — must NOT rely on JS local time because Vercel runs in UTC.
+  // Build the YM string for next month, then construct ISO with IST offset.
+  const [yNum, mNum] = ym.split("-").map(Number);
+  const nextYNum = mNum === 12 ? yNum + 1 : yNum;
+  const nextMNum = mNum === 12 ? 1 : mNum + 1;
+  const nextYm = `${nextYNum}-${String(nextMNum).padStart(2, "0")}`;
   const startUtc = new Date(`${ym}-01T00:00:00+05:30`);
-  const endUtc = new Date(
-    new Date(`${ym}-01T00:00:00+05:30`).getFullYear(),
-    new Date(`${ym}-01T00:00:00+05:30`).getMonth() + 1,
-    1
-  );
-  // ensure endUtc is start of next month
-  const nextMonthStartIso = endUtc.toISOString();
+  const nextMonthStartIso = new Date(`${nextYm}-01T00:00:00+05:30`).toISOString();
 
   const members = await getTeamMembers();
   const memberInfo = new Map(

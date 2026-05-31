@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership } from "@/lib/data";
+import { getMyMembership, isAdminOrManager } from "@/lib/data";
 
 const WORK_HOURS_START = 9;  // 9 AM IST
 const WORK_HOURS_END = 20;   // 8 PM IST
@@ -96,8 +96,51 @@ export async function checkOut(visitId: string, formData: FormData) {
 }
 
 export async function deleteVisit(id: string) {
+  const m = await getMyMembership();
+  if (!m) throw new Error("Not in a team.");
+  // RLS already restricts to owner / admin / manager; the server-side check
+  // here just gives clearer error messaging for non-owners.
   const supabase = await createClient();
   const { error } = await supabase.from("visits").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/visits");
+}
+
+// Admin / manager only: correct a visit (wrong customer, wrong time, etc.)
+export async function updateVisit(id: string, formData: FormData) {
+  const m = await getMyMembership();
+  if (!m || !isAdminOrManager(m.role)) {
+    throw new Error("Only admin/manager can edit visits.");
+  }
+
+  const update: Record<string, unknown> = {};
+
+  if (formData.has("lead_id")) {
+    const raw = String(formData.get("lead_id") ?? "").trim();
+    update.lead_id = raw || null;
+  }
+  if (formData.has("notes")) {
+    const raw = String(formData.get("notes") ?? "").trim();
+    update.notes = raw || null;
+  }
+  if (formData.has("check_in_at")) {
+    const raw = String(formData.get("check_in_at") ?? "").trim();
+    if (raw) update.check_in_at = new Date(raw).toISOString();
+  }
+  if (formData.has("check_out_at")) {
+    const raw = String(formData.get("check_out_at") ?? "").trim();
+    update.check_out_at = raw ? new Date(raw).toISOString() : null;
+    // If we just cleared check_out_at, also clear coords
+    if (!raw) {
+      update.check_out_lat = null;
+      update.check_out_lng = null;
+    }
+  }
+
+  if (Object.keys(update).length === 0) return;
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("visits").update(update).eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/visits");
 }

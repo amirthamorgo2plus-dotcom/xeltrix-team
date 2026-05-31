@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { format, differenceInMinutes } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers } from "@/lib/data";
+import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/empty-state";
 import { CheckInButton } from "./check-in-button";
 import { CheckOutButton } from "./check-out-button";
 import { VisitMap } from "./visit-map";
+import { VisitRowActions } from "./visit-row-actions";
 
 const WORK_HOURS = { start: 9, end: 20 };
 
@@ -43,6 +44,7 @@ export default async function VisitsPage({
 }) {
   const sp = await searchParams;
   const me = await getMyMembership();
+  const canManage = isAdminOrManager(me?.role);
   const members = await getTeamMembers();
 
   const dateFilter = sp.date && /^\d{4}-\d{2}-\d{2}$/.test(sp.date) ? sp.date : todayIsoIST();
@@ -326,6 +328,20 @@ export default async function VisitsPage({
                       {v.notes && (
                         <div className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
                           {v.notes}
+                        </div>
+                      )}
+                      {canManage && (
+                        <div className="mt-2">
+                          <VisitRowActions
+                            visitId={v.id}
+                            defaults={{
+                              lead_id: v.lead_id,
+                              notes: v.notes,
+                              check_in_at: v.check_in_at,
+                              check_out_at: v.check_out_at,
+                            }}
+                            leads={leadOptions.map((l) => ({ id: l.id, name: l.name }))}
+                          />
                         </div>
                       )}
                     </div>
