@@ -76,6 +76,64 @@ async function fetchAll<T>(
   return out;
 }
 
+// Combine a Zoho address object into a single text line for geocoding.
+function formatZohoAddress(a?: {
+  address?: string;
+  street2?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  country?: string;
+}): string | null {
+  if (!a) return null;
+  const parts = [a.address, a.street2, a.city, a.state, a.zip, a.country]
+    .map((p) => (p ?? "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(", ") : null;
+}
+
+// Contact addresses (billing/shipping) are ONLY returned by the detail
+// endpoint /contacts/{id}, not the /contacts list. Time-budgeted + concurrency
+// -capped, mirroring fetchTaxBreakdowns. Returns id -> address line.
+async function fetchContactAddresses(
+  integration: IntegrationRow,
+  contactIds: string[],
+  opts: { concurrency?: number; deadlineMs?: number } = {}
+): Promise<{ map: Map<string, string>; skipped: number }> {
+  const concurrency = opts.concurrency ?? 3;
+  const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
+  const out = new Map<string, string>();
+  let processed = 0;
+
+  for (let i = 0; i < contactIds.length; i += concurrency) {
+    if (Date.now() > deadline) break;
+    const batch = contactIds.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const res = await zohoFetch<{ contact?: ZohoContact }>(
+            integration,
+            `/contacts/${id}`
+          );
+          const c = res.contact;
+          const address = c
+            ? formatZohoAddress(c.billing_address) ??
+              formatZohoAddress(c.shipping_address)
+            : null;
+          return { id, address };
+        } catch {
+          return { id, address: null as string | null };
+        }
+      })
+    );
+    results.forEach((r) => {
+      if (r.address) out.set(r.id, r.address);
+    });
+    processed = Math.min(i + concurrency, contactIds.length);
+  }
+  return { map: out, skipped: contactIds.length - processed };
+}
+
 // Zoho's list endpoints (/invoices, /estimates) don't include sub_total or
 // tax_total — only the detail endpoint does. This batches detail fetches
 // with a concurrency cap and returns a map of id -> {sub_total, tax_total}.
@@ -206,21 +264,6 @@ export async function syncFromZoho(
     (existingLeads ?? []).map((l) => [l.zoho_customer_id as string, l.owner_id])
   );
 
-  const formatAddress = (a?: {
-    address?: string;
-    street2?: string;
-    city?: string;
-    state?: string;
-    zip?: string;
-    country?: string;
-  }): string | null => {
-    if (!a) return null;
-    const parts = [a.address, a.street2, a.city, a.state, a.zip, a.country]
-      .map((p) => (p ?? "").trim())
-      .filter(Boolean);
-    return parts.length ? parts.join(", ") : null;
-  };
-
   const leadRows = contacts.map((c) => ({
     team_id: integration.team_id,
     zoho_customer_id: c.contact_id,
@@ -240,28 +283,46 @@ export async function syncFromZoho(
   }
   counts.customers = leadRows.length;
 
-  // Store Zoho addresses (billing preferred) for geocoding. These rows already
-  // exist from the upsert above, so this hits the update path and only touches
-  // the address column — it won't clobber GPS addresses set on-site.
-  const addressRows = contacts
-    .map((c) => {
-      const address =
-        formatAddress(c.billing_address) ?? formatAddress(c.shipping_address);
-      return address
-        ? { team_id: integration.team_id, zoho_customer_id: c.contact_id, address }
-        : null;
-    })
-    .filter(Boolean) as Array<{
-    team_id: string;
-    zoho_customer_id: string;
-    address: string;
-  }>;
+  // Addresses for geocoding: only on the /contacts/{id} detail endpoint, not
+  // the list. Fetch detail ONLY for leads that don't have an address yet, so
+  // this is incremental (cheap after the first couple of syncs). Give it a
+  // small dedicated budget so it never starves the tax detail-fetch below.
+  const { data: leadsNoAddress } = await sb
+    .from("leads")
+    .select("zoho_customer_id")
+    .eq("team_id", integration.team_id)
+    .is("address", null)
+    .not("zoho_customer_id", "is", null);
+  const needAddr = new Set(
+    (leadsNoAddress ?? []).map((l) => l.zoho_customer_id as string)
+  );
+  const contactIdsForAddr = contacts
+    .map((c) => c.contact_id)
+    .filter((id) => needAddr.has(id));
 
-  if (addressRows.length > 0) {
-    const { error } = await sb
-      .from("leads")
-      .upsert(addressRows, { onConflict: "team_id,zoho_customer_id" });
-    if (error) throw new Error(`lead address upsert failed: ${error.message}`);
+  if (contactIdsForAddr.length > 0) {
+    const ADDRESS_DEADLINE = Math.min(DETAIL_DEADLINE, Date.now() + 15_000);
+    const addr = await fetchContactAddresses(integration, contactIdsForAddr, {
+      concurrency: 3,
+      deadlineMs: ADDRESS_DEADLINE,
+    });
+    const addressRows = [...addr.map.entries()].map(([id, address]) => ({
+      team_id: integration.team_id,
+      zoho_customer_id: id,
+      address,
+    }));
+    if (addressRows.length > 0) {
+      const { error } = await sb
+        .from("leads")
+        .upsert(addressRows, { onConflict: "team_id,zoho_customer_id" });
+      if (error) throw new Error(`lead address upsert failed: ${error.message}`);
+    }
+    counts.warnings.push(`Addresses: +${addressRows.length} fetched`);
+    if (addr.skipped > 0) {
+      counts.warnings.push(
+        `Addresses: ${addr.skipped} remaining (time budget) — click Sync again.`
+      );
+    }
   }
 
   const { data: refreshedLeads } = await sb
