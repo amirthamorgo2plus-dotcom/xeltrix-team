@@ -23,7 +23,7 @@ export async function EmployeeOfTheMonth() {
       ) : (
         <Card className="flex items-center gap-3 border-dashed border-amber-300/60 bg-amber-50/40 p-5 text-sm text-zinc-500 dark:border-amber-900/40 dark:bg-amber-950/20">
           <Trophy className="h-5 w-5 text-amber-500" aria-hidden />
-          <span>No Employee of the Month yet — upload a photo below.</span>
+          <span>No Rewards yet — upload an image below.</span>
         </Card>
       )}
       {isAdmin && <EotmUploader hasImage={!!url} currentCaption={caption} />}

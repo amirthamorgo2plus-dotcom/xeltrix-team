@@ -31,7 +31,7 @@ export function EotmCard({
           type="button"
           onClick={() => setOpen(true)}
           className="flex w-full items-center gap-4 p-5 text-left transition hover:bg-amber-50/50 dark:hover:bg-amber-950/30"
-          aria-label="View Employee of the Month"
+          aria-label="View Rewards"
         >
           <Trophy
             className="h-6 w-6 shrink-0 text-amber-500 dark:text-amber-400"
@@ -40,12 +40,12 @@ export function EotmCard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
-            alt={caption ?? "Employee of the Month"}
+            alt={caption ?? "Rewards"}
             className="h-16 w-16 shrink-0 rounded-md object-cover ring-1 ring-black/5"
           />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              Employee of the Month
+              Rewards
             </p>
             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
               {caption?.trim() ? caption : "Tap to view"}
@@ -67,7 +67,7 @@ export function EotmCard({
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
-            alt={caption ?? "Employee of the Month"}
+            alt={caption ?? "Rewards"}
             className="max-h-[90vh] max-w-[95vw] rounded-lg object-contain shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           />
