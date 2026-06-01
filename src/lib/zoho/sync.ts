@@ -102,7 +102,12 @@ async function fetchContactAddresses(
 ): Promise<{
   map: Map<string, string>;
   skipped: number;
-  diag: { hadBilling: number; hadShipping: number; topKeys: string };
+  diag: {
+    hadBilling: number;
+    hadShipping: number;
+    topKeys: string;
+    sample: string;
+  };
 }> {
   const concurrency = opts.concurrency ?? 3;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
@@ -112,6 +117,7 @@ async function fetchContactAddresses(
   let hadBilling = 0;
   let hadShipping = 0;
   let topKeys = "";
+  let sample = ""; // raw address shape of the first contact
 
   for (let i = 0; i < contactIds.length; i += concurrency) {
     if (Date.now() > deadline) break;
@@ -127,9 +133,18 @@ async function fetchContactAddresses(
           if (c) {
             if (formatZohoAddress(c.billing_address)) hadBilling++;
             if (formatZohoAddress(c.shipping_address)) hadShipping++;
-            // Capture the key list of the FIRST contact object once, so we can
-            // see what fields Zoho actually returns if addresses are missing.
-            if (!topKeys) topKeys = Object.keys(c).join(",");
+            // Capture diagnostics from the FIRST contact once: full key list +
+            // the raw billing/shipping objects + any `addresses` array, so we
+            // can see exactly where (or whether) Zoho stores the address.
+            if (!topKeys) {
+              topKeys = Object.keys(c).join(",");
+              const cc = c as unknown as Record<string, unknown>;
+              sample = JSON.stringify({
+                billing_address: cc.billing_address ?? null,
+                shipping_address: cc.shipping_address ?? null,
+                addresses: cc.addresses ?? null,
+              }).slice(0, 600);
+            }
           }
           const address = c
             ? formatZohoAddress(c.billing_address) ??
@@ -149,7 +164,7 @@ async function fetchContactAddresses(
   return {
     map: out,
     skipped: contactIds.length - processed,
-    diag: { hadBilling, hadShipping, topKeys },
+    diag: { hadBilling, hadShipping, topKeys, sample },
   };
 }
 
@@ -344,7 +359,7 @@ export async function syncFromZoho(
       );
     }
     counts.warnings.push(
-      `Addresses: +${updated} fetched (billing in ${addr.diag.hadBilling}, shipping in ${addr.diag.hadShipping} of ${contactIdsForAddr.length} checked). Contact fields: ${addr.diag.topKeys || "n/a"}`
+      `Addresses: +${updated} fetched (billing in ${addr.diag.hadBilling}, shipping in ${addr.diag.hadShipping} of ${contactIdsForAddr.length} checked). Sample: ${addr.diag.sample || "n/a"}`
     );
     if (addr.skipped > 0) {
       counts.warnings.push(
