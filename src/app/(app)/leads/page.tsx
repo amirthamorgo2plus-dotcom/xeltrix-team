@@ -6,6 +6,13 @@ import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
 import { LeadForm } from "./lead-form";
 import { LeadStatusSelect } from "./status-select";
+import { LocationCell } from "./location-cell";
+
+function toNum(v: number | string | null): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
 
 const statusTone: Record<string, "muted" | "info" | "success" | "warning" | "danger"> = {
   new: "info",
@@ -20,7 +27,9 @@ export default async function LeadsPage() {
   const supabase = await createClient();
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, name, email, phone, source, status, created_at")
+    .select(
+      "id, name, email, phone, source, status, created_at, latitude, longitude, geocode_status"
+    )
     .order("created_at", { ascending: false });
 
   return (
@@ -50,6 +59,7 @@ export default async function LeadsPage() {
                   <th className="pb-2 pr-4">Contact</th>
                   <th className="pb-2 pr-4">Source</th>
                   <th className="pb-2 pr-4">Status</th>
+                  <th className="pb-2 pr-4">Location</th>
                   <th className="pb-2">Added</th>
                 </tr>
               </thead>
@@ -68,6 +78,14 @@ export default async function LeadsPage() {
                       <span className="ml-2 inline-block align-middle">
                         <Badge tone={statusTone[l.status] ?? "muted"}>{l.status}</Badge>
                       </span>
+                    </td>
+                    <td className="py-2 pr-4">
+                      <LocationCell
+                        id={l.id}
+                        lat={toNum(l.latitude as number | string | null)}
+                        lng={toNum(l.longitude as number | string | null)}
+                        status={(l.geocode_status as string | null) ?? null}
+                      />
                     </td>
                     <td className="py-2 text-zinc-500">
                       {format(new Date(l.created_at), "dd MMM")}
