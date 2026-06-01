@@ -116,7 +116,9 @@ export default async function DashboardPage({
     (s, o) => s + Number(o.value_excl_tax ?? o.value ?? 0),
     0
   );
-  const pct = target > 0 ? Math.round((achieved / target) * 100) : null;
+  // Achievement % is measured on sales EXCLUDING tax (matches the team's
+  // language and the v_target_vs_achieved view).
+  const pct = target > 0 ? Math.round((achievedExcl / target) * 100) : null;
 
   // Attendance %: (worked_days) / (working_days)
   const holidayClosed = new Set(
@@ -198,12 +200,12 @@ export default async function DashboardPage({
         <KpiCard
           label="Achievement %"
           value={pct === null ? "—" : `${pct}%`}
-          hint={pct === null ? "Set targets to track" : "Achieved / Target"}
+          hint={pct === null ? "Set targets to track" : "Sales (excl. tax) / Target"}
           tone={pct === null ? null : pct >= 100 ? "success" : pct >= 50 ? "warning" : "danger"}
           href="/targets"
         />
         <KpiCard
-          label="Sales"
+          label="Sales (excl. tax)"
           value={fmtMoney(achievedExcl, currency)}
           secondary={{ label: "Incl. tax", value: fmtMoney(achieved, currency) }}
           hint="Won opps"

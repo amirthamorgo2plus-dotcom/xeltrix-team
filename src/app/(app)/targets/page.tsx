@@ -39,7 +39,7 @@ export default async function TargetsPage({
       <div>
         <h1 className="text-2xl font-semibold">Targets</h1>
         <p className="text-sm text-zinc-500">
-          {format(parseISO(month), "MMMM yyyy")} · Target vs Achieved
+          {format(parseISO(month), "MMMM yyyy")} · Target vs Achieved (sales excl. tax)
         </p>
       </div>
 

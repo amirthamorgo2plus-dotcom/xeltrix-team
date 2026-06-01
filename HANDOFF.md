@@ -151,6 +151,7 @@ xeltrix-team/
 | 00020 | `daily_quotes.sql` (productivity quotes) | Quote of the day — table is `daily_quotes` (NOT `quotes`, which is Zoho estimates from 00009) |
 | 00021 | `quote_images.sql` | Image quote of the day: `daily_quotes.body` made nullable + `quote-images` storage bucket |
 | 00022 | `lead_geocode.sql` | `leads.geocoded_at` + `geocode_status` for plotting customers on the visits map |
+| 00023 | `achievement_excl_tax.sql` | Redefine `v_sales_by_month` so achievement % is on sales EXCL. tax (drives dashboard + targets) |
 
 ### Key tables
 
@@ -215,7 +216,9 @@ Production + Preview. Never commit.
 Magic-link auth. Type email → click link in inbox → land at `/dashboard`. Uses Resend SMTP.
 
 ### `/dashboard`
-8 KPI cards (Achievement %, Sales, Target, Attendance %, Comp-off, Pipeline, Open Tasks, Open Complaints). Range filter (This month / This FY / etc.). Target vs Achieved chart. Quote of the day card — shows the latest admin-uploaded image as a thumbnail (click to enlarge in a lightbox); admins get an inline upload/replace/remove control; falls back to a rotating text quote until an image is uploaded.
+8 KPI cards (Achievement %, Sales (excl. tax), Target, Attendance %, Comp-off, Pipeline, Open Tasks, Open Complaints). Range filter (This month / This FY / etc.). Target vs Achieved chart. Quote of the day card — shows the latest admin-uploaded image as a thumbnail (click to enlarge in a lightbox); admins get an inline upload/replace/remove control; falls back to a rotating text quote until an image is uploaded.
+
+**Team language — say it the same way:** "Sales" and "Achievement %" are always measured **excluding tax**. Achievement % = Sales (excl. tax) ÷ Target. The incl-tax figure is shown only as a secondary line on the Sales card. Enforced in `v_sales_by_month` (migration 00023), so the dashboard KPI, the Targets leaderboard, and the Target-vs-Achieved chart all agree.
 
 ### `/leads`
 CRUD + Zoho-synced. Now has `latitude`, `longitude`, `address` columns for smart visit sorting.
@@ -335,7 +338,7 @@ Edit full_name, phone, timezone, avatar. **UPSERTs** so it works even if the pro
 ### Adding a new page
 1. Create folder under `src/app/(app)/your-page/`
 2. Add `page.tsx` (server component)
-3. Add to sidebar at `src/components/nav/nav-items.ts`
+3. Add to sidebar at `src/components/nav/nav-items.ts` — `NAV_ITEMS` is a tree: top-level items can have a `children` array (sub-tabs). A parent is still a real link (clicking navigates AND expands). Add your page as a top-level item or as a child under the right parent.
 4. Mark `adminOnly: true` if it's restricted
 5. Run `npm run build` locally before pushing
 
@@ -385,6 +388,7 @@ In order:
 00001 through 00020 — already run in production (00019 visits + 00020 daily_quotes confirmed run)
 00021_quote_images.sql — RUN THIS (body nullable + quote-images bucket; needed for image quote-of-the-day)
 00022_lead_geocode.sql — RUN THIS (geocode columns on leads; needed for customers-on-map)
+00023_achievement_excl_tax.sql — RUN THIS (achievement % switches to sales excl. tax)
 ```
 
 Migrations 00019 and 00020 are the most recent. Anything you're missing → just paste the file into Supabase SQL Editor and run.

@@ -137,12 +137,15 @@ create or replace view v_leave_balance as
   from leave_ledger
   group by member_id;
 
--- Sales achieved = sum of WON opportunities, by member + month
+-- Sales achieved = sum of WON opportunities, by member + month.
+-- NOTE: achievement is measured on the value EXCLUDING tax (value_excl_tax),
+-- matching how the team talks about sales. Falls back to `value` only for old
+-- rows where the excl-tax figure was never populated.
 create or replace view v_sales_by_month as
   select
     owner_id as member_id,
     date_trunc('month', close_date)::date as month,
-    sum(value) as achieved
+    sum(coalesce(value_excl_tax, value)) as achieved
   from opportunities
   where stage = 'won' and close_date is not null and owner_id is not null
   group by owner_id, date_trunc('month', close_date);
