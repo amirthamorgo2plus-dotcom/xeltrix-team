@@ -99,11 +99,19 @@ async function fetchContactAddresses(
   integration: IntegrationRow,
   contactIds: string[],
   opts: { concurrency?: number; deadlineMs?: number } = {}
-): Promise<{ map: Map<string, string>; skipped: number }> {
+): Promise<{
+  map: Map<string, string>;
+  skipped: number;
+  diag: { hadBilling: number; hadShipping: number; topKeys: string };
+}> {
   const concurrency = opts.concurrency ?? 3;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
   const out = new Map<string, string>();
   let processed = 0;
+  // Diagnostics: distinguish "Zoho has no addresses" from "wrong field".
+  let hadBilling = 0;
+  let hadShipping = 0;
+  let topKeys = "";
 
   for (let i = 0; i < contactIds.length; i += concurrency) {
     if (Date.now() > deadline) break;
@@ -116,6 +124,13 @@ async function fetchContactAddresses(
             `/contacts/${id}`
           );
           const c = res.contact;
+          if (c) {
+            if (formatZohoAddress(c.billing_address)) hadBilling++;
+            if (formatZohoAddress(c.shipping_address)) hadShipping++;
+            // Capture the key list of the FIRST contact object once, so we can
+            // see what fields Zoho actually returns if addresses are missing.
+            if (!topKeys) topKeys = Object.keys(c).join(",");
+          }
           const address = c
             ? formatZohoAddress(c.billing_address) ??
               formatZohoAddress(c.shipping_address)
@@ -131,7 +146,11 @@ async function fetchContactAddresses(
     });
     processed = Math.min(i + concurrency, contactIds.length);
   }
-  return { map: out, skipped: contactIds.length - processed };
+  return {
+    map: out,
+    skipped: contactIds.length - processed,
+    diag: { hadBilling, hadShipping, topKeys },
+  };
 }
 
 // Zoho's list endpoints (/invoices, /estimates) don't include sub_total or
@@ -324,7 +343,9 @@ export async function syncFromZoho(
         })
       );
     }
-    counts.warnings.push(`Addresses: +${updated} fetched`);
+    counts.warnings.push(
+      `Addresses: +${updated} fetched (billing in ${addr.diag.hadBilling}, shipping in ${addr.diag.hadShipping} of ${contactIdsForAddr.length} checked). Contact fields: ${addr.diag.topKeys || "n/a"}`
+    );
     if (addr.skipped > 0) {
       counts.warnings.push(
         `Addresses: ${addr.skipped} remaining (time budget) — click Sync again.`
