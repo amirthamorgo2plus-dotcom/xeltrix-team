@@ -72,21 +72,21 @@ export function LoginForm({
       {sent && (
         <div className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
           <p className="text-sm text-emerald-600">
-            Check your email. Tap the link, or enter the 6-digit code below.
+            Check your email. Tap the link, or enter the code below.
           </p>
           <form onSubmit={handleVerify} className="flex flex-col gap-2">
-            <Label htmlFor="token">6-digit code</Label>
+            <Label htmlFor="token">Code from email</Label>
             <div className="flex gap-2">
               <Input
                 id="token"
                 name="token"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="123456"
-                maxLength={6}
+                placeholder="Enter the code"
+                maxLength={10}
                 value={code}
                 onChange={(e) =>
-                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 10))
                 }
               />
               <Button type="submit" disabled={verifying || code.length < 6}>
