@@ -53,12 +53,12 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/visits", label: "Visits", icon: MapPin },
   {
     href: "/targets",
     label: "Targets",
     icon: Target,
     children: [
-      { href: "/visits",       label: "Visits",                  icon: MapPin },
       { href: "/salespersons", label: "Salesperson performance", icon: UserCog },
     ],
   },
