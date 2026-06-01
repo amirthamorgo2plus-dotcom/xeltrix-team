@@ -31,14 +31,26 @@ function numberedIcon(n: number) {
   });
 }
 
-// Small dot for customers (geocoded addresses), distinct from visit markers.
+// Storefront pin for customers (geocoded addresses). Amber teardrop with a
+// shop glyph so it reads clearly as "customer location" and is distinct from
+// the blue numbered route stops and default visit markers.
 const customerIcon = () =>
   L.divIcon({
     className: "",
-    html: `<div style="background:#9ca3af;width:11px;height:11px;border-radius:9999px;border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.4)"></div>`,
-    iconSize: [11, 11],
-    iconAnchor: [6, 6],
-    popupAnchor: [0, -6],
+    html: `<div style="position:relative;width:28px;height:36px">
+      <svg width="28" height="36" viewBox="0 0 28 36" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 0C6.3 0 0 6.1 0 13.6 0 23 14 36 14 36s14-13 14-22.4C28 6.1 21.7 0 14 0z" fill="#f59e0b" stroke="#fff" stroke-width="2"/>
+      </svg>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;top:5px;left:6px">
+        <path d="M3 9l1.5-5h15L21 9"/>
+        <path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/>
+        <path d="M3 9h18"/>
+        <path d="M9 20v-6h6v6"/>
+      </svg>
+    </div>`,
+    iconSize: [28, 36],
+    iconAnchor: [14, 36],
+    popupAnchor: [0, -34],
   });
 
 export type MapPin = {

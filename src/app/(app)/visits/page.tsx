@@ -448,7 +448,7 @@ export default async function VisitsPage({
           {!routeMode && (
             <p className="text-xs text-zinc-400">
               Tip: pick one employee above to see their numbered route and
-              travel stats. Gray dots are customers.
+              travel stats. Amber shop pins are customer locations.
             </p>
           )}
         </CardContent>
