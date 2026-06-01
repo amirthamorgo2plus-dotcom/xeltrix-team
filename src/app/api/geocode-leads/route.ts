@@ -17,12 +17,12 @@ function adminClient() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-async function geocode(
-  address: string
+async function nominatim(
+  query: string
 ): Promise<{ lat: number; lng: number } | null> {
   const url =
     "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=in&q=" +
-    encodeURIComponent(address);
+    encodeURIComponent(query);
   const res = await fetch(url, {
     headers: {
       // Nominatim requires a descriptive User-Agent identifying the app.
@@ -40,6 +40,38 @@ async function geocode(
   return { lat, lng };
 }
 
+// Build a coarse fallback query from a full address: detailed Indian addresses
+// (building names, layouts) often fail, but locality + pincode + state resolve
+// reliably. Extract a 6-digit pincode and the last few comma-parts.
+function coarseQuery(address: string): string | null {
+  const pin = address.match(/\b\d{6}\b/)?.[0];
+  const parts = address
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  // Keep the last 3 parts (typically city, state, country) plus the pincode.
+  const tail = parts.slice(-3);
+  const bits = [...new Set([...(pin ? [pin] : []), ...tail])];
+  const q = bits.join(", ");
+  return q && q !== address ? q : null;
+}
+
+const sleepShort = () => new Promise((r) => setTimeout(r, 1100));
+
+// Try the full address, then a coarse locality-level fallback.
+async function geocode(
+  address: string
+): Promise<{ lat: number; lng: number } | null> {
+  const exact = await nominatim(address);
+  if (exact) return exact;
+  const coarse = coarseQuery(address);
+  if (coarse) {
+    await sleepShort(); // respect the ~1 req/sec policy between the two calls
+    return await nominatim(coarse);
+  }
+  return null;
+}
+
 async function countPending(
   sb: ReturnType<typeof adminClient>,
   teamId: string
@@ -54,7 +86,20 @@ async function countPending(
   return count ?? 0;
 }
 
-export async function POST(_req: NextRequest) {
+async function countFailed(
+  sb: ReturnType<typeof adminClient>,
+  teamId: string
+): Promise<number> {
+  const { count } = await sb
+    .from("leads")
+    .select("id", { count: "exact", head: true })
+    .eq("team_id", teamId)
+    .is("latitude", null)
+    .eq("geocode_status", "failed");
+  return count ?? 0;
+}
+
+export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -72,17 +117,24 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // retry=1 re-attempts rows previously marked 'failed' (e.g. after the
+  // geocoder gained a coarse-fallback). Otherwise only fresh (never-tried) rows.
+  const retry = req.nextUrl.searchParams.get("retry") === "1";
+
   const sb = adminClient();
 
-  // A batch with an address but no coordinates, not yet attempted.
-  const { data: pending, error } = await sb
+  // A batch with an address but no coordinates. Fresh rows (status null), plus
+  // previously-failed rows when retrying.
+  let query = sb
     .from("leads")
     .select("id, address")
     .eq("team_id", m.team_id)
     .is("latitude", null)
-    .is("geocode_status", null)
-    .not("address", "is", null)
-    .limit(BATCH);
+    .not("address", "is", null);
+  query = retry
+    ? query.in("geocode_status", ["failed"])
+    : query.is("geocode_status", null);
+  const { data: pending, error } = await query.limit(BATCH);
   if (error)
     return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -121,5 +173,12 @@ export async function POST(_req: NextRequest) {
   }
 
   const remaining = await countPending(sb, m.team_id);
-  return NextResponse.json({ processed: list.length, ok, failed, remaining });
+  const failedRemaining = await countFailed(sb, m.team_id);
+  return NextResponse.json({
+    processed: list.length,
+    ok,
+    failed,
+    remaining,
+    failedRemaining,
+  });
 }

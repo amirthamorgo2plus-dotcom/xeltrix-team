@@ -224,14 +224,23 @@ export default async function VisitsPage({
   const allPins: MapPin[] = showCustomers ? [...customerPins, ...pins] : pins;
 
   let pendingGeocode = 0;
+  let failedGeocode = 0;
   if (canManage) {
-    const { count } = await supabase
-      .from("leads")
-      .select("id", { count: "exact", head: true })
-      .is("latitude", null)
-      .is("geocode_status", null)
-      .not("address", "is", null);
-    pendingGeocode = count ?? 0;
+    const [{ count: pendingCount }, { count: failedCount }] = await Promise.all([
+      supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .is("latitude", null)
+        .is("geocode_status", null)
+        .not("address", "is", null),
+      supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .is("latitude", null)
+        .eq("geocode_status", "failed"),
+    ]);
+    pendingGeocode = pendingCount ?? 0;
+    failedGeocode = failedCount ?? 0;
   }
 
   function buildUrl(overrides: Record<string, string | null>) {
@@ -414,7 +423,12 @@ export default async function VisitsPage({
             >
               {showCustomers ? "Hide customers" : "Show all customers"}
             </Link>
-            {canManage && <GeocodeCustomersButton pending={pendingGeocode} />}
+            {canManage && (
+              <GeocodeCustomersButton
+                pending={pendingGeocode}
+                failed={failedGeocode}
+              />
+            )}
           </div>
           {allPins.length === 0 ? (
             <EmptyState
