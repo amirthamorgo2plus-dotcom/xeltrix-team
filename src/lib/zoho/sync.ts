@@ -102,22 +102,16 @@ async function fetchContactAddresses(
 ): Promise<{
   map: Map<string, string>;
   skipped: number;
-  diag: {
-    hadBilling: number;
-    hadShipping: number;
-    topKeys: string;
-    sample: string;
-  };
+  diag: { hadBilling: number; hadShipping: number };
 }> {
   const concurrency = opts.concurrency ?? 3;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
   const out = new Map<string, string>();
   let processed = 0;
-  // Diagnostics: distinguish "Zoho has no addresses" from "wrong field".
+  // Count how many contacts actually carry a usable address (most Zoho Books
+  // accounts leave these blank), so the sync message can say so.
   let hadBilling = 0;
   let hadShipping = 0;
-  let topKeys = "";
-  let sample = ""; // raw address shape of the first contact
 
   for (let i = 0; i < contactIds.length; i += concurrency) {
     if (Date.now() > deadline) break;
@@ -133,18 +127,6 @@ async function fetchContactAddresses(
           if (c) {
             if (formatZohoAddress(c.billing_address)) hadBilling++;
             if (formatZohoAddress(c.shipping_address)) hadShipping++;
-            // Capture diagnostics from the FIRST contact once: full key list +
-            // the raw billing/shipping objects + any `addresses` array, so we
-            // can see exactly where (or whether) Zoho stores the address.
-            if (!topKeys) {
-              topKeys = Object.keys(c).join(",");
-              const cc = c as unknown as Record<string, unknown>;
-              sample = JSON.stringify({
-                billing_address: cc.billing_address ?? null,
-                shipping_address: cc.shipping_address ?? null,
-                addresses: cc.addresses ?? null,
-              }).slice(0, 600);
-            }
           }
           const address = c
             ? formatZohoAddress(c.billing_address) ??
@@ -359,7 +341,7 @@ export async function syncFromZoho(
       );
     }
     counts.warnings.push(
-      `Addresses: +${updated} fetched (billing in ${addr.diag.hadBilling}, shipping in ${addr.diag.hadShipping} of ${contactIdsForAddr.length} checked). Sample: ${addr.diag.sample || "n/a"}`
+      `Addresses: +${updated} fetched (${addr.diag.hadBilling + addr.diag.hadShipping} of ${contactIdsForAddr.length} contacts had an address in Zoho)`
     );
     if (addr.skipped > 0) {
       counts.warnings.push(
