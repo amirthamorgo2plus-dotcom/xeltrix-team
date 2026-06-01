@@ -306,18 +306,25 @@ export async function syncFromZoho(
       concurrency: 3,
       deadlineMs: ADDRESS_DEADLINE,
     });
-    const addressRows = [...addr.map.entries()].map(([id, address]) => ({
-      team_id: integration.team_id,
-      zoho_customer_id: id,
-      address,
-    }));
-    if (addressRows.length > 0) {
-      const { error } = await sb
-        .from("leads")
-        .upsert(addressRows, { onConflict: "team_id,zoho_customer_id" });
-      if (error) throw new Error(`lead address upsert failed: ${error.message}`);
+    // These leads already exist (upserted with names above), so UPDATE by
+    // zoho_customer_id — an upsert would hit the INSERT path and trip the
+    // NOT-NULL constraint on `name`, which we don't include here.
+    const entries = [...addr.map.entries()];
+    let updated = 0;
+    for (let i = 0; i < entries.length; i += 5) {
+      const slice = entries.slice(i, i + 5);
+      await Promise.all(
+        slice.map(async ([id, address]) => {
+          const { error } = await sb
+            .from("leads")
+            .update({ address })
+            .eq("team_id", integration.team_id)
+            .eq("zoho_customer_id", id);
+          if (!error) updated++;
+        })
+      );
     }
-    counts.warnings.push(`Addresses: +${addressRows.length} fetched`);
+    counts.warnings.push(`Addresses: +${updated} fetched`);
     if (addr.skipped > 0) {
       counts.warnings.push(
         `Addresses: ${addr.skipped} remaining (time budget) — click Sync again.`
