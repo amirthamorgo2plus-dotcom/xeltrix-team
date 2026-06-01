@@ -1,12 +1,11 @@
 "use client";
 
-import { useActionState, use } from "react";
+import { useState, use } from "react";
+import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { sendMagicLink } from "./actions";
-
-type State = { ok?: boolean; error?: string };
+import { sendMagicLink, verifyCode } from "./actions";
 
 export function LoginForm({
   searchParamsPromise,
@@ -14,42 +13,100 @@ export function LoginForm({
   searchParamsPromise: Promise<{ sent?: string; error?: string }>;
 }) {
   const sp = use(searchParamsPromise);
-  const [state, formAction, pending] = useActionState<State, FormData>(
-    async (_prev, formData) => sendMagicLink(formData),
-    {}
-  );
+  const router = useRouter();
 
-  const sent = state.ok || sp.sent === "1";
-  const error = state.error || sp.error;
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(sp.sent === "1");
+  const [error, setError] = useState<string | null>(sp.error ?? null);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+
+  async function handleSend(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSending(true);
+    const fd = new FormData();
+    fd.set("email", email);
+    const res = await sendMagicLink(fd);
+    setSending(false);
+    if (res.error) setError(res.error);
+    else setSent(true);
+  }
+
+  async function handleVerify(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setVerifying(true);
+    const fd = new FormData();
+    fd.set("email", email);
+    fd.set("token", code);
+    const res = await verifyCode(fd);
+    setVerifying(false);
+    if (res.error) setError(res.error);
+    else if (res.verified) router.push("/dashboard");
+  }
 
   return (
-    <form action={formAction} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          placeholder="you@xeltrix.com"
-        />
-      </div>
+    <div className="flex flex-col gap-4">
+      <form onSubmit={handleSend} className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="you@xeltrix.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
 
-      <Button type="submit" disabled={pending}>
-        {pending ? "Sending..." : "Email me a magic link"}
-      </Button>
+        <Button type="submit" disabled={sending}>
+          {sending ? "Sending..." : "Email me a sign-in link & code"}
+        </Button>
+      </form>
 
       {sent && (
-        <p className="text-sm text-emerald-600">
-          Check your email for a sign-in link.
-        </p>
+        <div className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+          <p className="text-sm text-emerald-600">
+            Check your email. Tap the link, or enter the 6-digit code below.
+          </p>
+          <form onSubmit={handleVerify} className="flex flex-col gap-2">
+            <Label htmlFor="token">6-digit code</Label>
+            <div className="flex gap-2">
+              <Input
+                id="token"
+                name="token"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="123456"
+                maxLength={6}
+                value={code}
+                onChange={(e) =>
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                }
+              />
+              <Button type="submit" disabled={verifying || code.length < 6}>
+                {verifying ? "Verifying..." : "Verify"}
+              </Button>
+            </div>
+            <p className="text-xs text-zinc-500">
+              On iPhone, the code is the reliable option if tapping the link
+              shows an error.
+            </p>
+          </form>
+        </div>
       )}
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <p className="text-xs text-zinc-500">
-        We&apos;ll send a one-tap sign-in link to your inbox. No password required.
+        We&apos;ll email you a one-tap link and a 6-digit code. No password
+        required.
       </p>
-    </form>
+    </div>
   );
 }
