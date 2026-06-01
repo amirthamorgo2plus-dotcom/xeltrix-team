@@ -148,7 +148,7 @@ async function fetchContactAddresses(
   return {
     map: out,
     skipped: contactIds.length - processed,
-    diag: { hadBilling, hadShipping, topKeys, sample },
+    diag: { hadBilling, hadShipping, example },
   };
 }
 
