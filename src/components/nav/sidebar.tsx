@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Globe } from "lucide-react";
 import { visibleNavItems, type NavItem } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
@@ -125,7 +125,17 @@ export function Sidebar({ role }: { role?: string | null }) {
         ))}
       </nav>
 
-      <div className="mt-4 border-t border-zinc-800 pt-3 text-[10px] uppercase tracking-wider text-zinc-600">
+      <a
+        href="https://xeltrixchem.com/"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-100"
+      >
+        <Globe className="h-4 w-4 text-zinc-500" />
+        <span className="truncate">Our website</span>
+      </a>
+
+      <div className="mt-2 border-t border-zinc-800 pt-3 text-[10px] uppercase tracking-wider text-zinc-600">
         v1 · {new Date().getFullYear()}
       </div>
     </aside>

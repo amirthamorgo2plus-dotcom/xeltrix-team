@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, ChevronDown, Globe } from "lucide-react";
 import { visibleNavItems, type NavItem } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
@@ -141,6 +141,15 @@ export function MobileNav({ role }: { role?: string | null }) {
               {items.map((item) => (
                 <MobileRow key={item.href} item={item} pathname={pathname} />
               ))}
+              <a
+                href="https://xeltrixchem.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+              >
+                <Globe className="h-4 w-4 text-zinc-500" />
+                Our website
+              </a>
             </nav>
           </aside>
         </div>
