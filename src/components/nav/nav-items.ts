@@ -17,6 +17,7 @@ import {
   Wallet,
   Receipt,
   MapPin,
+  QrCode,
   type LucideIcon,
 } from "lucide-react";
 
@@ -54,6 +55,7 @@ export const NAV_ITEMS: NavItem[] = [
   },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/visits", label: "Visits", icon: MapPin },
+  { href: "/payment-qr", label: "Payment QR", icon: QrCode },
   {
     href: "/targets",
     label: "Targets",

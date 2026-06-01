@@ -152,6 +152,7 @@ xeltrix-team/
 | 00021 | `quote_images.sql` | Image quote of the day: `daily_quotes.body` made nullable + `quote-images` storage bucket |
 | 00022 | `lead_geocode.sql` | `leads.geocoded_at` + `geocode_status` for plotting customers on the visits map |
 | 00023 | `achievement_excl_tax.sql` | Redefine `v_sales_by_month` so achievement % is on sales EXCL. tax (drives dashboard + targets) |
+| 00024 | `payment_qr.sql` | `payment-qr` storage bucket for the company payment QR image (URL stored in team_settings.config) |
 
 ### Key tables
 
@@ -389,6 +390,7 @@ In order:
 00021_quote_images.sql — RUN THIS (body nullable + quote-images bucket; needed for image quote-of-the-day)
 00022_lead_geocode.sql — RUN THIS (geocode columns on leads; needed for customers-on-map)
 00023_achievement_excl_tax.sql — RUN THIS (achievement % switches to sales excl. tax)
+00024_payment_qr.sql — RUN THIS (payment-qr storage bucket for the company QR)
 ```
 
 Migrations 00019 and 00020 are the most recent. Anything you're missing → just paste the file into Supabase SQL Editor and run.

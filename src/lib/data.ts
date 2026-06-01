@@ -80,6 +80,7 @@ export const getTeamSettings = cache(async () => {
     half_day_hours?: number;
     weekly_off?: unknown;
     target_cadence?: string;
+    payment_qr_url?: string | null;
   };
 });
 
