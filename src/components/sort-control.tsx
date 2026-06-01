@@ -1,31 +1,36 @@
-"use client";
-
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ArrowDownAZ, ArrowUpZA, Clock } from "lucide-react";
 
 export type SortKey = "newest" | "name_asc" | "name_desc";
 
-// Reusable A→Z / Z→A (+ optional Newest) toggle that drives a `?sort=` query
-// param. Server pages read the param and order accordingly.
+// A→Z / Z→A (+ optional Newest) toggle rendered as plain links. No client
+// hooks (no useSearchParams) — the server page passes its current params in,
+// so this stays a Server Component with zero runtime/Suspense risk.
 export function SortControl({
   current,
+  basePath,
+  params = {},
   withNewest = true,
-  param = "sort",
+  paramName = "sort",
 }: {
-  current: string;
+  current: SortKey;
+  basePath: string;
+  // Other query params to preserve on the URL (e.g. range, status, q).
+  params?: Record<string, string | undefined>;
   withNewest?: boolean;
-  param?: string;
+  paramName?: string;
 }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const defaultKey: SortKey = withNewest ? "newest" : "name_asc";
 
-  function set(value: SortKey) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value === (withNewest ? "newest" : "name_asc")) params.delete(param);
-    else params.set(param, value);
-    const qs = params.toString();
-    router.push(`${pathname}${qs ? `?${qs}` : ""}`);
+  function hrefFor(value: SortKey) {
+    const sp = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) sp.set(k, v);
+    });
+    if (value === defaultKey) sp.delete(paramName);
+    else sp.set(paramName, value);
+    const qs = sp.toString();
+    return `${basePath}${qs ? `?${qs}` : ""}`;
   }
 
   const options: Array<{ key: SortKey; label: string; icon: typeof Clock }> = [
@@ -41,10 +46,10 @@ export function SortControl({
       {options.map(({ key, label, icon: Icon }) => {
         const active = current === key;
         return (
-          <button
+          <Link
             key={key}
-            type="button"
-            onClick={() => set(key)}
+            href={hrefFor(key)}
+            scroll={false}
             className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${
               active
                 ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
@@ -53,7 +58,7 @@ export function SortControl({
           >
             <Icon className="h-3.5 w-3.5" />
             {label}
-          </button>
+          </Link>
         );
       })}
     </div>
@@ -61,7 +66,6 @@ export function SortControl({
 }
 
 // Shared helper so server pages resolve a sort param the same way.
-// `nameColumn`/`dateColumn` let each page map to its own columns.
 export function resolveSort(
   raw: string | undefined,
   opts: { withNewest?: boolean; nameColumn?: string; dateColumn?: string } = {}

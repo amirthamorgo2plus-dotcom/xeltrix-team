@@ -70,7 +70,11 @@ export default async function ComplaintsPage({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>All complaints</CardTitle>
-            <SortControl current={sort.key} />
+            <SortControl
+              current={sort.key}
+              basePath="/complaints"
+              params={{ range: range.key !== "all" ? range.key : undefined }}
+            />
           </div>
         </CardHeader>
         <CardContent>

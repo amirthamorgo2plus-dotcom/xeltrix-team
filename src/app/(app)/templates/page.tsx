@@ -81,7 +81,15 @@ export default async function TemplatesPage({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>{templates?.length ?? 0} products</CardTitle>
-            <SortControl current={sort.key} withNewest={false} />
+            <SortControl
+              current={sort.key}
+              basePath="/templates"
+              withNewest={false}
+              params={{
+                q: q || undefined,
+                status: status !== "all" ? status : undefined,
+              }}
+            />
           </div>
         </CardHeader>
         <CardContent>

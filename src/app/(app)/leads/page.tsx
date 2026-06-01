@@ -56,7 +56,7 @@ export default async function LeadsPage({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>{leads?.length ?? 0} total</CardTitle>
-            <SortControl current={sort.key} />
+            <SortControl current={sort.key} basePath="/leads" />
           </div>
         </CardHeader>
         <CardContent>
