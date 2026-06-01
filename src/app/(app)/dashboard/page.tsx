@@ -6,6 +6,7 @@ import { KpiCard } from "@/components/kpi-card";
 import { TargetChart } from "@/components/target-chart";
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
+import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
 import { DashboardFilters } from "./filters";
 import { RangeFilter } from "@/components/range-filter";
 import { resolveRange } from "@/lib/date-range";
@@ -246,7 +247,10 @@ export default async function DashboardPage({
         />
       </div>
 
-      <QuoteOfTheDay />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <QuoteOfTheDay />
+        <EmployeeOfTheMonth />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">

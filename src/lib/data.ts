@@ -81,6 +81,8 @@ export const getTeamSettings = cache(async () => {
     weekly_off?: unknown;
     target_cadence?: string;
     payment_qr_url?: string | null;
+    eotm_url?: string | null;
+    eotm_caption?: string | null;
   };
 });
 
