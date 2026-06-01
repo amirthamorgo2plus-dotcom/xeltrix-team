@@ -7,6 +7,7 @@ import { ExportButton } from "@/components/export-button";
 import { LeadForm } from "./lead-form";
 import { LeadStatusSelect } from "./status-select";
 import { LocationCell } from "./location-cell";
+import { SortControl, resolveSort } from "@/components/sort-control";
 
 function toNum(v: number | string | null): number | null {
   if (v == null) return null;
@@ -23,14 +24,21 @@ const statusTone: Record<string, "muted" | "info" | "success" | "warning" | "dan
   lost: "danger",
 };
 
-export default async function LeadsPage() {
+export default async function LeadsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ sort?: string }>;
+}) {
+  const sp = await searchParams;
+  const sort = resolveSort(sp.sort);
+
   const supabase = await createClient();
   const { data: leads } = await supabase
     .from("leads")
     .select(
       "id, name, email, phone, source, status, created_at, latitude, longitude, geocode_status"
     )
-    .order("created_at", { ascending: false });
+    .order(sort.column, { ascending: sort.ascending });
 
   return (
     <div className="flex flex-col gap-6">
@@ -46,7 +54,10 @@ export default async function LeadsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{leads?.length ?? 0} total</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>{leads?.length ?? 0} total</CardTitle>
+            <SortControl current={sort.key} />
+          </div>
         </CardHeader>
         <CardContent>
           {!leads || leads.length === 0 ? (

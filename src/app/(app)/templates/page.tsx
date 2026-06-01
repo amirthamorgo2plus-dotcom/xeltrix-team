@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { SortControl, resolveSort } from "@/components/sort-control";
 
 function fmtMoney(v: number | null, currency = "INR") {
   if (v === null || v === undefined) return "—";
@@ -20,12 +21,13 @@ type StatusFilter = "all" | "active" | "inactive";
 export default async function TemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: StatusFilter }>;
+  searchParams: Promise<{ q?: string; status?: StatusFilter; sort?: string }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const status: StatusFilter =
     sp.status === "active" || sp.status === "inactive" ? sp.status : "all";
+  const sort = resolveSort(sp.sort, { withNewest: false });
 
   const settings = await getTeamSettings();
   const currency = settings?.currency || "INR";
@@ -34,7 +36,7 @@ export default async function TemplatesPage({
   let query = supabase
     .from("opportunity_templates")
     .select("id, name, sku, rate, unit, active, zoho_item_id")
-    .order("name");
+    .order(sort.column, { ascending: sort.ascending });
 
   if (q) {
     query = query.or(`name.ilike.%${q}%,sku.ilike.%${q}%`);
@@ -49,6 +51,7 @@ export default async function TemplatesPage({
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (value !== "all") params.set("status", value);
+    if (sort.key !== "name_asc") params.set("sort", sort.key);
     const href = `/templates${params.size ? `?${params}` : ""}`;
     return (
       <Link
@@ -76,14 +79,18 @@ export default async function TemplatesPage({
 
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>{templates?.length ?? 0} templates</span>
-          </CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>{templates?.length ?? 0} products</CardTitle>
+            <SortControl current={sort.key} withNewest={false} />
+          </div>
         </CardHeader>
         <CardContent>
           <form className="mb-3 flex gap-2" action="/templates">
             {status !== "all" && (
               <input type="hidden" name="status" value={status} />
+            )}
+            {sort.key !== "name_asc" && (
+              <input type="hidden" name="sort" value={sort.key} />
             )}
             <Input
               name="q"

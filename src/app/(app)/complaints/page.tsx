@@ -8,6 +8,7 @@ import { ComplaintForm } from "./complaint-form";
 import { ComplaintStatusSelect } from "./status-select";
 import { RangeFilter } from "@/components/range-filter";
 import { resolveRange } from "@/lib/date-range";
+import { SortControl, resolveSort } from "@/components/sort-control";
 
 const sevTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
   low: "muted",
@@ -19,17 +20,21 @@ const sevTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
 export default async function ComplaintsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
   const range = resolveRange(sp.range ?? "all");
+  const sort = resolveSort(sp.sort, {
+    nameColumn: "customer_name",
+    dateColumn: "opened_at",
+  });
 
   const supabase = await createClient();
 
   let q = supabase
     .from("complaints")
     .select("id, customer_name, subject, severity, status, opened_at, resolved_at")
-    .order("opened_at", { ascending: false });
+    .order(sort.column, { ascending: sort.ascending });
 
   if (range.start) q = q.gte("opened_at", `${range.start}T00:00:00`);
   if (range.end) q = q.lte("opened_at", `${range.end}T23:59:59`);
@@ -53,13 +58,20 @@ export default async function ComplaintsPage({
         <ExportButton href="/api/export/complaints" />
       </div>
 
-      <RangeFilter basePath="/complaints" current={range.key} />
+      <RangeFilter
+        basePath="/complaints"
+        current={range.key}
+        extraParams={{ sort: sort.key !== "newest" ? sort.key : undefined }}
+      />
 
       <ComplaintForm leads={leads ?? []} />
 
       <Card>
         <CardHeader>
-          <CardTitle>All complaints</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <CardTitle>All complaints</CardTitle>
+            <SortControl current={sort.key} />
+          </div>
         </CardHeader>
         <CardContent>
           {!data || data.length === 0 ? (
