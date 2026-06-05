@@ -58,8 +58,11 @@ export function CheckInButton({
   const [newPhone, setNewPhone] = useState("");
   const [adding, setAdding] = useState(false);
 
+  const [denied, setDenied] = useState(false);
+
   function requestLocation() {
     setPosError(null);
+    setDenied(false);
     setGettingPos(true);
     if (!navigator.geolocation) {
       setPosError("Geolocation not supported in this browser.");
@@ -73,12 +76,27 @@ export function CheckInButton({
         setGettingPos(false);
       },
       (e) => {
-        setPosError(e.message);
+        // 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
+        if (e.code === 1) {
+          setDenied(true);
+          setPosError(null);
+        } else if (e.code === 3) {
+          setPosError("Timed out getting location. Move to open sky and retry.");
+        } else {
+          setPosError(
+            "Couldn't get location. Check that GPS/Location is on, then retry."
+          );
+        }
         setGettingPos(false);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
     );
   }
+
+  // Is this an iPhone/iPad? Permission steps differ from Android.
+  const isApple =
+    typeof navigator !== "undefined" &&
+    /iPhone|iPad|iPod/.test(navigator.userAgent);
 
   // Sort leads by distance from current GPS, then alphabetically
   const sortedLeads = useMemo(() => {
@@ -188,6 +206,47 @@ export function CheckInButton({
         )}
         {posError && (
           <div className="text-xs text-red-600">Location: {posError}</div>
+        )}
+
+        {denied && (
+          <div className="flex flex-col gap-2 rounded-md border border-amber-300/60 bg-amber-50/60 p-3 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
+            <p className="font-medium text-amber-800 dark:text-amber-300">
+              Location permission is off — check-in needs it.
+            </p>
+            {isApple ? (
+              <ol className="list-decimal pl-4 text-zinc-600 dark:text-zinc-400">
+                <li>
+                  iPhone <strong>Settings → Privacy &amp; Security → Location
+                  Services</strong> → turn ON.
+                </li>
+                <li>
+                  Scroll to your browser (<strong>Safari Websites</strong> or
+                  Chrome) → set to <strong>While Using</strong>.
+                </li>
+                <li>
+                  In Safari on this page, tap <strong>aA</strong> in the address
+                  bar → <strong>Website Settings → Location → Allow</strong>.
+                </li>
+                <li>Come back here and tap Retry.</li>
+              </ol>
+            ) : (
+              <ol className="list-decimal pl-4 text-zinc-600 dark:text-zinc-400">
+                <li>
+                  Tap the <strong>lock/ⓘ icon</strong> in the address bar.
+                </li>
+                <li>
+                  Set <strong>Location</strong> to <strong>Allow</strong>.
+                </li>
+                <li>Make sure the phone&apos;s GPS/Location is on.</li>
+                <li>Tap Retry below.</li>
+              </ol>
+            )}
+            <div>
+              <Button size="sm" onClick={requestLocation} disabled={gettingPos}>
+                {gettingPos ? "Retrying…" : "Retry location"}
+              </Button>
+            </div>
+          </div>
         )}
 
         {showForm && pos && (
