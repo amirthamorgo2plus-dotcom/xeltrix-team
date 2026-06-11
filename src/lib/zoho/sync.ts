@@ -667,6 +667,16 @@ export async function syncFromZoho(
       zoho_salesperson_id: inv.salesperson_id ?? null,
       zoho_salesperson_name: inv.salesperson_name ?? null,
     };
+    // Keep owner_id in step with the invoice's salesperson. The proposal opp
+    // was owned per the *estimate's* salesperson; if the invoice carries a
+    // different (mapped) salesperson, ownership must follow it — otherwise the
+    // opp shows one name (salespersons page) but credits another member
+    // (targets/dashboard, which group by owner_id). Only override when the
+    // salesperson maps to a member, so manual opps / unmapped names are left be.
+    const resolvedOwner = inv.salesperson_name
+      ? salespersonToMember.get(inv.salesperson_name) ?? null
+      : null;
+    if (resolvedOwner) updatePayload.owner_id = resolvedOwner;
     if (tax) {
       updatePayload.value_excl_tax = tax.sub_total;
       updatePayload.tax_amount = tax.tax_total;
