@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { HUB_CATEGORIES, HUB_LINKS, type HubLink } from "./links";
+import { getTeamSettings } from "@/lib/data";
+import {
+  DEFAULT_HUB_LINKS,
+  HUB_CATEGORIES,
+  normalizeHubLinks,
+  type HubLink,
+} from "./links";
 
 // Server-rendered, re-checked on each load (cheap for a 7-person tool).
 export const dynamic = "force-dynamic";
@@ -101,9 +107,17 @@ function HubCardLink({ link, status }: { link: HubLink; status: "up" | "down" | 
 }
 
 export default async function HubPage() {
+  // Admin-managed links live in team_settings.config.hub_links; fall back to the
+  // seed list until an admin has saved any.
+  const settings = await getTeamSettings();
+  const stored = normalizeHubLinks(
+    (settings as { hub_links?: unknown } | null)?.hub_links
+  );
+  const links = stored && stored.length > 0 ? stored : DEFAULT_HUB_LINKS;
+
   // Run all health checks in parallel; non-checked links resolve to "none".
   const statuses = await Promise.all(
-    HUB_LINKS.map(async (l) => {
+    links.map(async (l) => {
       if (!l.check || l.url === "#") return [l.key, "none"] as const;
       return [l.key, await checkStatus(l.url)] as const;
     })
@@ -120,7 +134,7 @@ export default async function HubPage() {
       </div>
 
       {HUB_CATEGORIES.map((category) => {
-        const items = HUB_LINKS.filter((l) => l.category === category);
+        const items = links.filter((l) => l.category === category);
         if (items.length === 0) return null;
         return (
           <Card key={category}>

@@ -1,7 +1,8 @@
 // Xeltrix command-center links.
 //
-// This is the ONE place to edit what shows on /hub. Add, remove, or re-URL a
-// card by editing this list — no other file needs to change.
+// Links shown on /hub are stored in the database (team_settings.config.hub_links)
+// and edited by an admin in the UI (Profile page → "Command Center links"). The
+// list below is only the DEFAULT/seed used when an admin hasn't saved any yet.
 //
 //   url      where the "Open" button goes (opens in a new tab)
 //   check    true  -> /hub pings the URL server-side and shows a green/red dot
@@ -9,7 +10,7 @@
 //                     e.g. JustDial/YouTube, so they don't show a false "down")
 //   internal true  -> it's a page inside THIS app (opens in the same tab)
 //
-// Anything left as "#" is a placeholder — paste the real URL when you have it.
+// Anything left as "#" is a placeholder — set the real URL from the UI.
 
 export type HubLink = {
   key: string;
@@ -31,7 +32,7 @@ export const HUB_CATEGORIES: HubCategory[] = [
   "My apps",
 ];
 
-export const HUB_LINKS: HubLink[] = [
+export const DEFAULT_HUB_LINKS: HubLink[] = [
   // ---- Web presence ----
   {
     key: "website",
@@ -100,3 +101,34 @@ export const HUB_LINKS: HubLink[] = [
   //   check: true,
   // },
 ];
+
+const ALLOWED_CATEGORIES = new Set<string>(HUB_CATEGORIES);
+
+// Coerce whatever is stored in team_settings.config.hub_links into a clean
+// HubLink[]. Tolerant of partial/old rows so a bad save can't break /hub.
+// Returns null if the value isn't a usable array (caller falls back to defaults).
+export function normalizeHubLinks(raw: unknown): HubLink[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: HubLink[] = [];
+  raw.forEach((item, i) => {
+    if (!item || typeof item !== "object") return;
+    const o = item as Record<string, unknown>;
+    const name = typeof o.name === "string" ? o.name.trim() : "";
+    const url = typeof o.url === "string" && o.url.trim() ? o.url.trim() : "#";
+    if (!name) return;
+    const category = (typeof o.category === "string" && ALLOWED_CATEGORIES.has(o.category)
+      ? o.category
+      : "My apps") as HubCategory;
+    out.push({
+      key: typeof o.key === "string" && o.key ? o.key : `link-${i}`,
+      name,
+      description: typeof o.description === "string" ? o.description : "",
+      url,
+      category,
+      emoji: typeof o.emoji === "string" && o.emoji ? o.emoji : "🔗",
+      check: o.check === true,
+      internal: o.internal === true,
+    });
+  });
+  return out;
+}

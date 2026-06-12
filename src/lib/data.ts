@@ -83,6 +83,7 @@ export const getTeamSettings = cache(async () => {
     payment_qr_url?: string | null;
     eotm_url?: string | null;
     eotm_caption?: string | null;
+    hub_links?: unknown;
   };
 });
 

@@ -1,12 +1,22 @@
-import { getMyProfile, getUser } from "@/lib/data";
+import { getMyMembership, getMyProfile, getTeamSettings, getUser, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { ProfileForm } from "./profile-form";
 import { AvatarUploader } from "./avatar-uploader";
+import { HubLinksEditor } from "./hub-links-editor";
+import { DEFAULT_HUB_LINKS, normalizeHubLinks } from "@/app/(app)/hub/links";
 
 export default async function ProfilePage() {
   const user = await getUser();
   const profile = await getMyProfile();
+  const membership = await getMyMembership();
+  const isAdmin = isAdminOrManager(membership?.role);
+
+  const settings = isAdmin ? await getTeamSettings() : null;
+  const storedLinks = normalizeHubLinks(
+    (settings as { hub_links?: unknown } | null)?.hub_links
+  );
+  const hubLinks = storedLinks && storedLinks.length > 0 ? storedLinks : DEFAULT_HUB_LINKS;
 
   return (
     <div className="flex flex-col gap-6">
@@ -39,6 +49,17 @@ export default async function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      {isAdmin && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Command Center links (admin)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <HubLinksEditor initialLinks={hubLinks} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
