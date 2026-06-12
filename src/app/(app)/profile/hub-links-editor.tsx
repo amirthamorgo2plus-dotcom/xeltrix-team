@@ -19,6 +19,7 @@ function blankLink(): HubLink {
     url: "",
     category: "My apps",
     emoji: "🔗",
+    image: "",
     check: false,
     internal: false,
   };
@@ -121,13 +122,38 @@ export function HubLinksEditor({ initialLinks }: { initialLinks: HubLink[] }) {
                   ))}
                 </Select>
               </div>
-              <div className="sm:col-span-8">
+              <div className="sm:col-span-4">
                 <Label className="text-xs text-zinc-500">Description</Label>
                 <Input
                   value={r.link.description}
                   onChange={(e) => update(r.id, { description: e.target.value })}
                   placeholder="Short note shown on the card"
                 />
+              </div>
+              <div className="sm:col-span-4">
+                <Label className="text-xs text-zinc-500">
+                  Logo image URL <span className="text-zinc-400">(optional)</span>
+                </Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={r.link.image ?? ""}
+                    onChange={(e) => update(r.id, { image: e.target.value })}
+                    placeholder="https://…/logo.png — overrides the icon"
+                  />
+                  {r.link.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={r.link.image}
+                      alt=""
+                      className="h-9 w-9 shrink-0 rounded border border-zinc-200 object-contain dark:border-zinc-800"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded border border-dashed border-zinc-300 text-lg dark:border-zinc-700">
+                      {r.link.emoji || "🔗"}
+                    </span>
+                  )}
+                </div>
               </div>
               <div className="flex items-end gap-4 sm:col-span-4">
                 <label className="flex items-center gap-1.5 text-xs">

@@ -8,6 +8,7 @@ import {
   normalizeHubLinks,
   type HubLink,
 } from "./links";
+import { ZohoKpis } from "./zoho-kpis";
 
 // Server-rendered, re-checked on each load (cheap for a 7-person tool).
 export const dynamic = "force-dynamic";
@@ -69,9 +70,21 @@ function HubCardLink({ link, status }: { link: HubLink; status: "up" | "down" | 
     >
       <CardContent className="flex h-full flex-col gap-2 p-4">
         <div className="flex items-start justify-between">
-          <span className="text-2xl" aria-hidden>
-            {link.emoji}
-          </span>
+          {link.image ? (
+            // Arbitrary external logo URLs — plain <img> avoids next.config
+            // remotePatterns upkeep for every domain an admin might paste.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={link.image}
+              alt=""
+              className="h-8 w-8 rounded object-contain"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <span className="text-2xl" aria-hidden>
+              {link.emoji}
+            </span>
+          )}
           {!link.internal && !placeholder && (
             <ExternalLink className="h-4 w-4 text-zinc-400" aria-hidden />
           )}
@@ -132,6 +145,8 @@ export default async function HubPage() {
           Every Xeltrix tool and channel, one click away.
         </p>
       </div>
+
+      <ZohoKpis />
 
       {HUB_CATEGORIES.map((category) => {
         const items = links.filter((l) => l.category === category);

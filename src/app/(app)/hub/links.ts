@@ -19,6 +19,10 @@ export type HubLink = {
   url: string;
   category: HubCategory;
   emoji: string;
+  // Optional logo image URL. When set, the card shows this image instead of the
+  // emoji. Paste any image URL (e.g. a logo hosted anywhere, or a Supabase
+  // public storage URL).
+  image?: string;
   check?: boolean;
   internal?: boolean;
 };
@@ -126,6 +130,7 @@ export function normalizeHubLinks(raw: unknown): HubLink[] | null {
       url,
       category,
       emoji: typeof o.emoji === "string" && o.emoji ? o.emoji : "🔗",
+      image: typeof o.image === "string" && o.image.trim() ? o.image.trim() : undefined,
       check: o.check === true,
       internal: o.internal === true,
     });
