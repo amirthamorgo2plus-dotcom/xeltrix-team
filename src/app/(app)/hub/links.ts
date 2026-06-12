@@ -72,16 +72,6 @@ export const DEFAULT_HUB_LINKS: HubLink[] = [
     emoji: "📈",
   },
 
-  // ---- Communication ----
-  {
-    key: "email",
-    name: "Email (Resend)",
-    description: "noreply@xeltrixchem.com — delivery logs",
-    url: "https://resend.com/emails",
-    category: "Communication",
-    emoji: "✉️",
-  },
-
   // ---- Business tools ----
   {
     key: "zoho",
@@ -103,12 +93,39 @@ export const DEFAULT_HUB_LINKS: HubLink[] = [
     internal: true,
   },
   {
-    key: "options-trading",
-    name: "Options Trading",
-    description: "Copy-trading platform",
-    url: "http://3.21.151.16.sslip.io", // edit if the URL has changed
+    key: "xeltrix-sparkle",
+    name: "Xeltrix Sparkle",
+    description: "Sparkle app",
+    url: "#", // TODO: paste the live URL (or set it from admin settings)
     category: "My apps",
-    emoji: "💹",
+    emoji: "✨",
+    check: true,
+  },
+  {
+    key: "kamma-app",
+    name: "Kamma App",
+    description: "Kamma app",
+    url: "#", // TODO: paste the live URL (or set it from admin settings)
+    category: "My apps",
+    emoji: "📱",
+    check: true,
+  },
+  {
+    key: "housekeeping-app",
+    name: "Housekeeping App",
+    description: "Housekeeping management",
+    url: "#", // TODO: paste the live URL (or set it from admin settings)
+    category: "My apps",
+    emoji: "🧹",
+    check: true,
+  },
+  {
+    key: "medi-track-app",
+    name: "Medi Track App",
+    description: "Medical records / tracking",
+    url: "#", // TODO: paste the live URL (or set it from admin settings)
+    category: "My apps",
+    emoji: "🩺",
     check: true,
   },
   // Add more of your own apps from Profile → Command Center links (admin).

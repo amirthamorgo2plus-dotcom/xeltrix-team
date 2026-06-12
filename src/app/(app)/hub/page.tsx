@@ -8,7 +8,6 @@ import {
   normalizeHubLinks,
   type HubLink,
 } from "./links";
-import { ZohoKpis } from "./zoho-kpis";
 
 // Server-rendered, re-checked on each load (cheap for a 7-person tool).
 export const dynamic = "force-dynamic";
@@ -93,7 +92,7 @@ function HubCardLink({ link, status }: { link: HubLink; status: "up" | "down" | 
         <p className="text-xs text-zinc-500">{link.description}</p>
         <div className="mt-auto pt-1">
           {placeholder ? (
-            <span className="text-xs text-amber-600">Add link in hub/links.ts</span>
+            <span className="text-xs text-amber-600">Set URL in admin settings</span>
           ) : (
             <StatusDot status={status} />
           )}
@@ -145,8 +144,6 @@ export default async function HubPage() {
           Every Xeltrix tool and channel, one click away.
         </p>
       </div>
-
-      <ZohoKpis />
 
       {HUB_CATEGORIES.map((category) => {
         const items = links.filter((l) => l.category === category);
