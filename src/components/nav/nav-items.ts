@@ -1,4 +1,5 @@
 import {
+  LayoutGrid,
   LayoutDashboard,
   Users,
   CheckSquare,
@@ -32,6 +33,7 @@ export type NavItem = {
 };
 
 export const NAV_ITEMS: NavItem[] = [
+  { href: "/hub", label: "Command Center", icon: LayoutGrid },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   {
     href: "/leads",
