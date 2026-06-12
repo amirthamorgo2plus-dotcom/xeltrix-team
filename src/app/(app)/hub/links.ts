@@ -63,6 +63,14 @@ export const DEFAULT_HUB_LINKS: HubLink[] = [
     category: "Web presence",
     emoji: "▶️",
   },
+  {
+    key: "google-analytics",
+    name: "Google Analytics",
+    description: "Website traffic & visitors",
+    url: "https://analytics.google.com",
+    category: "Web presence",
+    emoji: "📈",
+  },
 
   // ---- Communication ----
   {
@@ -94,16 +102,16 @@ export const DEFAULT_HUB_LINKS: HubLink[] = [
     emoji: "🏢",
     internal: true,
   },
-  // Add more of your own apps here, e.g.:
-  // {
-  //   key: "options-trading",
-  //   name: "Options Trading",
-  //   description: "Copy-trading platform",
-  //   url: "https://...",
-  //   category: "My apps",
-  //   emoji: "📈",
-  //   check: true,
-  // },
+  {
+    key: "options-trading",
+    name: "Options Trading",
+    description: "Copy-trading platform",
+    url: "http://3.21.151.16.sslip.io", // edit if the URL has changed
+    category: "My apps",
+    emoji: "💹",
+    check: true,
+  },
+  // Add more of your own apps from Profile → Command Center links (admin).
 ];
 
 const ALLOWED_CATEGORIES = new Set<string>(HUB_CATEGORIES);
