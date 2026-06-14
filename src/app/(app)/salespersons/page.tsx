@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { MappingForm } from "./mapping-form";
 import { RangeFilter } from "@/components/range-filter";
@@ -119,53 +120,51 @@ export default async function SalespersonsPage({
               hint="Click Sync now on /integrations after assigning salespersons to invoices/estimates in Zoho."
             />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="pb-2 pr-4">Zoho salesperson</th>
-                  <th className="pb-2 pr-4 text-right">Invoiced (incl. tax)</th>
-                  <th className="pb-2 pr-4 text-right">Invoiced (excl. tax)</th>
-                  <th className="pb-2 pr-4 text-right">Opps</th>
-                  <th className="pb-2 pr-4 text-right">Quotes</th>
-                  <th className="pb-2 pr-4">Mapped to</th>
-                  {canManage && <th className="pb-2">Change</th>}
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <THead>
+                <TR hover={false}>
+                  <TH>Zoho salesperson</TH>
+                  <TH right>Invoiced (incl. tax)</TH>
+                  <TH right>Invoiced (excl. tax)</TH>
+                  <TH right>Opps</TH>
+                  <TH right>Quotes</TH>
+                  <TH>Mapped to</TH>
+                  {canManage && <TH>Change</TH>}
+                </TR>
+              </THead>
+              <TBody>
                 {rows.map((r) => {
                   const mapped = nameToMember.get(r.name) ?? null;
                   return (
-                    <tr key={r.name} className="border-t border-zinc-200 dark:border-zinc-800">
-                      <td className="py-2 pr-4 font-medium">{r.name}</td>
-                      <td className="py-2 pr-4 text-right tabular-nums">
-                        {fmtMoney(r.invoiced, currency)}
-                      </td>
-                      <td className="py-2 pr-4 text-right tabular-nums text-zinc-500">
+                    <TR key={r.name}>
+                      <TD className="font-medium">{r.name}</TD>
+                      <TD right>{fmtMoney(r.invoiced, currency)}</TD>
+                      <TD right className="text-zinc-500">
                         {fmtMoney(r.invoicedExcl, currency)}
-                      </td>
-                      <td className="py-2 pr-4 text-right">{r.opp_count}</td>
-                      <td className="py-2 pr-4 text-right">{r.quote_count}</td>
-                      <td className="py-2 pr-4">
+                      </TD>
+                      <TD right>{r.opp_count}</TD>
+                      <TD right>{r.quote_count}</TD>
+                      <TD>
                         {mapped ? (
                           <Badge tone="success">{mapped.name}</Badge>
                         ) : (
                           <Badge tone="muted">unmapped</Badge>
                         )}
-                      </td>
+                      </TD>
                       {canManage && (
-                        <td className="py-2">
+                        <TD>
                           <MappingForm
                             salespersonName={r.name}
                             currentMemberId={mapped?.id ?? null}
                             members={memberOpts.map((mo) => ({ id: mo.id, name: mo.name }))}
                           />
-                        </td>
+                        </TD>
                       )}
-                    </tr>
+                    </TR>
                   );
                 })}
-              </tbody>
-            </table>
+              </TBody>
+            </Table>
           )}
         </CardContent>
       </Card>

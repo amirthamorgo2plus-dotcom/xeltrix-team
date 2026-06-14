@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TBody, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { RoutineForm } from "./routine-form";
 import { RoutineRow } from "./routine-row";
@@ -41,22 +42,22 @@ export default async function RoutinesPage() {
           {!routines || routines.length === 0 ? (
             <EmptyState title="No routines yet" hint="Add one above." />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="pb-2 pr-4">Routine</th>
-                  <th className="pb-2 pr-4">Repeats</th>
-                  <th className="pb-2 pr-4">Assigned</th>
-                  <th className="pb-2 pr-4">Status</th>
-                  <th className="pb-2" />
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <THead>
+                <TR hover={false}>
+                  <TH>Routine</TH>
+                  <TH>Repeats</TH>
+                  <TH>Assigned</TH>
+                  <TH>Status</TH>
+                  <TH />
+                </TR>
+              </THead>
+              <TBody>
                 {routines.map((r) => (
                   <RoutineRow key={r.id} routine={r} members={memberOpts} />
                 ))}
-              </tbody>
-            </table>
+              </TBody>
+            </Table>
           )}
         </CardContent>
       </Card>

@@ -1,8 +1,10 @@
 import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getTeamMembers, getTeamSettings, firstDayOfMonth } from "@/lib/data";
+import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { TargetForm } from "./target-form";
 
@@ -59,17 +61,17 @@ export default async function TargetsPage({
           {members.length === 0 ? (
             <EmptyState title="No team members" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="pb-2 pr-4">Member</th>
-                  <th className="pb-2 pr-4 text-right">Target</th>
-                  <th className="pb-2 pr-4 text-right">Achieved</th>
-                  <th className="pb-2 pr-4 text-right">%</th>
-                  <th className="pb-2 pr-4">Progress</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <THead>
+                <TR hover={false}>
+                  <TH>Member</TH>
+                  <TH right>Target</TH>
+                  <TH right>Achieved</TH>
+                  <TH right>%</TH>
+                  <TH>Progress</TH>
+                </TR>
+              </THead>
+              <TBody>
                 {members
                   .map((mem) => {
                     const r = rowMap.get(mem.id);
@@ -91,14 +93,19 @@ export default async function TargetsPage({
                       row.pct >= 50  ? "warning" :
                       row.target === 0 ? "muted" : "danger";
                     return (
-                      <tr key={row.id} className="border-t border-zinc-200 dark:border-zinc-800">
-                        <td className="py-2 pr-4 font-medium">{row.name}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{fmtMoney(row.target, currency)}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">{fmtMoney(row.achieved, currency)}</td>
-                        <td className="py-2 pr-4 text-right tabular-nums">
+                      <TR key={row.id}>
+                        <TD className="font-medium">
+                          <span className="inline-flex items-center gap-2">
+                            <span className={`h-2.5 w-2.5 rounded-full ${memberColor(row.id).dot}`} />
+                            {row.name}
+                          </span>
+                        </TD>
+                        <TD right>{fmtMoney(row.target, currency)}</TD>
+                        <TD right>{fmtMoney(row.achieved, currency)}</TD>
+                        <TD right>
                           <Badge tone={tone}>{row.pct.toFixed(0)}%</Badge>
-                        </td>
-                        <td className="py-2 pr-4">
+                        </TD>
+                        <TD>
                           <div className="h-2 w-40 rounded-full bg-zinc-100 dark:bg-zinc-800">
                             <div
                               className={`h-2 rounded-full ${
@@ -110,12 +117,12 @@ export default async function TargetsPage({
                               style={{ width: `${Math.min(100, Math.max(0, row.pct))}%` }}
                             />
                           </div>
-                        </td>
-                      </tr>
+                        </TD>
+                      </TR>
                     );
                   })}
-              </tbody>
-            </table>
+              </TBody>
+            </Table>
           )}
         </CardContent>
       </Card>

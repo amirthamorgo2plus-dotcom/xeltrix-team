@@ -5,6 +5,7 @@ import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { ensureRoutineInstances } from "@/lib/routines";
 import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
 
@@ -110,21 +111,21 @@ export default async function TaskReportPage() {
           {list.length === 0 ? (
             <EmptyState title="No team members" />
           ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs uppercase text-zinc-500">
-                <tr>
-                  <th className="pb-2 pr-4">Employee</th>
-                  <th className="pb-2 pr-4 text-right">Overdue</th>
-                  <th className="pb-2 pr-4 text-right">Due today</th>
-                  <th className="pb-2 pr-4 text-right">Upcoming</th>
-                  <th className="pb-2 pr-4 text-right">Pending total</th>
-                  <th className="pb-2 pr-4 text-right">Completed</th>
-                </tr>
-              </thead>
-              <tbody>
+            <Table>
+              <THead>
+                <TR hover={false}>
+                  <TH>Employee</TH>
+                  <TH right>Overdue</TH>
+                  <TH right>Due today</TH>
+                  <TH right>Upcoming</TH>
+                  <TH right>Pending total</TH>
+                  <TH right>Completed</TH>
+                </TR>
+              </THead>
+              <TBody>
                 {list.map((r) => (
-                  <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
-                    <td className="py-2 pr-4 font-medium">
+                  <TR key={r.id}>
+                    <TD className="font-medium">
                       <Link
                         href={`/tasks?member=${r.id}&status=pending`}
                         className="inline-flex items-center gap-2 hover:underline"
@@ -132,8 +133,8 @@ export default async function TaskReportPage() {
                         <span className={`h-2.5 w-2.5 rounded-full ${memberColor(r.id).dot}`} />
                         {r.name}
                       </Link>
-                    </td>
-                    <td className="py-2 pr-4 text-right tabular-nums">
+                    </TD>
+                    <TD right>
                       {r.overdue > 0 ? (
                         <Link
                           href={`/tasks?member=${r.id}&status=overdue`}
@@ -144,39 +145,45 @@ export default async function TaskReportPage() {
                       ) : (
                         <span className="text-zinc-400">0</span>
                       )}
-                    </td>
-                    <td className="py-2 pr-4 text-right tabular-nums">{r.today}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums">{r.upcoming}</td>
-                    <td className="py-2 pr-4 text-right font-semibold tabular-nums">{r.pending}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-emerald-600">
+                    </TD>
+                    <TD right>{r.today}</TD>
+                    <TD right>{r.upcoming}</TD>
+                    <TD right className="font-semibold">
+                      {r.pending}
+                    </TD>
+                    <TD right className="text-emerald-600">
                       {r.completed || <span className="text-zinc-400">0</span>}
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ))}
-                {(unassigned.pending > 0) && (
-                  <tr className="border-t border-zinc-200 dark:border-zinc-800">
-                    <td className="py-2 pr-4 italic text-zinc-500">Unassigned</td>
-                    <td className="py-2 pr-4 text-right tabular-nums">{unassigned.overdue}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums">{unassigned.today}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums">{unassigned.upcoming}</td>
-                    <td className="py-2 pr-4 text-right font-semibold tabular-nums">{unassigned.pending}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums text-emerald-600">{unassigned.completed}</td>
-                  </tr>
+                {unassigned.pending > 0 && (
+                  <TR>
+                    <TD className="italic text-zinc-500">Unassigned</TD>
+                    <TD right>{unassigned.overdue}</TD>
+                    <TD right>{unassigned.today}</TD>
+                    <TD right>{unassigned.upcoming}</TD>
+                    <TD right className="font-semibold">
+                      {unassigned.pending}
+                    </TD>
+                    <TD right className="text-emerald-600">
+                      {unassigned.completed}
+                    </TD>
+                  </TR>
                 )}
-                <tr className="border-t-2 border-zinc-300 dark:border-zinc-700">
-                  <td className="py-2 pr-4 font-semibold">Team total</td>
-                  <td className="py-2 pr-4 text-right font-semibold tabular-nums text-red-600">
+                <TR hover={false} className="border-t-2 border-zinc-300 font-semibold dark:border-zinc-700">
+                  <TD>Team total</TD>
+                  <TD right className="text-red-600">
                     {totals.overdue}
-                  </td>
-                  <td className="py-2 pr-4 text-right font-semibold tabular-nums">{totals.today}</td>
-                  <td className="py-2 pr-4 text-right font-semibold tabular-nums">{totals.upcoming}</td>
-                  <td className="py-2 pr-4 text-right font-semibold tabular-nums">{totals.pending}</td>
-                  <td className="py-2 pr-4 text-right font-semibold tabular-nums text-emerald-600">
+                  </TD>
+                  <TD right>{totals.today}</TD>
+                  <TD right>{totals.upcoming}</TD>
+                  <TD right>{totals.pending}</TD>
+                  <TD right className="text-emerald-600">
                     {totals.completed}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </TD>
+                </TR>
+              </TBody>
+            </Table>
           )}
         </CardContent>
       </Card>

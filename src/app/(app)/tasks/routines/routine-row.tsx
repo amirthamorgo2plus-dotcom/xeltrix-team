@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { TD, TR } from "@/components/ui/table";
 import { deleteRoutine, toggleRoutine, updateRoutine } from "./actions";
 
 export type RoutineData = {
@@ -76,21 +77,21 @@ export function RoutineRow({
 
   return (
     <>
-      <tr className="border-t border-zinc-200 dark:border-zinc-800">
-        <td className="py-2 pr-4">
+      <TR>
+        <TD>
           <div className="font-medium">{routine.title}</div>
           {routine.description && (
             <div className="text-xs text-zinc-500">{routine.description}</div>
           )}
-        </td>
-        <td className="py-2 pr-4">{cadenceLabel(routine)}</td>
-        <td className="py-2 pr-4">{assigned}</td>
-        <td className="py-2 pr-4">
+        </TD>
+        <TD>{cadenceLabel(routine)}</TD>
+        <TD>{assigned}</TD>
+        <TD>
           <Badge tone={routine.active ? "success" : "muted"}>
             {routine.active ? "Active" : "Paused"}
           </Badge>
-        </td>
-        <td className="py-2">
+        </TD>
+        <TD>
           <div className="flex items-center justify-end gap-1">
             <Button
               type="button"
@@ -128,12 +129,12 @@ export function RoutineRow({
               <Trash2 className="h-4 w-4" />
             </Button>
           </div>
-        </td>
-      </tr>
+        </TD>
+      </TR>
 
       {editing && (
-        <tr className="border-t border-zinc-100 dark:border-zinc-900">
-          <td colSpan={5} className="py-3">
+        <TR hover={false} className="bg-zinc-50/60 dark:bg-zinc-900/30">
+          <TD colSpan={5}>
             <form action={save} className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div className="flex flex-col gap-1 sm:col-span-2">
                 <Label>Title *</Label>
@@ -237,8 +238,8 @@ export function RoutineRow({
                 {error && <span className="ml-3 text-sm text-red-600">{error}</span>}
               </div>
             </form>
-          </td>
-        </tr>
+          </TD>
+        </TR>
       )}
     </>
   );
