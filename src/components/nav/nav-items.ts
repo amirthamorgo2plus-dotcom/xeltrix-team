@@ -54,6 +54,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Attendance",
     icon: Clock,
     children: [
+      { href: "/attendance/summary", label: "Summary", icon: ClipboardList },
       { href: "/holidays", label: "Holidays", icon: CalendarHeart },
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
     ],
