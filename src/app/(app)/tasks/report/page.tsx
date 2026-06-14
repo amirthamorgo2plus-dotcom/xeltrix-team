@@ -3,6 +3,7 @@ import { isPast, isToday } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { ensureRoutineInstances } from "@/lib/routines";
+import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
@@ -126,8 +127,9 @@ export default async function TaskReportPage() {
                     <td className="py-2 pr-4 font-medium">
                       <Link
                         href={`/tasks?member=${r.id}&status=pending`}
-                        className="hover:underline"
+                        className="inline-flex items-center gap-2 hover:underline"
                       >
+                        <span className={`h-2.5 w-2.5 rounded-full ${memberColor(r.id).dot}`} />
                         {r.name}
                       </Link>
                     </td>

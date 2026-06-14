@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { format, isPast, isToday } from "date-fns";
 import { Repeat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { ensureRoutineInstances } from "@/lib/routines";
+import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -20,20 +22,6 @@ const priorityTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
   high: "warning",
   urgent: "danger",
 };
-
-// Stable per-employee colours for quick visual scanning (left bar + legend dot).
-// Full class strings so Tailwind keeps them.
-const MEMBER_COLORS = [
-  { border: "border-l-rose-400", dot: "bg-rose-400" },
-  { border: "border-l-amber-400", dot: "bg-amber-400" },
-  { border: "border-l-emerald-400", dot: "bg-emerald-400" },
-  { border: "border-l-sky-400", dot: "bg-sky-400" },
-  { border: "border-l-violet-400", dot: "bg-violet-400" },
-  { border: "border-l-pink-400", dot: "bg-pink-400" },
-  { border: "border-l-teal-400", dot: "bg-teal-400" },
-  { border: "border-l-orange-400", dot: "bg-orange-400" },
-];
-const NO_COLOR = { border: "border-l-zinc-300 dark:border-l-zinc-700", dot: "bg-zinc-300" };
 
 type Task = {
   id: string;
@@ -101,12 +89,6 @@ export default async function TasksPage({
     })
   );
 
-  // Assign each member a stable colour by their position in the roster.
-  const colorByMember = new Map(
-    teamMembers.map((m, i) => [m.id, MEMBER_COLORS[i % MEMBER_COLORS.length]])
-  );
-  const colorFor = (ownerId: string | null) =>
-    (ownerId ? colorByMember.get(ownerId) : null) ?? NO_COLOR;
 
   // Member list for the comment form (with avatar)
   const memberListForComments = teamMembers.map((m) => {
@@ -207,10 +189,14 @@ export default async function TasksPage({
       {memberParam === "all" && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
           {memberOptsAll.map((m) => (
-            <span key={m.id} className="inline-flex items-center gap-1.5">
-              <span className={`h-2.5 w-2.5 rounded-full ${colorFor(m.id).dot}`} />
+            <Link
+              key={m.id}
+              href={`/tasks?member=${m.id}`}
+              className="inline-flex items-center gap-1.5 hover:text-zinc-900 hover:underline dark:hover:text-zinc-100"
+            >
+              <span className={`h-2.5 w-2.5 rounded-full ${memberColor(m.id).dot}`} />
               {m.name}
-            </span>
+            </Link>
           ))}
           <span className="inline-flex items-center gap-1.5">
             <Repeat className="h-3.5 w-3.5 text-indigo-500" /> routine
@@ -238,7 +224,7 @@ export default async function TasksPage({
                 {groups[key].map((t) => {
                   const owner = t.owner_id ? memberById.get(t.owner_id) : null;
                   const taskComments = commentsByTask.get(t.id) ?? [];
-                  const color = colorFor(t.owner_id);
+                  const color = memberColor(t.owner_id);
                   return (
                     <li
                       key={t.id}
@@ -268,11 +254,21 @@ export default async function TasksPage({
                           <Badge tone={priorityTone[t.priority] ?? "muted"}>{t.priority}</Badge>
                           {t.routine_id && <Badge tone="info">routine</Badge>}
                           <span className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
-                            <Avatar
-                              src={owner?.avatar_url}
-                              name={owner?.name}
-                              size={18}
-                            />
+                            {t.owner_id ? (
+                              <Link
+                                href={`/tasks?member=${t.owner_id}`}
+                                title={`Show only ${owner?.name ?? "this member"}'s tasks`}
+                              >
+                                <Avatar
+                                  src={owner?.avatar_url}
+                                  name={owner?.name}
+                                  size={18}
+                                  className={`ring-2 ring-offset-1 ring-offset-white dark:ring-offset-zinc-950 ${color.ring}`}
+                                />
+                              </Link>
+                            ) : (
+                              <Avatar src={owner?.avatar_url} name={owner?.name} size={18} />
+                            )}
                             <AssigneeSelect id={t.id} value={t.owner_id} members={memberOpts} />
                           </span>
                         </div>
