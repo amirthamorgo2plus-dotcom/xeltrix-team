@@ -101,16 +101,18 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
               <TD>
                 {m.role === "member" ? (
                   <div className="flex items-center gap-2">
-                    {m.attendance_only && <Badge tone="info">Attendance only</Badge>}
+                    <Badge tone={m.attendance_only ? "info" : "success"}>
+                      {m.attendance_only ? "Attendance only" : "Full access"}
+                    </Badge>
                     <Toggle
                       on={m.attendance_only}
-                      onLabel="Make full access"
+                      onLabel="Give full access"
                       offLabel="Limit to attendance"
                       onClick={() => setAttendanceOnly(m.id, !m.attendance_only)}
                     />
                   </div>
                 ) : (
-                  <span className="text-xs text-zinc-400">Full access</span>
+                  <Badge tone="success">Full access</Badge>
                 )}
               </TD>
               <TD>
