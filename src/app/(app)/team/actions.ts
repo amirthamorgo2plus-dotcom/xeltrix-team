@@ -52,9 +52,21 @@ export async function setMemberActive(memberId: string, value: boolean) {
 }
 
 // Toggle whether a member is restricted to the Attendance page only.
+// Only plain members can be limited — never an admin/manager (who'd lock
+// themselves out of management).
 export async function setAttendanceOnly(memberId: string, value: boolean) {
   if (!(await requireAdmin())) throw new Error("Admins only.");
   const supabase = await createClient();
+  if (value) {
+    const { data: target } = await supabase
+      .from("team_members")
+      .select("role")
+      .eq("id", memberId)
+      .maybeSingle();
+    if (target?.role === "admin" || target?.role === "manager") {
+      throw new Error("Admins and managers can't be limited to attendance.");
+    }
+  }
   const { error } = await supabase
     .from("team_members")
     .update({ attendance_only: value })
