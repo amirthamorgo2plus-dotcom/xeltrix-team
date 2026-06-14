@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Repeat,
   User,
+  Users2,
   Plug,
   Package,
   FileText,
@@ -85,13 +86,25 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { href: "/templates", label: "Product price list", icon: Package },
+  { href: "/team", label: "Team members", icon: Users2, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug, adminOnly: true },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
+// The only item an attendance-only staff login may see.
+const ATTENDANCE_ONLY_ITEM: NavItem = {
+  href: "/attendance",
+  label: "Attendance",
+  icon: Clock,
+};
+
 // Filter by role at both levels; drop a parent only if it's admin-only itself.
 // A parent whose children are all hidden still shows (it's its own page).
-export function visibleNavItems(role: string | null | undefined): NavItem[] {
+export function visibleNavItems(
+  role: string | null | undefined,
+  attendanceOnly = false
+): NavItem[] {
+  if (attendanceOnly) return [ATTENDANCE_ONLY_ITEM];
   const isAdmin = role === "admin" || role === "manager";
   return NAV_ITEMS.filter((it) => !it.adminOnly || isAdmin).map((it) => ({
     ...it,

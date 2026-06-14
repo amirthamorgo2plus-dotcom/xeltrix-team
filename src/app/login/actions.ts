@@ -2,6 +2,21 @@
 
 import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { staffEmail } from "@/lib/staff";
+
+export async function loginStaff(formData: FormData) {
+  const username = String(formData.get("username") ?? "").trim();
+  const pin = String(formData.get("pin") ?? "");
+  if (!username || !pin) return { error: "Enter your username and PIN." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({
+    email: staffEmail(username),
+    password: pin,
+  });
+  if (error) return { error: "Wrong username or PIN." };
+  return { verified: true };
+}
 
 export async function sendMagicLink(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();

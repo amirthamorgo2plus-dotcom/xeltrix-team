@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { sendMagicLink, verifyCode } from "./actions";
+import { loginStaff, sendMagicLink, verifyCode } from "./actions";
 
 export function LoginForm({
   searchParamsPromise,
@@ -21,6 +21,73 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(sp.error ?? null);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+
+  const [mode, setMode] = useState<"email" | "staff">("email");
+  const [username, setUsername] = useState("");
+  const [pin, setPin] = useState("");
+  const [staffBusy, setStaffBusy] = useState(false);
+
+  async function handleStaff(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setStaffBusy(true);
+    const fd = new FormData();
+    fd.set("username", username);
+    fd.set("pin", pin);
+    const res = await loginStaff(fd);
+    setStaffBusy(false);
+    if (res.error) setError(res.error);
+    else if (res.verified) router.push("/attendance");
+  }
+
+  if (mode === "staff") {
+    return (
+      <div className="flex flex-col gap-4">
+        <form onSubmit={handleStaff} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="username">Username</Label>
+            <Input
+              id="username"
+              name="username"
+              required
+              autoComplete="username"
+              placeholder="your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="pin">PIN</Label>
+            <Input
+              id="pin"
+              name="pin"
+              type="password"
+              required
+              inputMode="numeric"
+              autoComplete="current-password"
+              placeholder="your PIN"
+              value={pin}
+              onChange={(e) => setPin(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={staffBusy}>
+            {staffBusy ? "Signing in…" : "Sign in"}
+          </Button>
+        </form>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button
+          type="button"
+          onClick={() => {
+            setMode("email");
+            setError(null);
+          }}
+          className="text-left text-xs text-zinc-500 underline"
+        >
+          ← Sign in with email instead
+        </button>
+      </div>
+    );
+  }
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -107,6 +174,19 @@ export function LoginForm({
         We&apos;ll email you a one-tap link and a 6-digit code. No password
         required.
       </p>
+
+      <div className="border-t border-zinc-200 pt-3 dark:border-zinc-800">
+        <button
+          type="button"
+          onClick={() => {
+            setMode("staff");
+            setError(null);
+          }}
+          className="text-xs text-zinc-500 underline"
+        >
+          Staff sign-in (username &amp; PIN)
+        </button>
+      </div>
     </div>
   );
 }

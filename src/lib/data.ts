@@ -28,7 +28,7 @@ export const getMyMembership = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
-    .select("id, team_id, role, active")
+    .select("id, team_id, role, active, track_attendance, attendance_only")
     .eq("user_id", user.id)
     .eq("active", true)
     .maybeSingle();
@@ -42,7 +42,7 @@ export const getTeamMembers = cache(async () => {
 
   const { data: members } = await supabase
     .from("team_members")
-    .select("id, role, active, user_id, zoho_salesperson_name, zoho_advance_account_name")
+    .select("id, role, active, user_id, zoho_salesperson_name, zoho_advance_account_name, track_attendance, attendance_only")
     .eq("team_id", m.team_id)
     .eq("active", true)
     .order("role");

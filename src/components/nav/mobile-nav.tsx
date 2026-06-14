@@ -84,10 +84,16 @@ function MobileRow({ item, pathname }: { item: NavItem; pathname: string }) {
   );
 }
 
-export function MobileNav({ role }: { role?: string | null }) {
+export function MobileNav({
+  role,
+  attendanceOnly = false,
+}: {
+  role?: string | null;
+  attendanceOnly?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const items = visibleNavItems(role);
+  const items = visibleNavItems(role, attendanceOnly);
 
   useEffect(() => {
     setOpen(false);

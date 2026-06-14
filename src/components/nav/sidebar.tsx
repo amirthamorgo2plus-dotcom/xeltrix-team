@@ -98,8 +98,14 @@ function NavRow({
   );
 }
 
-export function Sidebar({ role }: { role?: string | null }) {
-  const items = visibleNavItems(role);
+export function Sidebar({
+  role,
+  attendanceOnly = false,
+}: {
+  role?: string | null;
+  attendanceOnly?: boolean;
+}) {
+  const items = visibleNavItems(role, attendanceOnly);
   const pathname = usePathname();
 
   return (

@@ -41,9 +41,33 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Attendance-only staff (no email, PIN login) can only use /attendance.
+  // One lightweight lookup; their home is /attendance everywhere.
+  let attendanceOnly = false;
+  if (user) {
+    const { data: m } = await supabase
+      .from("team_members")
+      .select("attendance_only")
+      .eq("user_id", user.id)
+      .eq("active", true)
+      .maybeSingle();
+    attendanceOnly = m?.attendance_only === true;
+  }
+
   if (user && pathname.startsWith("/login")) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = attendanceOnly ? "/attendance" : "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
+  if (
+    attendanceOnly &&
+    !pathname.startsWith("/attendance") &&
+    !pathname.startsWith("/auth") &&
+    !isPublic
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/attendance";
     return NextResponse.redirect(url);
   }
 

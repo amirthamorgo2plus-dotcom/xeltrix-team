@@ -22,27 +22,39 @@ export default async function AppLayout({
   const profile = await getMyProfile();
   const membership = await getMyMembership();
   const role = membership?.role ?? null;
+  const attendanceOnly =
+    (membership as { attendance_only?: boolean } | null)?.attendance_only === true;
+
+  const identity = (
+    <span className="inline-flex items-center gap-2 truncate">
+      <Avatar src={profile?.avatar_url} name={profile?.full_name ?? user.email} size={24} />
+      <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
+        {profile?.full_name ?? user.email}
+      </span>
+    </span>
+  );
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar role={role} />
+      <Sidebar role={role} attendanceOnly={attendanceOnly} />
       <div className="flex flex-1 flex-col">
         <header className="flex h-14 items-center justify-between gap-2 border-b border-zinc-200 px-4 md:px-6 dark:border-zinc-800">
           <div className="flex items-center gap-2 text-sm text-zinc-500 min-w-0">
-            <MobileNav role={role} />
-            <Link
-              href="/profile"
-              className="inline-flex items-center gap-2 truncate hover:text-zinc-900 dark:hover:text-zinc-100"
-            >
-              <Avatar src={profile?.avatar_url} name={profile?.full_name ?? user.email} size={24} />
-              <span className="truncate font-medium text-zinc-900 dark:text-zinc-100">
-                {profile?.full_name ?? user.email}
-              </span>
-            </Link>
+            <MobileNav role={role} attendanceOnly={attendanceOnly} />
+            {attendanceOnly ? (
+              identity
+            ) : (
+              <Link
+                href="/profile"
+                className="truncate hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                {identity}
+              </Link>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <WorldClocks />
-            <NotificationBell />
+            {!attendanceOnly && <WorldClocks />}
+            {!attendanceOnly && <NotificationBell />}
             <form action="/auth/signout" method="post">
               <button
                 type="submit"

@@ -37,7 +37,12 @@ export default async function AttendancePage({
   const monthIso = format(monthStart, "yyyy-MM");
 
   const me = await getMyMembership();
-  const members = await getTeamMembers();
+  const allMembers = await getTeamMembers();
+  // Salesperson buckets (e.g. "Maruthu & Nagaraj") have track_attendance=false
+  // — keep them for sales, hide from the attendance grid + mark form.
+  const members = allMembers.filter(
+    (m) => (m as { track_attendance?: boolean }).track_attendance !== false
+  );
   const canEdit = isAdminOrManager(me?.role);
 
   const supabase = await createClient();
