@@ -1,23 +1,45 @@
+import { isPast, isToday } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { toCsv, csvResponse, todayStamp } from "@/lib/csv";
 import { memberNameLookup, requireUser } from "@/lib/export-helpers";
 
-export async function GET() {
+// Mirrors the Tasks page buckets so a filtered export matches what's on screen.
+function matchesStatus(status: string, due_at: string | null, filter: string): boolean {
+  const isDone = status === "done" || status === "cancelled";
+  if (filter === "done") return isDone;
+  if (isDone) return false; // remaining filters are all "pending" subsets
+  if (filter === "pending") return true;
+  if (!due_at) return filter === "upcoming";
+  const due = new Date(due_at);
+  if (filter === "overdue") return isPast(due) && !isToday(due);
+  if (filter === "today") return isToday(due);
+  if (filter === "upcoming") return !(isPast(due) && !isToday(due)) && !isToday(due);
+  return true;
+}
+
+export async function GET(request: Request) {
   const user = await requireUser();
   if (!user) return new Response("Unauthorized", { status: 401 });
 
-  const supabase = await createClient();
-  const [{ data, error }, members] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select("title, description, due_at, priority, status, owner_id, related_type, related_id, created_at")
-      .order("created_at", { ascending: false }),
-    memberNameLookup(),
-  ]);
+  const { searchParams } = new URL(request.url);
+  const member = searchParams.get("member");
+  const status = searchParams.get("status") ?? "all";
 
+  const supabase = await createClient();
+  let query = supabase
+    .from("tasks")
+    .select("title, description, due_at, priority, status, owner_id, related_type, related_id, created_at")
+    .order("created_at", { ascending: false });
+  if (member && member !== "all") query = query.eq("owner_id", member);
+
+  const [{ data, error }, members] = await Promise.all([query, memberNameLookup()]);
   if (error) return new Response(error.message, { status: 500 });
 
-  const rows = (data ?? []).map((t) => ({
+  const filtered = (data ?? []).filter((t) =>
+    status === "all" ? true : matchesStatus(t.status as string, t.due_at as string | null, status)
+  );
+
+  const rows = filtered.map((t) => ({
     title: t.title,
     description: t.description,
     due_at: t.due_at,

@@ -10,6 +10,8 @@ import {
   Briefcase,
   Bell,
   CalendarHeart,
+  ClipboardList,
+  Repeat,
   User,
   Plug,
   Package,
@@ -55,7 +57,15 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
     ],
   },
-  { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  {
+    href: "/tasks",
+    label: "Tasks",
+    icon: CheckSquare,
+    children: [
+      { href: "/tasks/report", label: "Pending report", icon: ClipboardList },
+      { href: "/tasks/routines", label: "Routines", icon: Repeat, adminOnly: true },
+    ],
+  },
   { href: "/visits", label: "Visits", icon: MapPin },
   { href: "/payment-qr", label: "Payment QR", icon: QrCode },
   {

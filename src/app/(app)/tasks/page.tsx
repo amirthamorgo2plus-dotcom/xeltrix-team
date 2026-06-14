@@ -1,12 +1,14 @@
 import { format, isPast, isToday } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
+import { ensureRoutineInstances } from "@/lib/routines";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
 import { EmptyState } from "@/components/empty-state";
 import { ExportButton } from "@/components/export-button";
 import { TaskForm } from "./task-form";
+import { TaskFilters } from "./filters";
 import { TaskStatusSelect } from "./status-select";
 import { AssigneeSelect } from "./assignee-select";
 import { TaskComments, type TaskComment } from "./task-comments";
@@ -26,6 +28,7 @@ type Task = {
   priority: string;
   status: string;
   owner_id: string | null;
+  routine_id: string | null;
 };
 
 function bucket(t: Task) {
@@ -37,10 +40,31 @@ function bucket(t: Task) {
   return "upcoming";
 }
 
-export default async function TasksPage() {
+// Which buckets a status filter reveals. "pending" = everything not done.
+const STATUS_BUCKETS: Record<string, ReadonlyArray<"overdue" | "today" | "upcoming" | "done">> = {
+  all: ["overdue", "today", "upcoming", "done"],
+  pending: ["overdue", "today", "upcoming"],
+  overdue: ["overdue"],
+  today: ["today"],
+  upcoming: ["upcoming"],
+  done: ["done"],
+};
+
+export default async function TasksPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ member?: string; status?: string }>;
+}) {
+  const sp = await searchParams;
   const me = await getMyMembership();
   const canManage = isAdminOrManager(me?.role);
   const teamMembers = await getTeamMembers();
+
+  // Default to "My tasks": no member param => the current user's tasks.
+  // ?member=all shows the whole team.
+  const memberParam = sp.member ?? me?.id ?? "all";
+  const statusParam = sp.status && STATUS_BUCKETS[sp.status] ? sp.status : "all";
+  const visibleBuckets = STATUS_BUCKETS[statusParam];
 
   const memberOpts = teamMembers.map((m) => {
     const profile = (m.profiles as unknown) as { full_name?: string } | null;
@@ -73,11 +97,24 @@ export default async function TasksPage() {
   });
 
   const supabase = await createClient();
+
+  // Materialise this period's routine tasks before reading (idempotent).
+  if (me?.team_id) {
+    await ensureRoutineInstances(
+      supabase,
+      me.team_id,
+      teamMembers.map((m) => m.id)
+    );
+  }
+
+  let tasksQuery = supabase
+    .from("tasks")
+    .select("id, title, description, due_at, priority, status, owner_id, routine_id")
+    .order("due_at", { ascending: true, nullsFirst: false });
+  if (memberParam !== "all") tasksQuery = tasksQuery.eq("owner_id", memberParam);
+
   const [{ data: tasksData }, { data: commentsData }] = await Promise.all([
-    supabase
-      .from("tasks")
-      .select("id, title, description, due_at, priority, status, owner_id")
-      .order("due_at", { ascending: true, nullsFirst: false }),
+    tasksQuery,
     supabase
       .from("comments")
       .select("id, subject_id, body, author_id, mentioned_ids, attachment_url, created_at")
@@ -88,6 +125,28 @@ export default async function TasksPage() {
   const tasks: Task[] = tasksData ?? [];
   const groups: Record<string, Task[]> = { overdue: [], today: [], upcoming: [], done: [] };
   tasks.forEach((t) => groups[bucket(t)].push(t));
+
+  // Count only what the active status filter reveals.
+  const shownCount = visibleBuckets.reduce((n, k) => n + groups[k].length, 0);
+
+  const memberOptsAll = teamMembers.map((m) => {
+    const profile = (m.profiles as unknown) as { full_name?: string } | null;
+    return { id: m.id, name: profile?.full_name || "(unnamed)" };
+  });
+  const scopeLabel =
+    memberParam === "all"
+      ? "All members"
+      : memberParam === me?.id
+        ? "My tasks"
+        : memberById.get(memberParam)?.name ?? "Member";
+
+  // Export reflects the current filter.
+  const exportParams = new URLSearchParams();
+  if (memberParam !== "all") exportParams.set("member", memberParam);
+  if (statusParam !== "all") exportParams.set("status", statusParam);
+  const exportHref = exportParams.toString()
+    ? `/api/export/tasks?${exportParams.toString()}`
+    : "/api/export/tasks";
 
   // Group comments by task id
   const commentsByTask = new Map<string, TaskComment[]>();
@@ -109,14 +168,23 @@ export default async function TasksPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Tasks</h1>
-          <p className="text-sm text-zinc-500">{tasks.length} total</p>
+          <p className="text-sm text-zinc-500">
+            {shownCount} {statusParam === "all" ? "task" : statusParam} · {scopeLabel}
+          </p>
         </div>
-        <ExportButton href="/api/export/tasks" />
+        <ExportButton href={exportHref} />
       </div>
+
+      <TaskFilters
+        members={memberOptsAll}
+        myMemberId={me?.id ?? null}
+        member={memberParam}
+        status={statusParam}
+      />
 
       <TaskForm members={memberOpts} myMemberId={me?.id ?? null} />
 
-      {(["overdue", "today", "upcoming", "done"] as const).map((key) => (
+      {visibleBuckets.map((key) => (
         <Card key={key}>
           <CardHeader>
             <CardTitle className="capitalize">
@@ -153,6 +221,7 @@ export default async function TasksPage() {
                             </span>
                           )}
                           <Badge tone={priorityTone[t.priority] ?? "muted"}>{t.priority}</Badge>
+                          {t.routine_id && <Badge tone="info">routine</Badge>}
                           <span className="inline-flex items-center gap-1 text-xs text-zinc-600 dark:text-zinc-400">
                             <Avatar
                               src={owner?.avatar_url}
