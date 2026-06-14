@@ -2,22 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { RoutineForm } from "./routine-form";
-import { RoutineRowActions } from "./routine-row-actions";
-
-const WEEKDAY_LABEL = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function cadenceLabel(r: {
-  cadence: string;
-  weekday: number | null;
-  day_of_month: number | null;
-}) {
-  if (r.cadence === "weekly") return `Weekly · ${WEEKDAY_LABEL[r.weekday ?? 1]}`;
-  if (r.cadence === "monthly") return `Monthly · day ${r.day_of_month ?? 1}`;
-  return "Daily";
-}
+import { RoutineRow } from "./routine-row";
 
 export default async function RoutinesPage() {
   const me = await getMyMembership();
@@ -28,8 +15,6 @@ export default async function RoutinesPage() {
     const profile = (m.profiles as unknown) as { full_name?: string } | null;
     return { id: m.id, name: profile?.full_name || "(unnamed)" };
   });
-  const memberById = new Map(memberOpts.map((m) => [m.id, m.name]));
-
   const supabase = await createClient();
   const { data: routines } = await supabase
     .from("task_routines")
@@ -67,32 +52,9 @@ export default async function RoutinesPage() {
                 </tr>
               </thead>
               <tbody>
-                {routines.map((r) => {
-                  const assigned =
-                    r.assignee_mode === "everyone" && r.per_person
-                      ? "Everyone (per person)"
-                      : memberById.get(r.owner_id as string) ?? "—";
-                  return (
-                    <tr key={r.id} className="border-t border-zinc-200 dark:border-zinc-800">
-                      <td className="py-2 pr-4">
-                        <div className="font-medium">{r.title}</div>
-                        {r.description && (
-                          <div className="text-xs text-zinc-500">{r.description}</div>
-                        )}
-                      </td>
-                      <td className="py-2 pr-4">{cadenceLabel(r)}</td>
-                      <td className="py-2 pr-4">{assigned}</td>
-                      <td className="py-2 pr-4">
-                        <Badge tone={r.active ? "success" : "muted"}>
-                          {r.active ? "Active" : "Paused"}
-                        </Badge>
-                      </td>
-                      <td className="py-2">
-                        <RoutineRowActions id={r.id} active={r.active} />
-                      </td>
-                    </tr>
-                  );
-                })}
+                {routines.map((r) => (
+                  <RoutineRow key={r.id} routine={r} members={memberOpts} />
+                ))}
               </tbody>
             </table>
           )}

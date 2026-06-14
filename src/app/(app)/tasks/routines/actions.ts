@@ -66,6 +66,68 @@ export async function createRoutine(
   return {};
 }
 
+export async function updateRoutine(
+  id: string,
+  formData: FormData
+): Promise<{ error?: string }> {
+  const m = await getMyMembership();
+  if (!m || !isAdminOrManager(m.role)) return { error: "Admins only." };
+
+  const title = String(formData.get("title") ?? "").trim();
+  if (!title) return { error: "Title is required." };
+
+  const cadence = String(formData.get("cadence") ?? "");
+  if (!["daily", "weekly", "monthly"].includes(cadence)) {
+    return { error: "Pick a cadence." };
+  }
+
+  const assignee_mode = String(formData.get("assignee_mode") ?? "member");
+  const per_person =
+    assignee_mode === "everyone" && formData.get("per_person") === "on";
+  const ownerRaw = String(formData.get("owner_id") ?? "").trim();
+  const owner_id = ownerRaw || null;
+
+  if (!per_person && !owner_id) {
+    return { error: "Pick who is responsible (owner)." };
+  }
+
+  let weekday: number | null = null;
+  let day_of_month: number | null = null;
+  if (cadence === "weekly") {
+    weekday = Number(formData.get("weekday"));
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
+      return { error: "Pick a weekday." };
+    }
+  }
+  if (cadence === "monthly") {
+    day_of_month = Number(formData.get("day_of_month"));
+    if (!Number.isInteger(day_of_month) || day_of_month < 1 || day_of_month > 31) {
+      return { error: "Pick a day of the month (1–31)." };
+    }
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("task_routines")
+    .update({
+      title,
+      description: String(formData.get("description") ?? "").trim() || null,
+      cadence,
+      weekday,
+      day_of_month,
+      assignee_mode: assignee_mode === "everyone" ? "everyone" : "member",
+      owner_id: per_person ? null : owner_id,
+      per_person,
+      priority: String(formData.get("priority") ?? "medium"),
+    })
+    .eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath("/tasks/routines");
+  revalidatePath("/tasks");
+  return {};
+}
+
 export async function toggleRoutine(id: string, active: boolean) {
   const m = await getMyMembership();
   if (!m || !isAdminOrManager(m.role)) throw new Error("Admins only.");
