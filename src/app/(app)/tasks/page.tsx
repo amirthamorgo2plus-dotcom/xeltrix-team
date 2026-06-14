@@ -1,4 +1,5 @@
 import { format, isPast, isToday } from "date-fns";
+import { Repeat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { ensureRoutineInstances } from "@/lib/routines";
@@ -19,6 +20,20 @@ const priorityTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
   high: "warning",
   urgent: "danger",
 };
+
+// Stable per-employee colours for quick visual scanning (left bar + legend dot).
+// Full class strings so Tailwind keeps them.
+const MEMBER_COLORS = [
+  { border: "border-l-rose-400", dot: "bg-rose-400" },
+  { border: "border-l-amber-400", dot: "bg-amber-400" },
+  { border: "border-l-emerald-400", dot: "bg-emerald-400" },
+  { border: "border-l-sky-400", dot: "bg-sky-400" },
+  { border: "border-l-violet-400", dot: "bg-violet-400" },
+  { border: "border-l-pink-400", dot: "bg-pink-400" },
+  { border: "border-l-teal-400", dot: "bg-teal-400" },
+  { border: "border-l-orange-400", dot: "bg-orange-400" },
+];
+const NO_COLOR = { border: "border-l-zinc-300 dark:border-l-zinc-700", dot: "bg-zinc-300" };
 
 type Task = {
   id: string;
@@ -85,6 +100,13 @@ export default async function TasksPage({
       ];
     })
   );
+
+  // Assign each member a stable colour by their position in the roster.
+  const colorByMember = new Map(
+    teamMembers.map((m, i) => [m.id, MEMBER_COLORS[i % MEMBER_COLORS.length]])
+  );
+  const colorFor = (ownerId: string | null) =>
+    (ownerId ? colorByMember.get(ownerId) : null) ?? NO_COLOR;
 
   // Member list for the comment form (with avatar)
   const memberListForComments = teamMembers.map((m) => {
@@ -182,6 +204,20 @@ export default async function TasksPage({
         status={statusParam}
       />
 
+      {memberParam === "all" && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
+          {memberOptsAll.map((m) => (
+            <span key={m.id} className="inline-flex items-center gap-1.5">
+              <span className={`h-2.5 w-2.5 rounded-full ${colorFor(m.id).dot}`} />
+              {m.name}
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1.5">
+            <Repeat className="h-3.5 w-3.5 text-indigo-500" /> routine
+          </span>
+        </div>
+      )}
+
       <TaskForm members={memberOpts} myMemberId={me?.id ?? null} />
 
       {visibleBuckets.map((key) => (
@@ -202,13 +238,22 @@ export default async function TasksPage({
                 {groups[key].map((t) => {
                   const owner = t.owner_id ? memberById.get(t.owner_id) : null;
                   const taskComments = commentsByTask.get(t.id) ?? [];
+                  const color = colorFor(t.owner_id);
                   return (
-                    <li key={t.id} className="flex items-start gap-3 py-3">
+                    <li
+                      key={t.id}
+                      className={`flex items-start gap-3 py-3 pl-3 border-l-4 ${color.border} ${
+                        t.routine_id ? "bg-indigo-50/60 dark:bg-indigo-950/20" : ""
+                      }`}
+                    >
                       <div className="mt-0.5">
                         <TaskStatusSelect id={t.id} status={t.status} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className={t.status === "done" ? "line-through text-zinc-500" : ""}>
+                          {t.routine_id && (
+                            <Repeat className="mr-1 inline h-3.5 w-3.5 align-[-2px] text-indigo-500" />
+                          )}
                           {t.title}
                         </div>
                         {t.description && (
