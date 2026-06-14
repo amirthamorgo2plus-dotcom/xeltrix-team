@@ -14,6 +14,7 @@ type Row = {
   today: number;
   upcoming: number;
   pending: number;
+  completed: number;
 };
 
 function isPendingStatus(s: string) {
@@ -47,15 +48,20 @@ export default async function TaskReportPage() {
       today: 0,
       upcoming: 0,
       pending: 0,
+      completed: 0,
     });
   });
 
-  let unassigned = { overdue: 0, today: 0, upcoming: 0, pending: 0 };
+  const unassigned = { overdue: 0, today: 0, upcoming: 0, pending: 0, completed: 0 };
 
   (tasksData ?? []).forEach((t) => {
-    if (!isPendingStatus(t.status as string)) return;
-    const target = t.owner_id ? rows.get(t.owner_id as string) : null;
-    const bucketObj = target ?? unassigned;
+    const status = t.status as string;
+    const bucketObj = (t.owner_id ? rows.get(t.owner_id as string) : null) ?? unassigned;
+    if (status === "done") {
+      bucketObj.completed += 1;
+      return;
+    }
+    if (!isPendingStatus(status)) return; // ignore cancelled
     bucketObj.pending += 1;
     if (!t.due_at) {
       bucketObj.upcoming += 1;
@@ -65,7 +71,6 @@ export default async function TaskReportPage() {
       else if (isToday(due)) bucketObj.today += 1;
       else bucketObj.upcoming += 1;
     }
-    if (!target) unassigned = bucketObj;
   });
 
   const list = Array.from(rows.values()).sort(
@@ -78,8 +83,9 @@ export default async function TaskReportPage() {
       today: acc.today + r.today,
       upcoming: acc.upcoming + r.upcoming,
       pending: acc.pending + r.pending,
+      completed: acc.completed + r.completed,
     }),
-    { overdue: 0, today: 0, upcoming: 0, pending: 0 }
+    { overdue: 0, today: 0, upcoming: 0, pending: 0, completed: 0 }
   );
 
   return (
@@ -88,7 +94,8 @@ export default async function TaskReportPage() {
         <div>
           <h1 className="text-2xl font-semibold">Pending tasks by employee</h1>
           <p className="text-sm text-zinc-500">
-            Open tasks (todo + in&nbsp;progress) per person — overdue counted separately.
+            Open tasks (todo + in&nbsp;progress) per person — overdue counted separately;
+            completed shown for context.
           </p>
         </div>
         <ExportButton href="/api/export/task-report" />
@@ -110,6 +117,7 @@ export default async function TaskReportPage() {
                   <th className="pb-2 pr-4 text-right">Due today</th>
                   <th className="pb-2 pr-4 text-right">Upcoming</th>
                   <th className="pb-2 pr-4 text-right">Pending total</th>
+                  <th className="pb-2 pr-4 text-right">Completed</th>
                 </tr>
               </thead>
               <tbody>
@@ -138,6 +146,9 @@ export default async function TaskReportPage() {
                     <td className="py-2 pr-4 text-right tabular-nums">{r.today}</td>
                     <td className="py-2 pr-4 text-right tabular-nums">{r.upcoming}</td>
                     <td className="py-2 pr-4 text-right font-semibold tabular-nums">{r.pending}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-emerald-600">
+                      {r.completed || <span className="text-zinc-400">0</span>}
+                    </td>
                   </tr>
                 ))}
                 {(unassigned.pending > 0) && (
@@ -147,6 +158,7 @@ export default async function TaskReportPage() {
                     <td className="py-2 pr-4 text-right tabular-nums">{unassigned.today}</td>
                     <td className="py-2 pr-4 text-right tabular-nums">{unassigned.upcoming}</td>
                     <td className="py-2 pr-4 text-right font-semibold tabular-nums">{unassigned.pending}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums text-emerald-600">{unassigned.completed}</td>
                   </tr>
                 )}
                 <tr className="border-t-2 border-zinc-300 dark:border-zinc-700">
@@ -157,6 +169,9 @@ export default async function TaskReportPage() {
                   <td className="py-2 pr-4 text-right font-semibold tabular-nums">{totals.today}</td>
                   <td className="py-2 pr-4 text-right font-semibold tabular-nums">{totals.upcoming}</td>
                   <td className="py-2 pr-4 text-right font-semibold tabular-nums">{totals.pending}</td>
+                  <td className="py-2 pr-4 text-right font-semibold tabular-nums text-emerald-600">
+                    {totals.completed}
+                  </td>
                 </tr>
               </tbody>
             </table>

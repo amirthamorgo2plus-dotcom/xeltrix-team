@@ -16,15 +16,20 @@ export async function GET() {
   ]);
   if (error) return new Response(error.message, { status: 500 });
 
-  type Acc = { overdue: number; today: number; upcoming: number; pending: number };
+  type Acc = { overdue: number; today: number; upcoming: number; pending: number; completed: number };
   const byMember = new Map<string, Acc>();
-  const fresh = (): Acc => ({ overdue: 0, today: 0, upcoming: 0, pending: 0 });
+  const fresh = (): Acc => ({ overdue: 0, today: 0, upcoming: 0, pending: 0, completed: 0 });
 
   (data ?? []).forEach((t) => {
     const s = t.status as string;
-    if (s !== "todo" && s !== "in_progress") return;
     const key = (t.owner_id as string) ?? "__unassigned__";
     const acc = byMember.get(key) ?? fresh();
+    if (s === "done") {
+      acc.completed += 1;
+      byMember.set(key, acc);
+      return;
+    }
+    if (s !== "todo" && s !== "in_progress") return; // ignore cancelled
     acc.pending += 1;
     const due = t.due_at ? new Date(t.due_at as string) : null;
     if (!due) acc.upcoming += 1;
@@ -41,6 +46,7 @@ export async function GET() {
       today: a.today,
       upcoming: a.upcoming,
       pending: a.pending,
+      completed: a.completed,
     }))
     .sort((x, y) => y.overdue - x.overdue || y.pending - x.pending);
 
@@ -50,6 +56,7 @@ export async function GET() {
     { key: "today", header: "Due today" },
     { key: "upcoming", header: "Upcoming" },
     { key: "pending", header: "Pending total" },
+    { key: "completed", header: "Completed" },
   ]);
 
   return csvResponse(csv, `pending-tasks-by-employee-${todayStamp()}.csv`);
