@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/nav/sidebar";
 import { MobileNav } from "@/components/nav/mobile-nav";
 import { NotificationBell } from "@/components/nav/notification-bell";
 import { WorldClocks } from "@/components/nav/world-clocks";
+import { InstallHint } from "@/components/install-hint";
 import { Avatar } from "@/components/ui/avatar";
 
 export default async function AppLayout({
@@ -65,6 +66,7 @@ export default async function AppLayout({
             </form>
           </div>
         </header>
+        <InstallHint />
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>
