@@ -4,6 +4,7 @@ import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { InstallHelp } from "@/components/install-help";
 import { CheckInButton } from "./check-in-button";
 import { MarkAttendanceForm } from "./mark-form";
 
@@ -223,6 +224,8 @@ export default async function AttendancePage({
           </div>
         </CardContent>
       </Card>
+
+      <InstallHelp />
     </div>
   );
 }

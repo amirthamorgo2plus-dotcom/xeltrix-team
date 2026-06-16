@@ -4,6 +4,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { ProfileForm } from "./profile-form";
 import { AvatarUploader } from "./avatar-uploader";
 import { HubLinksEditor } from "./hub-links-editor";
+import { InstallHelp } from "@/components/install-help";
 import { DEFAULT_HUB_LINKS, normalizeHubLinks } from "@/app/(app)/hub/links";
 
 export default async function ProfilePage() {
@@ -49,6 +50,8 @@ export default async function ProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      <InstallHelp />
 
       {isAdmin && (
         <Card>
