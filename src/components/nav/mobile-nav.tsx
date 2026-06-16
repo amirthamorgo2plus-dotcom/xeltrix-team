@@ -129,9 +129,12 @@ export function MobileNav({
           <aside className="fixed left-0 top-0 flex h-full w-64 flex-col overflow-y-auto border-r border-zinc-800 bg-zinc-950 p-4 text-zinc-300 shadow-2xl">
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-sky-500 text-sm font-bold text-zinc-900">
-                  X
-                </span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/molec.png"
+                  alt=""
+                  className="h-8 w-8 rounded-lg bg-zinc-900 object-contain p-0.5"
+                />
                 <span className="text-base font-semibold text-zinc-50">Xeltrix Team</span>
               </div>
               <button

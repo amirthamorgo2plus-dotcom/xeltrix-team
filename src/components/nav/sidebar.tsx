@@ -111,12 +111,12 @@ export function Sidebar({
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 p-4 text-zinc-300 md:flex">
       <div className="mb-6 flex items-center gap-2.5 px-2">
-        <span
-          className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-sky-500 text-base font-bold text-zinc-900 shadow-lg shadow-emerald-500/20"
-          aria-hidden
-        >
-          X
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/molec.png"
+          alt=""
+          className="h-9 w-9 rounded-lg bg-zinc-900 object-contain p-0.5"
+        />
         <div className="flex flex-col leading-tight">
           <span className="text-base font-semibold text-zinc-50">Xeltrix Team</span>
           <span className="text-[10px] uppercase tracking-wider text-zinc-500">
