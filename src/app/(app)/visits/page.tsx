@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { CheckInButton } from "./check-in-button";
 import { CheckOutButton } from "./check-out-button";
+import { LocationTest } from "./location-test";
 import { VisitMap } from "./visit-map";
 import { VisitRowActions } from "./visit-row-actions";
 import { GeocodeCustomersButton } from "./geocode-customers-button";
@@ -361,6 +362,20 @@ export default async function VisitsPage({
         </Card>
       ) : (
         isToday && <CheckInButton leads={leadOptions} workHours={WORK_HOURS} />
+      )}
+
+      {isToday && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Trouble checking in?</CardTitle>
+            <p className="text-xs text-zinc-500">
+              Verify your phone shares location (handy on iPhone) without doing a real check-in.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <LocationTest />
+          </CardContent>
+        </Card>
       )}
 
       {routeMode && pins.length >= 2 && (
