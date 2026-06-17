@@ -68,8 +68,20 @@ export function SyncNowButton() {
 export function ZohoOrgPicker({ current }: { current?: string }) {
   const [pending, start] = useTransition();
   const [orgs, setOrgs] = useState<{ id: string; name: string }[] | null>(null);
+  const [manual, setManual] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const router = useRouter();
+
+  function save(orgId: string) {
+    start(async () => {
+      const r = await setZohoOrg(orgId.trim());
+      if (r.error) setMsg(r.error);
+      else {
+        setMsg("Saved. Clear old data (if any), then click Sync now.");
+        router.refresh();
+      }
+    });
+  }
 
   return (
     <div className="flex flex-col gap-1">
@@ -95,16 +107,7 @@ export function ZohoOrgPicker({ current }: { current?: string }) {
           <select
             defaultValue={current}
             disabled={pending}
-            onChange={(e) =>
-              start(async () => {
-                const r = await setZohoOrg(e.target.value);
-                if (r.error) setMsg(r.error);
-                else {
-                  setMsg("Saved. Clear old data (if any), then click Sync now.");
-                  router.refresh();
-                }
-              })
-            }
+            onChange={(e) => save(e.target.value)}
             className="h-9 rounded-md border border-zinc-300 bg-transparent px-2 text-sm dark:border-zinc-700"
           >
             {orgs.map((o) => (
@@ -115,6 +118,30 @@ export function ZohoOrgPicker({ current }: { current?: string }) {
           </select>
         </label>
       )}
+
+      {/* Manual override — set a known Organization ID directly. Only works if
+          this connection's Zoho login actually has access to that org. */}
+      <label className="mt-1 flex flex-col gap-1 text-xs text-zinc-500">
+        Or enter Organization ID
+        <span className="flex gap-2">
+          <input
+            value={manual}
+            disabled={pending}
+            onChange={(e) => setManual(e.target.value.replace(/\D/g, ""))}
+            placeholder="e.g. 910454903"
+            inputMode="numeric"
+            className="h-9 w-40 rounded-md border border-zinc-300 bg-transparent px-2 text-sm dark:border-zinc-700"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending || manual.trim().length < 6}
+            onClick={() => save(manual)}
+          >
+            Save
+          </Button>
+        </span>
+      </label>
       {msg && <span className="text-xs text-zinc-600 dark:text-zinc-400">{msg}</span>}
     </div>
   );
