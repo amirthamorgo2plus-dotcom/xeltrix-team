@@ -3,9 +3,81 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createSbAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership } from "@/lib/data";
-import { getIntegrationForTeam } from "@/lib/zoho/client";
+import { getMyMembership, isAdminOrManager } from "@/lib/data";
+import { getIntegrationForTeam, zohoFetch } from "@/lib/zoho/client";
 import { syncFromZoho } from "@/lib/zoho/sync";
+
+// List the Zoho organizations this connection's login can access, so the admin
+// can pick the right one (a single Zoho login may have several orgs).
+export async function listZohoOrgs(): Promise<{
+  ok: boolean;
+  orgs?: { id: string; name: string }[];
+  error?: string;
+}> {
+  const m = await getMyMembership();
+  if (!m || !isAdminOrManager(m.role)) return { ok: false, error: "Admins only." };
+  const integration = await getIntegrationForTeam(m.team_id, true);
+  if (!integration?.refresh_token) return { ok: false, error: "Zoho not connected." };
+  try {
+    const json = await zohoFetch<{
+      organizations?: { organization_id: string; name: string }[];
+    }>(integration, "/organizations");
+    return {
+      ok: true,
+      orgs: (json.organizations ?? []).map((o) => ({ id: o.organization_id, name: o.name })),
+    };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Failed to list organizations." };
+  }
+}
+
+// Point this org's Zoho connection at a specific organization id.
+export async function setZohoOrg(orgId: string): Promise<{ error?: string }> {
+  const m = await getMyMembership();
+  if (!m || !isAdminOrManager(m.role)) return { error: "Admins only." };
+  const sb = adminClient();
+  const { data: row } = await sb
+    .from("integrations")
+    .select("config")
+    .eq("team_id", m.team_id)
+    .eq("provider", "zoho_books")
+    .maybeSingle();
+  const config = {
+    ...((row?.config as Record<string, unknown> | null) ?? {}),
+    organization_id: orgId,
+  };
+  const { error } = await sb
+    .from("integrations")
+    .update({ config, last_sync_error: null })
+    .eq("team_id", m.team_id)
+    .eq("provider", "zoho_books");
+  if (error) return { error: error.message };
+  revalidatePath("/integrations");
+  return {};
+}
+
+// Delete THIS org's Zoho-sourced records (use if the wrong Zoho org was synced).
+export async function clearSyncedData(): Promise<{ ok?: boolean; error?: string }> {
+  const m = await getMyMembership();
+  if (!m || !isAdminOrManager(m.role)) return { error: "Admins only." };
+  const sb = adminClient();
+  for (const t of ["opportunities", "quotes", "leads", "zoho_expenses", "opportunity_templates"]) {
+    const { error } = await sb.from(t).delete().eq("team_id", m.team_id);
+    if (error) return { error: `${t}: ${error.message}` };
+  }
+  for (const p of [
+    "/integrations",
+    "/dashboard",
+    "/leads",
+    "/opportunities",
+    "/quotes",
+    "/expenses",
+    "/templates",
+    "/salespersons",
+  ])
+    revalidatePath(p);
+  return { ok: true };
+}
 
 function adminClient() {
   return createSbAdmin(

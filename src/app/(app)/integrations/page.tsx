@@ -8,7 +8,12 @@ import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { SyncNowButton, DisconnectButton } from "./client-buttons";
+import {
+  SyncNowButton,
+  DisconnectButton,
+  ZohoOrgPicker,
+  ClearSyncedDataButton,
+} from "./client-buttons";
 
 export default async function IntegrationsPage({
   searchParams,
@@ -85,11 +90,26 @@ export default async function IntegrationsPage({
           )}
 
           {canManage ? (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-3">
               {integration ? (
                 <>
                   <SyncNowButton />
-                  <DisconnectButton />
+                  <div className="flex flex-wrap items-start gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+                    <ZohoOrgPicker
+                      current={
+                        (integration.config as { organization_id?: string } | null)
+                          ?.organization_id
+                      }
+                    />
+                    <ClearSyncedDataButton />
+                    <DisconnectButton />
+                  </div>
+                  <p className="text-xs text-zinc-500">
+                    Wrong company&apos;s data showing? Your Zoho login may have several
+                    organizations. Use <strong>Change Zoho organization</strong> to pick the
+                    right one, <strong>Clear synced data</strong> to remove the wrong rows, then{" "}
+                    <strong>Sync now</strong>.
+                  </p>
                 </>
               ) : (
                 <a href="/api/zoho/connect">
