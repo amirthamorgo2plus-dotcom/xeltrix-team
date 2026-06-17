@@ -6,14 +6,22 @@ import { Mail, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { deleteOrg, renameOrg, resendInvite } from "./actions";
 
-export function OrgRowActions({ teamId, name }: { teamId: string; name: string }) {
+export function OrgRowActions({
+  teamId,
+  name,
+  adminEmails,
+}: {
+  teamId: string;
+  name: string;
+  adminEmails: string[];
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [note, setNote] = useState<string | null>(null);
 
   function flash(msg: string) {
     setNote(msg);
-    setTimeout(() => setNote(null), 3000);
+    setTimeout(() => setNote(null), 4000);
   }
 
   return (
@@ -24,13 +32,19 @@ export function OrgRowActions({ teamId, name }: { teamId: string; name: string }
         variant="ghost"
         size="sm"
         disabled={pending}
-        title="Resend sign-in link to the org admin"
-        onClick={() =>
+        title={
+          adminEmails.length
+            ? `Resend sign-in link to ${adminEmails.join(", ")}`
+            : "Resend sign-in link to the org admin"
+        }
+        onClick={() => {
+          const to = adminEmails.join(", ") || "the org admin";
+          if (!window.confirm(`Resend sign-in link to ${to}?`)) return;
           start(async () => {
             const res = await resendInvite(teamId);
-            flash(res.error ? res.error : "Invite sent");
-          })
-        }
+            flash(res.error ? res.error : `Sent to ${to}`);
+          });
+        }}
       >
         <Mail className="h-4 w-4" /> Resend
       </Button>
