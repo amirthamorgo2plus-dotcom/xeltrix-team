@@ -1,6 +1,9 @@
 import "server-only";
 import { cache } from "react";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+
+export const ACTIVE_TEAM_COOKIE = "active_team";
 
 export const getUser = cache(async () => {
   const supabase = await createClient();
@@ -22,17 +25,43 @@ export const getMyProfile = cache(async () => {
   return data;
 });
 
-export const getMyMembership = cache(async () => {
+// All active memberships for the signed-in user (one per org they belong to).
+export const getMyMemberships = cache(async () => {
   const user = await getUser();
-  if (!user) return null;
+  if (!user) return [];
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
     .select("id, team_id, role, active, track_attendance, attendance_only")
     .eq("user_id", user.id)
-    .eq("active", true)
-    .maybeSingle();
-  return data;
+    .eq("active", true);
+  return data ?? [];
+});
+
+// The membership for the *current* org. Picks the org named by the
+// active_team cookie if the user belongs to it, else their first org.
+export const getMyMembership = cache(async () => {
+  const list = await getMyMemberships();
+  if (list.length === 0) return null;
+  const active = (await cookies()).get(ACTIVE_TEAM_COOKIE)?.value;
+  return list.find((m) => m.team_id === active) ?? list[0];
+});
+
+// The user's orgs (id + name + role) for the org switcher.
+export const getMyTeams = cache(async () => {
+  const list = await getMyMemberships();
+  if (list.length === 0) return [];
+  const supabase = await createClient();
+  const ids = list.map((m) => m.team_id);
+  const { data: teams } = await supabase.from("teams").select("id, name").in("id", ids);
+  const nameById = new Map((teams ?? []).map((t) => [t.id, t.name as string]));
+  return list
+    .map((m) => ({
+      team_id: m.team_id as string,
+      role: m.role as string,
+      name: nameById.get(m.team_id) ?? "Organization",
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 });
 
 export const getTeamMembers = cache(async () => {

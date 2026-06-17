@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronDown, Globe } from "lucide-react";
+import { ChevronDown, Globe, Building2 } from "lucide-react";
 import { visibleNavItems, type NavItem } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
@@ -101,9 +101,11 @@ function NavRow({
 export function Sidebar({
   role,
   attendanceOnly = false,
+  superAdmin = false,
 }: {
   role?: string | null;
   attendanceOnly?: boolean;
+  superAdmin?: boolean;
 }) {
   const items = visibleNavItems(role, attendanceOnly);
   const pathname = usePathname();
@@ -129,6 +131,12 @@ export function Sidebar({
         {items.map((item) => (
           <NavRow key={item.href} item={item} pathname={pathname} />
         ))}
+        {superAdmin && (
+          <NavRow
+            item={{ href: "/admin/orgs", label: "Organizations", icon: Building2 }}
+            pathname={pathname}
+          />
+        )}
       </nav>
 
       <a
