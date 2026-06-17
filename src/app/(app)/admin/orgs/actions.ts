@@ -1,9 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { type SupabaseClient } from "@supabase/supabase-js";
 import { isSuperAdmin } from "@/lib/super-admin";
 import { adminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 async function findUserByEmail(sb: SupabaseClient, email: string) {
   const target = email.toLowerCase();
@@ -48,4 +50,58 @@ export async function createOrg(
 
   revalidatePath("/admin/orgs");
   return { ok: true };
+}
+
+// Re-send the magic-link sign-in email to an org's admin (e.g. they never
+// logged in). Sends to every admin/manager of the org.
+export async function resendInvite(teamId: string): Promise<{ error?: string }> {
+  if (!(await isSuperAdmin())) return { error: "Not authorized." };
+  const sb = adminClient();
+
+  const { data: admins } = await sb
+    .from("team_members")
+    .select("user_id")
+    .eq("team_id", teamId)
+    .eq("active", true)
+    .in("role", ["admin", "manager"]);
+  if (!admins || admins.length === 0) return { error: "No admin on this org." };
+
+  const emails: string[] = [];
+  for (const a of admins) {
+    const { data } = await sb.auth.admin.getUserById(a.user_id as string);
+    if (data?.user?.email) emails.push(data.user.email);
+  }
+  if (emails.length === 0) return { error: "No admin email found." };
+
+  const h = await headers();
+  const origin = h.get("origin") ?? `https://${h.get("host")}`;
+  const supabase = await createClient();
+  for (const email of emails) {
+    await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${origin}/auth/callback` },
+    });
+  }
+  return {};
+}
+
+export async function renameOrg(teamId: string, name: string): Promise<{ error?: string }> {
+  if (!(await isSuperAdmin())) return { error: "Not authorized." };
+  const clean = name.trim();
+  if (!clean) return { error: "Name required." };
+  const sb = adminClient();
+  const { error } = await sb.from("teams").update({ name: clean }).eq("id", teamId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/orgs");
+  return {};
+}
+
+// Delete an org and ALL its data (cascades via team_id FKs). Irreversible.
+export async function deleteOrg(teamId: string): Promise<{ error?: string }> {
+  if (!(await isSuperAdmin())) return { error: "Not authorized." };
+  const sb = adminClient();
+  const { error } = await sb.from("teams").delete().eq("id", teamId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/orgs");
+  return {};
 }

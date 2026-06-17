@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { EmptyState } from "@/components/empty-state";
 import { OrgCreateForm } from "./org-create-form";
+import { OrgRowActions } from "./org-row-actions";
 import { adminClient } from "@/lib/supabase/admin";
 
 function fmtBytes(n: number | null): string {
@@ -114,6 +115,7 @@ export default async function OrgsAdminPage() {
                   <TH right>Last login</TH>
                   <TH right>Storage</TH>
                   <TH right>Created</TH>
+                  <TH />
                 </TR>
               </THead>
               <TBody>
@@ -132,6 +134,9 @@ export default async function OrgsAdminPage() {
                       </TD>
                       <TD right className="text-zinc-500">
                         {t.created_at ? format(new Date(t.created_at), "dd MMM yyyy") : "—"}
+                      </TD>
+                      <TD>
+                        <OrgRowActions teamId={t.id} name={t.name} />
                       </TD>
                     </TR>
                   );
