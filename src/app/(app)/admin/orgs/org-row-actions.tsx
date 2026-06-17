@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, Pencil, Trash2 } from "lucide-react";
+import { Mail, Pencil, Trash2, UserCog } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { deleteOrg, renameOrg, resendInvite } from "./actions";
+import { changeAdmin, deleteOrg, renameOrg, resendInvite } from "./actions";
 
 export function OrgRowActions({
   teamId,
@@ -47,6 +47,31 @@ export function OrgRowActions({
         }}
       >
         <Mail className="h-4 w-4" /> Resend
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={pending}
+        title="Change the org's admin email"
+        onClick={() => {
+          const next = window.prompt(
+            "Set the org admin's email (creates their login if new):",
+            adminEmails[0] ?? ""
+          );
+          if (next && next.trim()) {
+            start(async () => {
+              const res = await changeAdmin(teamId, next);
+              if (res.error) flash(res.error);
+              else {
+                flash(`Admin set to ${next.trim().toLowerCase()}`);
+                router.refresh();
+              }
+            });
+          }
+        }}
+      >
+        <UserCog className="h-4 w-4" /> Admin
       </Button>
       <Button
         type="button"

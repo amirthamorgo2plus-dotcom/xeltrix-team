@@ -85,6 +85,56 @@ export async function resendInvite(teamId: string): Promise<{ error?: string }> 
   return {};
 }
 
+// Set (or change) an org's admin by email. Adds the new email as admin
+// (creating their login if needed) and deactivates any *other* admin/manager
+// who has never signed in — so a wrongly-provisioned placeholder is cleaned up,
+// but an admin who has actually used the app is left alone.
+export async function changeAdmin(
+  teamId: string,
+  email: string
+): Promise<{ error?: string; ok?: boolean }> {
+  if (!(await isSuperAdmin())) return { error: "Not authorized." };
+  const clean = email.trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(clean)) return { error: "Enter a valid email." };
+
+  const sb = adminClient();
+  let userId: string;
+  const existing = await findUserByEmail(sb, clean);
+  if (existing) {
+    userId = existing.id;
+  } else {
+    const { data, error } = await sb.auth.admin.createUser({ email: clean, email_confirm: true });
+    if (error || !data?.user) return { error: error?.message ?? "Could not create the user." };
+    userId = data.user.id;
+  }
+
+  const { error: upErr } = await sb
+    .from("team_members")
+    .upsert(
+      { team_id: teamId, user_id: userId, role: "admin", active: true },
+      { onConflict: "team_id,user_id" }
+    );
+  if (upErr) return { error: upErr.message };
+
+  // Deactivate other admins/managers who never signed in (placeholder cleanup).
+  const { data: others } = await sb
+    .from("team_members")
+    .select("id, user_id")
+    .eq("team_id", teamId)
+    .eq("active", true)
+    .in("role", ["admin", "manager"])
+    .neq("user_id", userId);
+  for (const o of others ?? []) {
+    const { data } = await sb.auth.admin.getUserById(o.user_id as string);
+    if (!data?.user?.last_sign_in_at) {
+      await sb.from("team_members").update({ active: false }).eq("id", o.id);
+    }
+  }
+
+  revalidatePath("/admin/orgs");
+  return { ok: true };
+}
+
 export async function renameOrg(teamId: string, name: string): Promise<{ error?: string }> {
   if (!(await isSuperAdmin())) return { error: "Not authorized." };
   const clean = name.trim();
