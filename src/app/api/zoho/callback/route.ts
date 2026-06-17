@@ -33,10 +33,18 @@ export async function GET(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
+  // The org that started the connect (set in /connect). Verify the user is an
+  // admin/manager of that specific org.
+  const teamId = cookieStore.get("zoho_oauth_team")?.value;
+  cookieStore.delete("zoho_oauth_team");
+  if (!teamId) {
+    return NextResponse.redirect(new URL("/integrations?error=missing_team", request.url));
+  }
   const { data: m } = await supabase
     .from("team_members")
-    .select("role, team_id")
+    .select("role")
     .eq("user_id", user.id)
+    .eq("team_id", teamId)
     .eq("active", true)
     .maybeSingle();
   if (!m || (m.role !== "admin" && m.role !== "manager")) {
@@ -47,16 +55,25 @@ export async function GET(request: NextRequest) {
     const origin = request.nextUrl.origin;
     const tokens = await exchangeCodeForTokens(code, getRedirectUri(origin));
 
-    // Prefer an explicit ZOHO_ORG_ID from env (avoids the /organizations endpoint
-    // which requires elevated permissions some Zoho Books plans don't grant).
-    // Fall back to auto-detection.
-    const envOrgId = process.env.ZOHO_ORG_ID?.trim();
-    const organization_id = envOrgId || (await fetchOrganizationId(tokens.access_token));
+    // Use the CONNECTED account's own Zoho organization id — each org connects
+    // its own Zoho. Never use a shared env org id, which would pull another
+    // company's books into this org.
+    const organization_id = await fetchOrganizationId(tokens.access_token);
+    if (!organization_id) {
+      return NextResponse.redirect(
+        new URL(
+          `/integrations?error=${encodeURIComponent(
+            "Couldn't read your Zoho organization — make sure this login has Zoho Books access."
+          )}`,
+          request.url
+        )
+      );
+    }
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
     await supabase.from("integrations").upsert(
       {
-        team_id: m.team_id,
+        team_id: teamId,
         provider: "zoho_books",
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token ?? null,

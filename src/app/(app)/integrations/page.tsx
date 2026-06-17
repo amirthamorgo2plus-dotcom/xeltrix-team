@@ -20,11 +20,14 @@ export default async function IntegrationsPage({
   const canManage = isAdminOrManager(m?.role);
 
   const supabase = await createClient();
-  const { data: integration } = await supabase
-    .from("integrations")
-    .select("id, provider, expires_at, connected_at, last_synced_at, last_sync_error, config")
-    .eq("provider", "zoho_books")
-    .maybeSingle();
+  const { data: integration } = m
+    ? await supabase
+        .from("integrations")
+        .select("id, provider, expires_at, connected_at, last_synced_at, last_sync_error, config")
+        .eq("team_id", m.team_id)
+        .eq("provider", "zoho_books")
+        .maybeSingle()
+    : { data: null };
 
   return (
     <div className="flex flex-col gap-6">
