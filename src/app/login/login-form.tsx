@@ -7,6 +7,21 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { loginStaff, sendMagicLink, verifyCode } from "./actions";
 
+// Turn raw Supabase auth errors (from a failed link) into a clear instruction.
+function friendlyError(raw: string): string {
+  const s = raw.toLowerCase();
+  if (
+    s.includes("code challenge") ||
+    s.includes("verifier") ||
+    s.includes("missing_code") ||
+    s.includes("pkce") ||
+    s.includes("flow state")
+  ) {
+    return "The sign-in link didn't work in this browser (it often opens in a different app). Enter your email below, then use the 6-digit code from the email instead of tapping the link.";
+  }
+  return raw;
+}
+
 export function LoginForm({
   searchParamsPromise,
 }: {
@@ -18,7 +33,7 @@ export function LoginForm({
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [sent, setSent] = useState(sp.sent === "1");
-  const [error, setError] = useState<string | null>(sp.error ?? null);
+  const [error, setError] = useState<string | null>(sp.error ? friendlyError(sp.error) : null);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
@@ -137,12 +152,13 @@ export function LoginForm({
       </form>
 
       {sent && (
-        <div className="flex flex-col gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-          <p className="text-sm text-emerald-600">
-            Check your email. Tap the link, or enter the code below.
+        <div className="flex flex-col gap-3 rounded-md border border-emerald-300/60 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+          <p className="text-sm text-emerald-700 dark:text-emerald-300">
+            Check your email and <strong>enter the 6-digit code below</strong>. The code is the
+            most reliable — the link can fail if your email opens it in a different app.
           </p>
           <form onSubmit={handleVerify} className="flex flex-col gap-2">
-            <Label htmlFor="token">Code from email</Label>
+            <Label htmlFor="token">6-digit code from email</Label>
             <div className="flex gap-2">
               <Input
                 id="token"
