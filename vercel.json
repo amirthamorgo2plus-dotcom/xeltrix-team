@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/zoho/sync",
-      "schedule": "0 2 * * *"
+      "schedule": "30 17 * * *"
     },
     {
       "path": "/api/cron/auto-close-visits",

@@ -60,7 +60,7 @@ export default async function IntegrationsPage({
           <p className="text-sm text-zinc-600 dark:text-zinc-400">
             Pulls customers (as leads), items (as templates), and invoices (as won opportunities).
             Pushes opportunities marked &quot;won&quot; back to Zoho as draft invoices.
-            Sync runs daily at 07:30 IST.
+            Sync runs daily at 11:00 PM IST.
           </p>
 
           {integration && (

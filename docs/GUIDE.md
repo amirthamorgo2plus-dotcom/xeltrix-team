@@ -88,8 +88,8 @@ Each org connects its **own** Zoho account — they never share data.
    settings — read, plus invoice/contact create for push-back).
 5. You're returned to **Integrations** showing **Connected**, with **that
    account's own Organization ID** (not any other company's).
-6. Click **Sync now** to pull data immediately (or wait for the daily 07:30 IST
-   cron). For full history, set **Since** to `2024-01-01` and click Sync a few
+6. Click **Sync now** to pull data immediately (or wait for the daily 11:00 PM
+   IST cron). For full history, set **Since** to `2024-01-01` and click Sync a few
    times (it works in time-budgeted batches).
 
 ### What syncs
@@ -263,7 +263,7 @@ The app is installable for one-tap, full-screen access.
 
 ## 15. Maintenance
 
-- **Daily:** Sync Zoho if you added invoices since the 07:30 cron.
+- **Daily:** Sync Zoho if you added invoices since the 11 PM cron.
 - **Weekly:** verify pending employee expense submissions.
 - **Monthly:** review `/visits/summary` and `/attendance/summary`; set next
   month's targets.
