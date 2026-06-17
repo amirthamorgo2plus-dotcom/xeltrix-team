@@ -60,6 +60,7 @@ export default async function TasksPage({
 }) {
   const sp = await searchParams;
   const me = await getMyMembership();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canManage = isAdminOrManager(me?.role);
   const teamMembers = await getTeamMembers();
 
@@ -114,6 +115,7 @@ export default async function TasksPage({
   let tasksQuery = supabase
     .from("tasks")
     .select("id, title, description, due_at, priority, status, owner_id, routine_id")
+    .eq("team_id", teamId)
     .order("due_at", { ascending: true, nullsFirst: false });
   if (memberParam !== "all") tasksQuery = tasksQuery.eq("owner_id", memberParam);
 

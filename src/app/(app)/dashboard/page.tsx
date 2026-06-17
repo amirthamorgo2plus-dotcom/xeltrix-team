@@ -56,6 +56,7 @@ export default async function DashboardPage({
     : members.map((m) => m.id);
 
   const supabase = await createClient();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
 
   const [
     { data: tvaRows },
@@ -79,6 +80,7 @@ export default async function DashboardPage({
     supabase
       .from("holidays")
       .select("date, working_allowed")
+      .eq("team_id", teamId)
       .gte("date", monthFirst)
       .lte("date", monthLast),
     supabase
@@ -91,14 +93,17 @@ export default async function DashboardPage({
     supabase
       .from("leads")
       .select("id")
+      .eq("team_id", teamId)
       .in("status", ["new", "contacted", "qualified"]),
     supabase
       .from("tasks")
       .select("id")
+      .eq("team_id", teamId)
       .in("status", ["todo", "in_progress"]),
     supabase
       .from("complaints")
       .select("id")
+      .eq("team_id", teamId)
       .in("status", ["open", "in_progress"]),
   ]);
 

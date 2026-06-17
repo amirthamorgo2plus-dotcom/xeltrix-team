@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
@@ -32,12 +33,15 @@ export default async function LeadsPage({
   const sp = await searchParams;
   const sort = resolveSort(sp.sort);
 
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const supabase = await createClient();
   const { data: leads } = await supabase
     .from("leads")
     .select(
       "id, name, email, phone, source, status, created_at, latitude, longitude, geocode_status"
     )
+    .eq("team_id", teamId)
     .order(sort.column, { ascending: sort.ascending });
 
   return (

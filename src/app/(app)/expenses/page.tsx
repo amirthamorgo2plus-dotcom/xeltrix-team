@@ -70,6 +70,7 @@ export default async function ExpensesPage({
     : null;
 
   const me = await getMyMembership();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canManage = isAdminOrManager(me?.role);
   const members = await getTeamMembers();
   const settings = await getTeamSettings();
@@ -81,6 +82,7 @@ export default async function ExpensesPage({
   let subsQuery = supabase
     .from("expense_submissions")
     .select("id, member_id, date, description, amount, category, status, notes, reject_reason, zoho_expense_id")
+    .eq("team_id", teamId)
     .order("date", { ascending: false });
   if (monthRange) {
     subsQuery = subsQuery.gte("date", monthRange.start).lte("date", monthRange.end);
@@ -118,6 +120,7 @@ export default async function ExpensesPage({
     .select(
       "id, date, account_name, paid_through_account_name, vendor_name, customer_name, amount, currency_code, reference_number, description, zoho_expense_id"
     )
+    .eq("team_id", teamId)
     .order("date", { ascending: false });
 
   if (q) {
@@ -138,7 +141,8 @@ export default async function ExpensesPage({
   // All rows up to end-of-month (for KPIs and cumulative outstanding)
   let aggQuery = supabase
     .from("zoho_expenses")
-    .select("id, zoho_expense_id, account_name, paid_through_account_name, amount, date, vendor_name");
+    .select("id, zoho_expense_id, account_name, paid_through_account_name, amount, date, vendor_name")
+    .eq("team_id", teamId);
   if (monthRange) {
     aggQuery = aggQuery.lte("date", monthRange.end);
   }

@@ -62,18 +62,20 @@ export default async function FollowUpsPage({
   const showDone = sp.show === "done";
 
   const supabase = await createClient();
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const [{ data: items }, { data: leads }, { data: opps }, { data: complaints }] =
     await Promise.all([
       supabase
         .from("follow_ups")
         .select("id, due_at, channel, notes, done_at, lead_id, related_type, related_id, auto_source")
+        .eq("team_id", teamId)
         .order("due_at", { ascending: true }),
-      supabase.from("leads").select("id, name").order("name"),
-      supabase.from("opportunities").select("id, title"),
-      supabase.from("complaints").select("id, subject"),
+      supabase.from("leads").select("id, name").eq("team_id", teamId).order("name"),
+      supabase.from("opportunities").select("id, title").eq("team_id", teamId),
+      supabase.from("complaints").select("id, subject").eq("team_id", teamId),
     ]);
 
-  const m = await getMyMembership();
   const canManage = isAdminOrManager(m?.role);
 
   const leadName = new Map((leads ?? []).map((l) => [l.id, l.name]));

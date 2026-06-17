@@ -25,6 +25,7 @@ function isPendingStatus(s: string) {
 
 export default async function TaskReportPage() {
   const me = await getMyMembership();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const teamMembers = await getTeamMembers();
   const supabase = await createClient();
 
@@ -38,7 +39,8 @@ export default async function TaskReportPage() {
 
   const { data: tasksData } = await supabase
     .from("tasks")
-    .select("status, due_at, owner_id");
+    .select("status, due_at, owner_id")
+    .eq("team_id", teamId);
 
   const rows = new Map<string, Row>();
   teamMembers.forEach((m) => {

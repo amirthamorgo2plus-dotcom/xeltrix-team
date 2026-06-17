@@ -25,6 +25,7 @@ export default async function SalespersonsPage({
   const range = resolveRange(sp.range ?? "all");
 
   const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canManage = isAdminOrManager(m?.role);
   const members = await getTeamMembers();
   const settings = await getTeamSettings();
@@ -35,6 +36,7 @@ export default async function SalespersonsPage({
   let oppQuery = supabase
     .from("opportunities")
     .select("zoho_salesperson_name, value, value_excl_tax, stage, close_date")
+    .eq("team_id", teamId)
     .not("zoho_salesperson_name", "is", null);
   if (range.start) oppQuery = oppQuery.gte("close_date", range.start);
   if (range.end) oppQuery = oppQuery.lte("close_date", range.end);
@@ -42,6 +44,7 @@ export default async function SalespersonsPage({
   let quoteQuery = supabase
     .from("quotes")
     .select("zoho_salesperson_name, value, value_excl_tax, date")
+    .eq("team_id", teamId)
     .not("zoho_salesperson_name", "is", null);
   if (range.start) quoteQuery = quoteQuery.gte("date", range.start);
   if (range.end) quoteQuery = quoteQuery.lte("date", range.end);

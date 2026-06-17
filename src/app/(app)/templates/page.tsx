@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { getTeamSettings } from "@/lib/data";
+import { getTeamSettings, getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -32,10 +32,14 @@ export default async function TemplatesPage({
   const settings = await getTeamSettings();
   const currency = settings?.currency || "INR";
 
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
+
   const supabase = await createClient();
   let query = supabase
     .from("opportunity_templates")
     .select("id, name, sku, rate, unit, active, zoho_item_id")
+    .eq("team_id", teamId)
     .order(sort.column, { ascending: sort.ascending });
 
   if (q) {

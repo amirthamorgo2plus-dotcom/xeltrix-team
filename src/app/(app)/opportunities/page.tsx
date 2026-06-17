@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { getTeamSettings } from "@/lib/data";
+import { getTeamSettings, getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExportButton } from "@/components/export-button";
@@ -52,11 +52,15 @@ export default async function OpportunitiesPage({
   const sp = await searchParams;
   const range = resolveRange(sp.range ?? "all");
 
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
+
   const supabase = await createClient();
 
   let q = supabase
     .from("opportunities")
     .select("id, title, value, value_excl_tax, stage, close_date, lead:leads(id, name)")
+    .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
   if (range.start) q = q.gte("close_date", range.start);
@@ -64,7 +68,7 @@ export default async function OpportunitiesPage({
 
   const [{ data: opps }, { data: leads }, settings] = await Promise.all([
     q,
-    supabase.from("leads").select("id, name").order("name"),
+    supabase.from("leads").select("id, name").eq("team_id", teamId).order("name"),
     getTeamSettings(),
   ]);
 

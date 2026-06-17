@@ -1,5 +1,6 @@
 import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
+import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
@@ -29,11 +30,15 @@ export default async function ComplaintsPage({
     dateColumn: "opened_at",
   });
 
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
+
   const supabase = await createClient();
 
   let q = supabase
     .from("complaints")
     .select("id, customer_name, subject, severity, status, opened_at, resolved_at")
+    .eq("team_id", teamId)
     .order(sort.column, { ascending: sort.ascending });
 
   if (range.start) q = q.gte("opened_at", `${range.start}T00:00:00`);
@@ -44,6 +49,7 @@ export default async function ComplaintsPage({
   const { data: leads } = await supabase
     .from("leads")
     .select("id, name, email")
+    .eq("team_id", teamId)
     .order("name");
 
   return (

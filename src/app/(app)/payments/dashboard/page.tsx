@@ -23,6 +23,7 @@ export default async function PaymentsDashboardPage({
 }) {
   const m = await getMyMembership();
   if (!m || !isAdminOrManager(m.role)) redirect("/dashboard");
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
 
   const sp = await searchParams;
   const year = sp.year ? Number(sp.year) : new Date().getFullYear();
@@ -36,10 +37,12 @@ export default async function PaymentsDashboardPage({
       .select(
         "id, name, category, frequency, budget, due_day, due_month, reminder_days, notes, active"
       )
+      .eq("team_id", teamId)
       .eq("active", true),
     supabase
       .from("expense_payments")
       .select("item_id, month, actual")
+      .eq("team_id", teamId)
       .gte("month", yearStart)
       .lte("month", yearEnd),
   ]);

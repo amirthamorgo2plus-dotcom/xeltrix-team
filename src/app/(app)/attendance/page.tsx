@@ -38,6 +38,7 @@ export default async function AttendancePage({
   const monthIso = format(monthStart, "yyyy-MM");
 
   const me = await getMyMembership();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const allMembers = await getTeamMembers();
   // Salesperson buckets (e.g. "Maruthu & Nagaraj") have track_attendance=false
   // — keep them for sales, hide from the attendance grid + mark form.
@@ -51,11 +52,13 @@ export default async function AttendancePage({
     supabase
       .from("holidays")
       .select("date, name, working_allowed")
+      .eq("team_id", teamId)
       .gte("date", format(monthStart, "yyyy-MM-dd"))
       .lte("date", format(monthEnd, "yyyy-MM-dd")),
     supabase
       .from("attendance")
       .select("member_id, date, status, hours")
+      .eq("team_id", teamId)
       .gte("date", format(monthStart, "yyyy-MM-dd"))
       .lte("date", format(monthEnd, "yyyy-MM-dd")),
     supabase.from("v_leave_balance").select("member_id, balance"),
@@ -63,6 +66,7 @@ export default async function AttendancePage({
       ? supabase
           .from("attendance")
           .select("id, status, check_in_at, check_out_at, hours")
+          .eq("team_id", teamId)
           .eq("member_id", me.id)
           .eq("date", format(new Date(), "yyyy-MM-dd"))
           .maybeSingle()

@@ -70,6 +70,7 @@ export default async function VisitsPage({
 }) {
   const sp = await searchParams;
   const me = await getMyMembership();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canManage = isAdminOrManager(me?.role);
   const members = await getTeamMembers();
 
@@ -89,6 +90,7 @@ export default async function VisitsPage({
     .select(
       "id, member_id, lead_id, check_in_at, check_in_lat, check_in_lng, check_out_at, check_out_lat, check_out_lng, notes"
     )
+    .eq("team_id", teamId)
     .gte("check_in_at", dayStartUtc)
     .lte("check_in_at", dayEndUtc)
     .order("check_in_at", { ascending: false });
@@ -99,6 +101,7 @@ export default async function VisitsPage({
     supabase
       .from("leads")
       .select("id, name, latitude, longitude")
+      .eq("team_id", teamId)
       .order("name")
       .limit(500),
   ]);
@@ -133,6 +136,7 @@ export default async function VisitsPage({
     .select(
       "id, member_id, lead_id, check_in_at, check_in_lat, check_in_lng, check_out_at, check_out_lat, check_out_lng, notes"
     )
+    .eq("team_id", teamId)
     .eq("member_id", me?.id ?? "")
     .is("check_out_at", null)
     .order("check_in_at", { ascending: false })
@@ -231,12 +235,14 @@ export default async function VisitsPage({
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
+        .eq("team_id", teamId)
         .is("latitude", null)
         .is("geocode_status", null)
         .not("address", "is", null),
       supabase
         .from("leads")
         .select("id", { count: "exact", head: true })
+        .eq("team_id", teamId)
         .is("latitude", null)
         .eq("geocode_status", "failed"),
     ]);

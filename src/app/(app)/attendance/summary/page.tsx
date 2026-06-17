@@ -39,6 +39,7 @@ export default async function AttendanceSummaryPage({
   searchParams: Promise<{ month?: string }>;
 }) {
   const me = await getMyMembership();
+  const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   // Attendance-only staff just mark their own — keep them on the main page.
   if ((me as { attendance_only?: boolean } | null)?.attendance_only) {
     redirect("/attendance");
@@ -62,6 +63,7 @@ export default async function AttendanceSummaryPage({
     supabase
       .from("attendance")
       .select("member_id, status")
+      .eq("team_id", teamId)
       .gte("date", format(monthStart, "yyyy-MM-dd"))
       .lte("date", format(monthEnd, "yyyy-MM-dd")),
     supabase.from("v_leave_balance").select("member_id, balance"),

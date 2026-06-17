@@ -9,12 +9,14 @@ import { EmptyState } from "@/components/empty-state";
 
 export default async function HolidaysPage() {
   const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canEdit = isAdminOrManager(m?.role);
 
   const supabase = await createClient();
   const { data: holidays } = await supabase
     .from("holidays")
     .select("id, date, name, working_allowed, tentative")
+    .eq("team_id", teamId)
     .order("date");
 
   return (

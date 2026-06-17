@@ -2,7 +2,7 @@ import Link from "next/link";
 import { format, addMonths } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getTeamMembers } from "@/lib/data";
+import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiCard } from "@/components/kpi-card";
 import { EmptyState } from "@/components/empty-state";
@@ -63,6 +63,8 @@ export default async function VisitsSummaryPage({
   const startUtc = new Date(`${ym}-01T00:00:00+05:30`);
   const nextMonthStartIso = new Date(`${nextYm}-01T00:00:00+05:30`).toISOString();
 
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const members = await getTeamMembers();
   const memberInfo = new Map(
     members.map((mm) => {
@@ -85,6 +87,7 @@ export default async function VisitsSummaryPage({
   let visitsQuery = supabase
     .from("visits")
     .select("id, member_id, lead_id, check_in_at, check_out_at")
+    .eq("team_id", teamId)
     .gte("check_in_at", startUtc.toISOString())
     .lt("check_in_at", nextMonthStartIso);
   if (memberFilter) visitsQuery = visitsQuery.eq("member_id", memberFilter);
@@ -95,6 +98,7 @@ export default async function VisitsSummaryPage({
   let leadsQuery = supabase
     .from("leads")
     .select("id, name, owner_id, source, created_at")
+    .eq("team_id", teamId)
     .gte("created_at", startUtc.toISOString())
     .lt("created_at", nextMonthStartIso)
     .eq("source", "visit");
@@ -104,7 +108,7 @@ export default async function VisitsSummaryPage({
     await Promise.all([
       visitsQuery,
       leadsQuery,
-      supabase.from("leads").select("id, name").limit(2000),
+      supabase.from("leads").select("id, name").eq("team_id", teamId).limit(2000),
     ]);
 
   const leadName = new Map(

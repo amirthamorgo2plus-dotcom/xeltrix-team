@@ -3,7 +3,7 @@ import {
   isSameMonth, isToday, parseISO, startOfMonth, startOfWeek, subMonths,
 } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getTeamMembers } from "@/lib/data";
+import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +32,8 @@ export default async function CalendarPage({
   const isoEnd = format(days[41], "yyyy-MM-dd");
 
   const supabase = await createClient();
+  const m = await getMyMembership();
+  const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const teamMembers = await getTeamMembers();
   const memberNameById = new Map(
     teamMembers.map((m) => {
@@ -44,11 +46,13 @@ export default async function CalendarPage({
     supabase
       .from("holidays")
       .select("date, name, working_allowed")
+      .eq("team_id", teamId)
       .gte("date", isoStart)
       .lte("date", isoEnd),
     supabase
       .from("tasks")
       .select("id, title, due_at, status")
+      .eq("team_id", teamId)
       .gte("due_at", `${isoStart}T00:00:00`)
       .lte("due_at", `${isoEnd}T23:59:59`)
       .neq("status", "done")
@@ -56,12 +60,14 @@ export default async function CalendarPage({
     supabase
       .from("follow_ups")
       .select("id, due_at, lead:leads(name)")
+      .eq("team_id", teamId)
       .gte("due_at", `${isoStart}T00:00:00`)
       .lte("due_at", `${isoEnd}T23:59:59`)
       .is("done_at", null),
     supabase
       .from("attendance")
       .select("date, status, member_id")
+      .eq("team_id", teamId)
       .gte("date", isoStart)
       .lte("date", isoEnd)
       .in("status", ["leave", "half_day"]),
