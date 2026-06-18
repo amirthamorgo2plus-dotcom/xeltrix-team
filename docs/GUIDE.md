@@ -82,15 +82,35 @@ Each org connects its **own** Zoho account — they never share data.
 ### Steps (org admin)
 1. Sign in and make sure the **header org switcher shows the correct org**.
 2. Go to **Integrations** (sidebar, admin/manager only).
-3. It should say **"Not connected"** for a new org. Click **Connect Zoho Books**.
+3. It should say **"Not connected"** for a new org. Choose the **Zoho data
+   center** (region) the account lives in — see "Which region?" below — then
+   click **Connect Zoho Books**.
 4. You're sent to Zoho — **log in to *that org's* Zoho account** and **Accept**
    the requested permissions (invoices, estimates, contacts, items, expenses,
    settings — read, plus invoice/contact create for push-back).
+   - Tip: use an **Incognito window** so you're not silently signed in as
+     another company's Zoho — type the correct account's credentials.
 5. You're returned to **Integrations** showing **Connected**, with **that
-   account's own Organization ID** (not any other company's).
+   account's own Organization ID** (not any other company's). If the login has
+   several orgs, use **Change Zoho organization** (or type the Organization ID).
 6. Click **Sync now** to pull data immediately (or wait for the daily 11:00 PM
    IST cron). For full history, set **Since** to `2024-01-01` and click Sync a few
    times (it works in time-budgeted batches).
+
+### Which region? (data center)
+Zoho is multi-data-center, and a connection only works against the account's own
+region. Find it from the **Books URL** when logged into that account:
+- `books.zoho.in` → **India** (default; uses `ZOHO_CLIENT_ID/SECRET`).
+- `books.zoho.com` → **US/Global** → needs `ZOHO_CLIENT_ID_COM/SECRET_COM`.
+- `books.zoho.eu` / `.com.au` / etc. → that region's `_<REGION>` env vars.
+
+For a non-India region you must register a **separate OAuth app** in that data
+center's console (e.g. `api-console.zoho.com`) → Server-based Application →
+Redirect URI `https://<app-url>/api/zoho/callback` → put its Client ID/Secret in
+Vercel as `ZOHO_CLIENT_ID_<REGION>` / `ZOHO_CLIENT_SECRET_<REGION>` (e.g. `_COM`),
+then redeploy. "Invalid Client" during connect means the region/app is wrong.
+Note: a Zoho account's **country can differ from its data center** — only the
+Books URL tells you the region.
 
 ### What syncs
 - Zoho **contacts → leads**, **items → product price list**, **invoices → won
@@ -100,8 +120,12 @@ Each org connects its **own** Zoho account — they never share data.
 ### Notes / troubleshooting
 - "Couldn't read your Zoho organization" → the Zoho login used must have **Zoho
   Books access** (settings permission). Use the account that owns the books.
-- Region is **Zoho India** (`zohoapis.in`). The OAuth **app** (client id/secret)
-  is shared across orgs — that's normal; each org still authorizes its own books.
+- Multi-region: each org picks its data center at connect time (see "Which
+  region?"). Within one region the OAuth app is shared across orgs — normal; each
+  org still authorizes its own books.
+- Wrong company's data showing? The login may have multiple orgs, or the wrong
+  Zoho account/region was used. Use **Change Zoho organization** / **Clear synced
+  data**, or Disconnect and reconnect (Incognito) with the right account/region.
 - Rate limit (429): Zoho's free tier allows ~1000 calls/day; wait until midnight
   IST and the cron continues.
 - Disconnect anytime with **Disconnect** (removes tokens for that org only).
@@ -154,6 +178,11 @@ A launcher for every Xeltrix tool/channel.
 
 Manage who's in the org and their access.
 
+- **Invite a user (by email)** — add a teammate to this org with a role
+  (member/manager/admin); creates their login if new and emails a sign-in link.
+  They sign in with the 6-digit code.
+- **Resend** (per row) — re-send the sign-in email to an email member who didn't
+  get it (not shown for PIN staff).
 - **In attendance** toggle — turn OFF for "salesperson buckets" (e.g. a combined
   "Maruthu & Nagaraj") so they stay for sales but disappear from attendance.
 - **Access** — for plain members, **Full access** (sees everything) or limit to

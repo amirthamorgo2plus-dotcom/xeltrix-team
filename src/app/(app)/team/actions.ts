@@ -95,6 +95,36 @@ export async function inviteMember(
   return { ok: true };
 }
 
+// Re-send a sign-in link to an existing member (email logins only; PIN staff
+// don't use email).
+export async function resendMemberInvite(memberId: string): Promise<{ error?: string; ok?: boolean }> {
+  const m = await requireAdmin();
+  if (!m) return { error: "Admins only." };
+  const sb = adminClient();
+  const { data: member } = await sb
+    .from("team_members")
+    .select("user_id")
+    .eq("id", memberId)
+    .eq("team_id", m.team_id)
+    .maybeSingle();
+  if (!member?.user_id) return { error: "Member not found." };
+
+  const { data } = await sb.auth.admin.getUserById(member.user_id as string);
+  const email = data?.user?.email;
+  if (!email) return { error: "No email on file." };
+  if (email.endsWith("@staff.local")) return { error: "Staff sign in with their PIN, not email." };
+
+  const h = await headers();
+  const origin = h.get("origin") ?? `https://${h.get("host")}`;
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: `${origin}/auth/callback` },
+  });
+  if (error) return { error: error.message };
+  return { ok: true };
+}
+
 // Hide/show a member in the attendance grid (kept for sales either way).
 export async function setTrackAttendance(memberId: string, value: boolean) {
   if (!(await requireAdmin())) throw new Error("Admins only.");

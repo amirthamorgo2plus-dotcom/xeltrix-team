@@ -11,10 +11,36 @@ import { memberColor } from "@/lib/member-colors";
 import {
   createStaff,
   inviteMember,
+  resendMemberInvite,
   setAttendanceOnly,
   setMemberActive,
   setTrackAttendance,
 } from "./actions";
+
+function ResendButton({ memberId }: { memberId: string }) {
+  const [pending, start] = useTransition();
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await resendMemberInvite(memberId);
+            setNote(r.error ? r.error : "Sent");
+            setTimeout(() => setNote(null), 4000);
+          })
+        }
+      >
+        Resend
+      </Button>
+      {note && <span className="text-xs text-zinc-500">{note}</span>}
+    </span>
+  );
+}
 
 function InviteForm() {
   const ref = useRef<HTMLFormElement>(null);
@@ -174,7 +200,7 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
                 )}
               </TD>
               <TD>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge tone={m.active ? "success" : "muted"}>
                     {m.active ? "Active" : "Inactive"}
                   </Badge>
@@ -184,6 +210,7 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
                     offLabel="Reactivate"
                     onClick={() => setMemberActive(m.id, !m.active)}
                   />
+                  {!m.attendance_only && <ResendButton memberId={m.id} />}
                 </div>
               </TD>
             </TR>
