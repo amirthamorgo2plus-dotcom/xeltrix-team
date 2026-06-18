@@ -7,12 +7,12 @@ export const maxDuration = 60;
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   SyncNowButton,
   DisconnectButton,
   ZohoOrgPicker,
   ClearSyncedDataButton,
+  ConnectZoho,
 } from "./client-buttons";
 
 export default async function IntegrationsPage({
@@ -112,9 +112,7 @@ export default async function IntegrationsPage({
                   </p>
                 </>
               ) : (
-                <a href="/api/zoho/connect">
-                  <Button>Connect Zoho Books</Button>
-                </a>
+                <ConnectZoho />
               )}
             </div>
           ) : (

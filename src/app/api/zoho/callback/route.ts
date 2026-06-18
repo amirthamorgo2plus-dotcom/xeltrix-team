@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { exchangeCodeForTokens } from "@/lib/zoho/oauth";
 import { fetchOrganizationId } from "@/lib/zoho/client";
-import { getRedirectUri } from "@/lib/zoho/config";
+import { getRedirectUri, isZohoRegion, DEFAULT_ZOHO_REGION } from "@/lib/zoho/config";
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -51,14 +51,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL("/integrations?error=forbidden", request.url));
   }
 
+  const regionCookie = cookieStore.get("zoho_oauth_region")?.value;
+  cookieStore.delete("zoho_oauth_region");
+  const region = isZohoRegion(regionCookie) ? regionCookie : DEFAULT_ZOHO_REGION;
+
   try {
     const origin = request.nextUrl.origin;
-    const tokens = await exchangeCodeForTokens(code, getRedirectUri(origin));
+    const tokens = await exchangeCodeForTokens(code, getRedirectUri(origin), region);
 
     // Use the CONNECTED account's own Zoho organization id — each org connects
     // its own Zoho. Never use a shared env org id, which would pull another
     // company's books into this org.
-    const organization_id = await fetchOrganizationId(tokens.access_token);
+    const organization_id = await fetchOrganizationId(tokens.access_token, region);
     if (!organization_id) {
       return NextResponse.redirect(
         new URL(
@@ -78,7 +82,7 @@ export async function GET(request: NextRequest) {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token ?? null,
         expires_at: expiresAt,
-        config: { organization_id, api_domain: tokens.api_domain },
+        config: { organization_id, api_domain: tokens.api_domain, region },
         connected_by: user.id,
         connected_at: new Date().toISOString(),
         last_sync_error: null,

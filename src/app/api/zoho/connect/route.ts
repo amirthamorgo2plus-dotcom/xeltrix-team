@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { buildAuthUrl } from "@/lib/zoho/oauth";
-import { getRedirectUri } from "@/lib/zoho/config";
+import { getRedirectUri, isZohoRegion, DEFAULT_ZOHO_REGION } from "@/lib/zoho/config";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -38,7 +38,18 @@ export async function GET(request: NextRequest) {
     maxAge: 600,
   });
 
+  // Data center to connect in (defaults to India).
+  const regionParam = request.nextUrl.searchParams.get("region");
+  const region = isZohoRegion(regionParam) ? regionParam : DEFAULT_ZOHO_REGION;
+  cookieStore.set("zoho_oauth_region", region, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 600,
+  });
+
   const origin = request.nextUrl.origin;
-  const url = buildAuthUrl(getRedirectUri(origin), state);
+  const url = buildAuthUrl(getRedirectUri(origin), state, region);
   return NextResponse.redirect(url);
 }

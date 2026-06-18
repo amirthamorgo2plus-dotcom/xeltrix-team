@@ -3,6 +3,7 @@
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ZOHO_REGIONS } from "@/lib/zoho/config";
 import {
   clearSyncedData,
   disconnectZoho,
@@ -10,6 +11,32 @@ import {
   setZohoOrg,
   triggerSync,
 } from "./actions";
+
+// Connect Zoho, choosing the data center (region) the account lives in.
+export function ConnectZoho() {
+  const [region, setRegion] = useState("in");
+  return (
+    <div className="flex flex-wrap items-end gap-2">
+      <label className="flex flex-col gap-1 text-xs text-zinc-500">
+        Zoho data center
+        <select
+          value={region}
+          onChange={(e) => setRegion(e.target.value)}
+          className="h-9 rounded-md border border-zinc-300 bg-transparent px-2 text-sm dark:border-zinc-700"
+        >
+          {ZOHO_REGIONS.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <a href={`/api/zoho/connect?region=${region}`}>
+        <Button>Connect Zoho Books</Button>
+      </a>
+    </div>
+  );
+}
 
 export function SyncNowButton() {
   const [pending, start] = useTransition();

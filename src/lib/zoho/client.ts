@@ -2,8 +2,15 @@ import "server-only";
 import { createClient as createSupabaseServer } from "@/lib/supabase/server";
 import { createClient as createSbAdmin } from "@supabase/supabase-js";
 import { refreshAccessToken } from "./oauth";
-import { ZOHO_API } from "./config";
+import { apiBase, DEFAULT_ZOHO_REGION, isZohoRegion, type ZohoRegion } from "./config";
 import type { IntegrationRow } from "./types";
+
+// The data center this integration was connected in (default India for legacy
+// connections that predate multi-region).
+function regionOf(integration: IntegrationRow): ZohoRegion {
+  const r = integration.config?.region;
+  return isZohoRegion(r) ? r : DEFAULT_ZOHO_REGION;
+}
 
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -41,7 +48,7 @@ async function ensureFreshAccessToken(integration: IntegrationRow): Promise<stri
   }
   if (!integration.refresh_token) throw new Error("No refresh token; reconnect Zoho.");
 
-  const tokens = await refreshAccessToken(integration.refresh_token);
+  const tokens = await refreshAccessToken(integration.refresh_token, regionOf(integration));
   const newExpires = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
   // Persist new access_token AND new refresh_token (Zoho occasionally rotates).
@@ -78,7 +85,7 @@ export async function zohoFetch<T = unknown>(
   const orgId = integration.config?.organization_id;
   if (!orgId) throw new Error("organization_id missing in integration config");
 
-  const url = new URL(`${ZOHO_API}${path}`);
+  const url = new URL(`${apiBase(regionOf(integration))}${path}`);
   url.searchParams.set("organization_id", orgId);
   if (opts.query) {
     for (const [k, v] of Object.entries(opts.query)) {
@@ -103,8 +110,11 @@ export async function zohoFetch<T = unknown>(
   return (await res.json()) as T;
 }
 
-export async function fetchOrganizationId(accessToken: string): Promise<string> {
-  const res = await fetch(`${ZOHO_API}/organizations`, {
+export async function fetchOrganizationId(
+  accessToken: string,
+  region: ZohoRegion = DEFAULT_ZOHO_REGION
+): Promise<string> {
+  const res = await fetch(`${apiBase(region)}/organizations`, {
     headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
     cache: "no-store",
   });

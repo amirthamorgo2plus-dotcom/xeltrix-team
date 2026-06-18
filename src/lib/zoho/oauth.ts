@@ -1,9 +1,15 @@
-import { ZOHO_ACCOUNTS, ZOHO_SCOPES, getClientCredentials } from "./config";
+import {
+  ZOHO_SCOPES,
+  accountsBase,
+  getClientCredentials,
+  DEFAULT_ZOHO_REGION,
+  type ZohoRegion,
+} from "./config";
 import type { ZohoTokens } from "./types";
 
-export function buildAuthUrl(redirectUri: string, state: string) {
-  const { id } = getClientCredentials();
-  const url = new URL(`${ZOHO_ACCOUNTS}/oauth/v2/auth`);
+export function buildAuthUrl(redirectUri: string, state: string, region: ZohoRegion) {
+  const { id } = getClientCredentials(region);
+  const url = new URL(`${accountsBase(region)}/oauth/v2/auth`);
   url.searchParams.set("scope", ZOHO_SCOPES);
   url.searchParams.set("client_id", id);
   url.searchParams.set("response_type", "code");
@@ -14,8 +20,11 @@ export function buildAuthUrl(redirectUri: string, state: string) {
   return url.toString();
 }
 
-async function postToken(body: URLSearchParams): Promise<ZohoTokens> {
-  const res = await fetch(`${ZOHO_ACCOUNTS}/oauth/v2/token`, {
+async function postToken(
+  body: URLSearchParams,
+  region: ZohoRegion = DEFAULT_ZOHO_REGION
+): Promise<ZohoTokens> {
+  const res = await fetch(`${accountsBase(region)}/oauth/v2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
@@ -37,9 +46,10 @@ async function postToken(body: URLSearchParams): Promise<ZohoTokens> {
 
 export async function exchangeCodeForTokens(
   code: string,
-  redirectUri: string
+  redirectUri: string,
+  region: ZohoRegion
 ): Promise<ZohoTokens> {
-  const { id, secret } = getClientCredentials();
+  const { id, secret } = getClientCredentials(region);
   return postToken(
     new URLSearchParams({
       grant_type: "authorization_code",
@@ -47,18 +57,23 @@ export async function exchangeCodeForTokens(
       client_secret: secret,
       redirect_uri: redirectUri,
       code,
-    })
+    }),
+    region
   );
 }
 
-export async function refreshAccessToken(refreshToken: string): Promise<ZohoTokens> {
-  const { id, secret } = getClientCredentials();
+export async function refreshAccessToken(
+  refreshToken: string,
+  region: ZohoRegion = DEFAULT_ZOHO_REGION
+): Promise<ZohoTokens> {
+  const { id, secret } = getClientCredentials(region);
   return postToken(
     new URLSearchParams({
       grant_type: "refresh_token",
       client_id: id,
       client_secret: secret,
       refresh_token: refreshToken,
-    })
+    }),
+    region
   );
 }

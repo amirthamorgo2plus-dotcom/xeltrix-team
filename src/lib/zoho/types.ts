@@ -106,7 +106,7 @@ export type IntegrationRow = {
   access_token: string | null;
   refresh_token: string | null;
   expires_at: string | null;
-  config: { organization_id?: string; api_domain?: string } | null;
+  config: { organization_id?: string; api_domain?: string; region?: string } | null;
   connected_at: string | null;
   last_synced_at: string | null;
   last_sync_error: string | null;
