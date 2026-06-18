@@ -1,7 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { createClient as createSbAdmin } from "@supabase/supabase-js";
+import { createClient as createSbAdmin, type SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { staffEmail } from "@/lib/staff";
@@ -12,6 +13,18 @@ function adminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { persistSession: false } }
   );
+}
+
+async function findUserByEmail(sb: SupabaseClient, email: string) {
+  const target = email.toLowerCase();
+  for (let page = 1; page <= 10; page++) {
+    const { data, error } = await sb.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error || !data) return null;
+    const u = data.users.find((x) => (x.email ?? "").toLowerCase() === target);
+    if (u) return u;
+    if (data.users.length < 1000) return null;
+  }
+  return null;
 }
 
 async function requireAdmin() {
@@ -25,6 +38,61 @@ function revalidateAll() {
   revalidatePath("/attendance");
   revalidatePath("/tasks");
   revalidatePath("/dashboard");
+}
+
+// Invite a teammate by email into the CURRENT org with a role, and send them a
+// magic-link sign-in email. Creates their login if they're new.
+export async function inviteMember(
+  _prev: { error?: string; ok?: boolean } | undefined,
+  formData: FormData
+): Promise<{ error?: string; ok?: boolean }> {
+  const m = await requireAdmin();
+  if (!m) return { error: "Admins only." };
+
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const roleRaw = String(formData.get("role") ?? "member");
+  const role = ["admin", "manager", "member"].includes(roleRaw) ? roleRaw : "member";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { error: "Enter a valid email." };
+
+  const sb = adminClient();
+  let userId: string;
+  const existing = await findUserByEmail(sb, email);
+  if (existing) {
+    userId = existing.id;
+  } else {
+    const { data, error } = await sb.auth.admin.createUser({ email, email_confirm: true });
+    if (error || !data?.user) return { error: error?.message ?? "Could not create the user." };
+    userId = data.user.id;
+  }
+
+  const { error: upErr } = await sb.from("team_members").upsert(
+    {
+      team_id: m.team_id,
+      user_id: userId,
+      role,
+      active: true,
+      track_attendance: true,
+      attendance_only: false,
+    },
+    { onConflict: "team_id,user_id" }
+  );
+  if (upErr) return { error: upErr.message };
+
+  // Email them a sign-in link/code so they can get in.
+  try {
+    const h = await headers();
+    const origin = h.get("origin") ?? `https://${h.get("host")}`;
+    const supabase = await createClient();
+    await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: `${origin}/auth/callback` },
+    });
+  } catch {
+    /* membership added even if the email send hiccups */
+  }
+
+  revalidateAll();
+  return { ok: true };
 }
 
 // Hide/show a member in the attendance grid (kept for sales either way).

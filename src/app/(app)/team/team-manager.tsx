@@ -5,14 +5,72 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import { memberColor } from "@/lib/member-colors";
 import {
   createStaff,
+  inviteMember,
   setAttendanceOnly,
   setMemberActive,
   setTrackAttendance,
 } from "./actions";
+
+function InviteForm() {
+  const ref = useRef<HTMLFormElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState(false);
+  const [pending, start] = useTransition();
+
+  function submit(fd: FormData) {
+    start(async () => {
+      const res = await inviteMember(undefined, fd);
+      if (res?.error) {
+        setError(res.error);
+        setOk(false);
+      } else {
+        setError(null);
+        setOk(true);
+        ref.current?.reset();
+      }
+    });
+  }
+
+  return (
+    <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      <h3 className="text-sm font-medium">Invite a user (by email)</h3>
+      <p className="mt-1 text-xs text-zinc-500">
+        Adds them to this organization and emails a sign-in link. They sign in with the 6-digit
+        code (no password).
+      </p>
+      <form ref={ref} action={submit} className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <Label>Email *</Label>
+          <Input name="email" type="email" required placeholder="person@company.com" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label>Role</Label>
+          <Select name="role" defaultValue="member">
+            <option value="member">Member</option>
+            <option value="manager">Manager</option>
+            <option value="admin">Admin</option>
+          </Select>
+        </div>
+        <div className="flex items-end">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Inviting…" : "Invite user"}
+          </Button>
+        </div>
+        {error && <p className="text-sm text-red-600 sm:col-span-4">{error}</p>}
+        {ok && (
+          <p className="text-sm text-emerald-600 sm:col-span-4">
+            Invited — they&apos;ll get a sign-in email and appear in the list.
+          </p>
+        )}
+      </form>
+    </div>
+  );
+}
 
 export type TeamMemberRow = {
   id: string;
@@ -132,6 +190,8 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
           ))}
         </TBody>
       </Table>
+
+      <InviteForm />
 
       <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
         <h3 className="text-sm font-medium">Add staff (no email)</h3>
