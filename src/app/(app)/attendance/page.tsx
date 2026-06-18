@@ -57,8 +57,12 @@ export default async function AttendancePage({
       .lte("date", format(monthEnd, "yyyy-MM-dd")),
     supabase
       .from("attendance")
+      // attendance has no team_id — it's scoped by member_id (current-org members)
       .select("member_id, date, status, hours")
-      .eq("team_id", teamId)
+      .in(
+        "member_id",
+        members.length ? members.map((mm) => mm.id) : ["00000000-0000-0000-0000-000000000000"]
+      )
       .gte("date", format(monthStart, "yyyy-MM-dd"))
       .lte("date", format(monthEnd, "yyyy-MM-dd")),
     supabase.from("v_leave_balance").select("member_id, balance"),
@@ -66,7 +70,6 @@ export default async function AttendancePage({
       ? supabase
           .from("attendance")
           .select("id, status, check_in_at, check_out_at, hours")
-          .eq("team_id", teamId)
           .eq("member_id", me.id)
           .eq("date", format(new Date(), "yyyy-MM-dd"))
           .maybeSingle()

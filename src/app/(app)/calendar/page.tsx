@@ -66,8 +66,14 @@ export default async function CalendarPage({
       .is("done_at", null),
     supabase
       .from("attendance")
+      // attendance has no team_id — scope by current-org members
       .select("date, status, member_id")
-      .eq("team_id", teamId)
+      .in(
+        "member_id",
+        teamMembers.length
+          ? teamMembers.map((mm) => mm.id)
+          : ["00000000-0000-0000-0000-000000000000"]
+      )
       .gte("date", isoStart)
       .lte("date", isoEnd)
       .in("status", ["leave", "half_day"]),
