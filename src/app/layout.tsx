@@ -6,10 +6,19 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Xeltrix Team",
-  description: "Team CRM, attendance, and sales dashboard for Xeltrix Chemicals.",
+  title: "Xeltrix Team — Run Your Team from One Screen",
+  description:
+    "Attendance, tasks, daily workflows, passwordless sign-in, staff PINs, and Zoho CRM sync — everything your team needs in one place.",
   manifest: "/manifest.webmanifest",
   applicationName: "Xeltrix Team",
+  keywords: ["team management", "attendance", "tasks", "Zoho CRM", "staff management", "small business"],
+  openGraph: {
+    title: "Xeltrix Team — Run Your Team from One Screen",
+    description:
+      "Attendance, tasks, daily workflows, passwordless sign-in, staff PINs, and Zoho CRM sync — everything your team needs in one place.",
+    type: "website",
+    siteName: "Xeltrix Team",
+  },
   appleWebApp: {
     capable: true,
     title: "Xeltrix",
