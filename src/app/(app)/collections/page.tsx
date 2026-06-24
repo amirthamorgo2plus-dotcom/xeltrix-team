@@ -103,12 +103,10 @@ export default async function CollectionsPage({
   }
 
   // ── Salesperson name helper ───────────────────────────────────────────────
-  const memberMap = new Map(
-    members.map((m) => [
-      m.id,
-      ((m.profiles as unknown) as { full_name?: string } | null)?.full_name ?? m.email,
-    ])
-  );
+  function memberName(m: typeof members[number]) {
+    return ((m.profiles as unknown) as { full_name?: string } | null)?.full_name ?? m.id;
+  }
+  const memberMap = new Map(members.map((m) => [m.id, memberName(m)]));
   function salespersonLabel(r: Row) {
     return r.zoho_salesperson_name ?? memberMap.get(r.owner_id ?? "") ?? "Unassigned";
   }
@@ -183,7 +181,7 @@ export default async function CollectionsPage({
                   : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
               }`}
             >
-              {m.full_name ?? m.email}
+              {memberName(m)}
             </Link>
           ))}
         </div>
