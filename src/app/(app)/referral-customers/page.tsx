@@ -2,17 +2,12 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
-import { LinkCustomerForm } from "./link-customer-form";
+import { LinkCustomerForm, QuickLinkButton } from "./link-customer-form";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
 
-export default async function ReferralCustomersPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ link_lead?: string; link_referrer?: string }>;
-}) {
-  const sp = await searchParams;
+export default async function ReferralCustomersPage() {
   const m = await getMyMembership();
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const supabase = await createClient();
@@ -86,13 +81,7 @@ export default async function ReferralCustomersPage({
         <p className="text-sm text-zinc-500">Customers who were referred by someone. Track their commission structure.</p>
       </div>
 
-      <LinkCustomerForm
-        teamId={teamId}
-        leads={sp.link_lead ? (leads ?? []) : unlinkedLeads}
-        referrers={referrers ?? []}
-        defaultLeadId={sp.link_lead}
-        defaultReferrerId={sp.link_referrer}
-      />
+      <LinkCustomerForm teamId={teamId} leads={unlinkedLeads} referrers={referrers ?? []} />
 
       {/* Auto-detected from Zoho */}
       {detected.length > 0 && (
@@ -127,12 +116,13 @@ export default async function ReferralCustomersPage({
                       <td className="py-2.5 pr-4 text-zinc-500 text-xs">{d.salesperson}</td>
                       <td className="py-2.5">
                         {d.lead_id ? (
-                          <a
-                            href={`/referral-customers?link_lead=${d.lead_id}&link_referrer=${d.referrerId}`}
-                            className="rounded-md border border-[#b5c76a]/30 bg-[#b5c76a]/10 px-3 py-1 text-xs text-[#b5c76a] hover:bg-[#b5c76a]/20 transition-colors"
-                          >
-                            Link →
-                          </a>
+                          <QuickLinkButton
+                            teamId={teamId}
+                            leads={leads ?? []}
+                            referrers={referrers ?? []}
+                            leadId={d.lead_id}
+                            referrerId={d.referrerId}
+                          />
                         ) : (
                           <span className="text-xs text-zinc-600">No lead record</span>
                         )}
