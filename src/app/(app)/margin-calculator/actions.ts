@@ -17,66 +17,34 @@ export async function parsePdfInvoice(fd: FormData): Promise<{ rows: ParsedRow[]
     const pdf = await getDocumentProxy(buf);
     const { text } = await extractText(pdf, { mergePages: true });
 
+    // unpdf returns the whole document as one continuous string (no newlines).
+    // Isolate the line-items region: after the "Qty Rate Amount" header,
+    // and before the "Sub Total" / totals section.
+    let region = text;
+    const headerMatch = /Qty\s+Rate\s+Amount/i.exec(region);
+    if (headerMatch) region = region.slice(headerMatch.index + headerMatch[0].length);
+    const endMatch = /Sub\s*Total/i.exec(region);
+    if (endMatch) region = region.slice(0, endMatch.index);
+    // Drop page-break artifacts like "POWERED BY 2"
+    region = region.replace(/POWERED BY\s*\d*/gi, " ");
+
+    // Each row: <rownum> <NAME> <qty> [unit] <rate> <amount>
+    //   qty / rate / amount are decimals (e.g. 25.00, 4,000.00)
+    //   unit is an optional word between qty and rate (Nos, pac, ltr…)
+    //   the NAME may contain digits without decimals (e.g. CAN-2L)
+    const rowRe = /(\d{1,3})\s+(.+?)\s+(\d+\.\d{2})\s+(?:([A-Za-z]+)\s+)?([\d,]+\.\d{2})\s+([\d,]+\.\d{2})/g;
     const rows: ParsedRow[] = [];
-    const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
-
-    // Pattern: line starting with a row number, ending with 3+ decimal numbers
-    // e.g. "1 SYNTHETIC BROOM 25.00 160.00 4,000.00"
-    // Accumulate multi-line item names
-    let pending: { name: string; nums: number[] } | null = null;
-
-    for (const line of lines) {
-      // Try to detect a new numbered row: starts with digits followed by non-digit
-      const rowStart = /^(\d{1,3})\s+(.+)$/.exec(line);
-      // Extract all numbers from end of the line
-      const numMatches = [...line.matchAll(/([\d,]+\.?\d{0,2})/g)];
-      const nums = numMatches.map((m) => parseNum(m[1]));
-
-      if (rowStart) {
-        // Save previous pending row first
-        if (pending && pending.nums.length >= 2) {
-          const n = pending.nums;
-          // Last = amount, second-to-last = rate, third-to-last = qty
-          const rate = n[n.length - 2];
-          const qty = n[n.length - 3] ?? 1;
-          if (rate > 0) rows.push({ name: pending.name.trim(), qty, rate });
-        }
-        // Start new row
-        const firstNum = nums[0];
-        const rowNum = parseInt(rowStart[1]);
-        // Only treat as table row if first number is the row number
-        if (firstNum === rowNum || isNaN(firstNum)) {
-          const restText = rowStart[2];
-          pending = { name: restText.replace(/([\d,]+\.?\d*\s*)+$/, "").trim(), nums };
-        } else {
-          pending = null;
-        }
-      } else if (pending && nums.length > 0) {
-        // Continuation line — accumulate numbers
-        pending.nums.push(...nums);
-        // If line has only numbers it's probably the rest of the row
-        if (/^[\d\s,\.]+$/.test(line)) {
-          // numbers-only continuation, skip adding to name
-        } else {
-          pending.name += " " + line.replace(/([\d,]+\.?\d*\s*)+$/, "").trim();
-        }
+    let mm: RegExpExecArray | null;
+    while ((mm = rowRe.exec(region)) !== null) {
+      const name = mm[2].trim();
+      const qty = parseNum(mm[3]);
+      const rate = parseNum(mm[5]);
+      if (name.length > 1 && rate > 0) {
+        rows.push({ name, qty: qty || 1, rate });
       }
     }
 
-    // Flush last pending row
-    if (pending && pending.nums.length >= 2) {
-      const n = pending.nums;
-      const rate = n[n.length - 2];
-      const qty = n[n.length - 3] ?? 1;
-      if (rate > 0) rows.push({ name: pending.name.trim(), qty, rate });
-    }
-
-    // Filter out header-like rows and rows with no name
-    const filtered = rows.filter(
-      (r) => r.name.length > 1 && r.rate > 0 && !r.name.toUpperCase().includes("S.NO") && !r.name.toUpperCase().includes("ITEM &")
-    );
-
-    return { rows: filtered, error: null };
+    return { rows, error: null };
   } catch (e) {
     return { rows: [], error: String(e) };
   }
