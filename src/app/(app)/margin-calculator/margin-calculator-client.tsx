@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { parsePdfInvoice } from "./actions";
+import { VisitMap } from "../visits/visit-map";
 
 type Template = { id: string; name: string; sku: string | null; rate: number | null; cost_price: number | null; unit: string | null };
 type Customer = { id: string; company_name: string };
@@ -369,39 +370,58 @@ export function MarginCalculatorClient({
           Add delivery cost estimate
         </label>
         {deliveryOn && (
-          <div className="mt-3 flex flex-wrap items-end gap-4">
-            <div>
-              <label className="mb-1 block text-[11px] text-zinc-500">Distance (km)</label>
-              <input
-                type="number" min="0" step="0.1"
-                value={manualKm}
-                onChange={(e) => setManualKm(e.target.value)}
-                placeholder={autoKm != null ? autoKm.toFixed(1) : "enter km"}
-                className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
-              />
+          <div className="mt-3 grid gap-4 md:grid-cols-[1fr_auto]">
+            {/* Controls */}
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] text-zinc-500">Distance (km)</label>
+                  <input
+                    type="number" min="0" step="0.1"
+                    value={manualKm}
+                    onChange={(e) => setManualKm(e.target.value)}
+                    placeholder={autoKm != null ? autoKm.toFixed(1) : "enter km"}
+                    className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] text-zinc-500">Delivery ₹ (override)</label>
+                  <input
+                    type="number" min="0" step="1"
+                    value={deliveryOverride}
+                    onChange={(e) => setDeliveryOverride(e.target.value)}
+                    placeholder={autoDeliveryCost != null ? autoDeliveryCost.toFixed(0) : "—"}
+                    className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-[#b5c76a] focus:border-[#b5c76a] focus:outline-none tabular-nums"
+                  />
+                </div>
+                <div className="pb-1 text-sm">
+                  <span className="text-zinc-500 text-xs">Delivery:</span>{" "}
+                  <span className="font-semibold text-zinc-100 tabular-nums">{fmt(deliveryCost)}</span>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-500">
+                {autoKm != null
+                  ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> straight-line from Coimbatore · ₹{delivery.perKm}/km</>
+                  : <span className="text-amber-400">
+                      Customer not geocoded — add it on the{" "}
+                      <a href="/visits" className="underline hover:text-amber-300">Visits</a> page (Geocode customers), or enter distance manually. Otherwise leave it.
+                    </span>}
+              </p>
             </div>
-            <div className="text-xs text-zinc-500">
-              {autoKm != null
-                ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> from Coimbatore · ₹{delivery.perKm}/km</>
-                : <span className="text-amber-400">
-                    Customer not geocoded — add it on the{" "}
-                    <a href="/visits" className="underline hover:text-amber-300">Visits</a> page (Geocode customers), or enter distance manually. Otherwise leave it.
-                  </span>}
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] text-zinc-500">Delivery cost ₹ (override)</label>
-              <input
-                type="number" min="0" step="1"
-                value={deliveryOverride}
-                onChange={(e) => setDeliveryOverride(e.target.value)}
-                placeholder={autoDeliveryCost != null ? autoDeliveryCost.toFixed(0) : "—"}
-                className="w-32 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-[#b5c76a] focus:border-[#b5c76a] focus:outline-none tabular-nums"
-              />
-            </div>
-            <div className="text-sm">
-              <span className="text-zinc-500 text-xs">Delivery:</span>{" "}
-              <span className="font-semibold text-zinc-100 tabular-nums">{fmt(deliveryCost)}</span>
-            </div>
+
+            {/* Mini route map (only when we have the customer's coordinates) */}
+            {destCoords && (
+              <div className="w-full md:w-72">
+                <VisitMap
+                  height={170}
+                  pins={[
+                    { id: "origin", lat: origin.lat, lng: origin.lng, label: "Xeltrix (Coimbatore)" },
+                    { id: "dest", lat: destCoords.lat, lng: destCoords.lng, label: customerName, kind: "customer" },
+                  ]}
+                  routePath={[[origin.lat, origin.lng], [destCoords.lat, destCoords.lng]]}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
