@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
-import { SortControl, resolveSort } from "@/components/sort-control";
+import { resolveSort } from "@/components/sort-control";
 import { CostPriceCell } from "./cost-price-cell";
 
 function fmtMoney(v: number | null, currency = "INR") {
@@ -47,7 +47,9 @@ export default async function TemplatesPage({
     sp.status === "active" || sp.status === "inactive" ? sp.status : "all";
   const cat: CategoryKey =
     (CATEGORIES.find((c) => c.prefix === sp.cat)?.prefix) ?? "all";
-  const sort = resolveSort(sp.sort, { withNewest: false });
+  const marginSort: "margin_asc" | "margin_desc" | null =
+    sp.sort === "margin_asc" ? "margin_asc" : sp.sort === "margin_desc" ? "margin_desc" : null;
+  const sort = marginSort ? resolveSort(undefined, { withNewest: false }) : resolveSort(sp.sort, { withNewest: false });
 
   const settings = await getTeamSettings();
   const currency = settings?.currency || "INR";
@@ -71,13 +73,26 @@ export default async function TemplatesPage({
   const { data: rawTemplates } = await query.limit(500);
 
   // Category filter applied in-memory (prefix on name)
-  const templates = cat === "all"
+  let templates = cat === "all"
     ? (rawTemplates ?? [])
     : (rawTemplates ?? []).filter((t) => categoryOf(t.name) === cat);
 
+  // Margin sort applied in-memory (margin % not a DB column)
+  if (marginSort) {
+    templates = [...templates].sort((a, b) => {
+      const mA = a.cost_price != null && Number(a.rate) > 0 ? ((Number(a.rate) - Number(a.cost_price)) / Number(a.rate)) * 100 : null;
+      const mB = b.cost_price != null && Number(b.rate) > 0 ? ((Number(b.rate) - Number(b.cost_price)) / Number(b.rate)) * 100 : null;
+      if (mA == null && mB == null) return 0;
+      if (mA == null) return 1;   // nulls last
+      if (mB == null) return -1;
+      return marginSort === "margin_asc" ? mA - mB : mB - mA;
+    });
+  }
+
+  const currentSortKey = marginSort ?? sort.key;
   function buildParams(overrides: Record<string, string | undefined>) {
     const params = new URLSearchParams();
-    const merged = { q: q || undefined, status: status !== "all" ? status : undefined, cat: cat !== "all" ? cat : undefined, sort: sort.key !== "name_asc" ? sort.key : undefined, ...overrides };
+    const merged = { q: q || undefined, status: status !== "all" ? status : undefined, cat: cat !== "all" ? cat : undefined, sort: currentSortKey !== "name_asc" ? currentSortKey : undefined, ...overrides };
     for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
     return params.size ? `?${params}` : "";
   }
@@ -128,15 +143,18 @@ export default async function TemplatesPage({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>{templates.length} product{templates.length === 1 ? "" : "s"}{cat !== "all" ? ` · ${CATEGORIES.find(c => c.prefix === cat)?.label}` : ""}</CardTitle>
-            <SortControl
-              current={sort.key}
-              basePath="/templates"
-              withNewest={false}
-              params={{
-                q: q || undefined,
-                status: status !== "all" ? status : undefined,
-              }}
-            />
+            <div className="inline-flex items-center rounded-md border border-zinc-700 p-0.5 text-xs gap-0.5">
+              {(["name_asc","name_desc","margin_asc","margin_desc"] as const).map((k) => {
+                const labels: Record<string, string> = { name_asc: "A–Z", name_desc: "Z–A", margin_asc: "Margin ↑", margin_desc: "Margin ↓" };
+                const active = currentSortKey === k;
+                return (
+                  <Link key={k} href={`/templates${buildParams({ sort: k !== "name_asc" ? k : undefined })}`} scroll={false}
+                    className={`rounded px-2.5 py-1 transition-colors font-medium ${active ? "bg-[#b5c76a] text-[#1a1a1a]" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200"}`}>
+                    {labels[k]}
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
