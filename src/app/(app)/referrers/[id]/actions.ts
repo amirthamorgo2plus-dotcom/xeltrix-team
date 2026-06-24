@@ -1,6 +1,28 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+
+export async function updateReferrer(fd: FormData) {
+  const supabase = await createClient();
+  const num = (key: string) => {
+    const v = fd.get(key);
+    return v && String(v).trim() !== "" ? Number(v) : null;
+  };
+  const { error } = await supabase.from("referrers").update({
+    name: (fd.get("name") as string).trim(),
+    phone: (fd.get("phone") as string | null)?.trim() || null,
+    email: (fd.get("email") as string | null)?.trim() || null,
+    bank_details: (fd.get("bank_details") as string | null)?.trim() || null,
+    default_pct: num("default_pct"),
+    traded_pct: num("traded_pct"),
+    manufactured_pct: num("manufactured_pct"),
+    first_invoice_pct: num("first_invoice_pct"),
+  }).eq("id", fd.get("id") as string);
+  if (error) return { error: error.message };
+  revalidatePath("/referrers");
+  return { error: null };
+}
 
 export async function addCommission(fd: FormData) {
   const supabase = await createClient();

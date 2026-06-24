@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { AddCommissionForm } from "./add-commission-form";
 import { MarkPaidPanel } from "./mark-paid-panel";
+import { EditReferrerForm } from "./edit-referrer-form";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
@@ -97,14 +98,45 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
-      <div className="flex flex-col gap-1">
-        <a href="/referrers" className="text-xs text-zinc-500 hover:text-zinc-300">← All Referrers</a>
-        <h1 className="text-2xl font-semibold">{referrer.name}</h1>
-        <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
-          {referrer.phone && <span>📞 {referrer.phone}</span>}
-          {referrer.email && <span>✉️ {referrer.email}</span>}
-          {referrer.bank_details && <span>🏦 {referrer.bank_details}</span>}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <a href="/referrers" className="text-xs text-zinc-500 hover:text-zinc-300">← All Referrers</a>
+          <h1 className="text-2xl font-semibold">{referrer.name}</h1>
+          <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
+            {referrer.phone && <span>📞 {referrer.phone}</span>}
+            {referrer.email && <span>✉️ {referrer.email}</span>}
+            {referrer.bank_details && <span>🏦 {referrer.bank_details}</span>}
+          </div>
         </div>
+        <EditReferrerForm referrer={{
+          id: referrer.id,
+          name: referrer.name,
+          phone: referrer.phone ?? "",
+          email: referrer.email ?? "",
+          bank_details: referrer.bank_details ?? "",
+          default_pct: referrer.default_pct,
+          traded_pct: referrer.traded_pct,
+          manufactured_pct: referrer.manufactured_pct,
+          first_invoice_pct: referrer.first_invoice_pct,
+        }} />
+      </div>
+
+      {/* Commission rates strip */}
+      <div className="flex flex-wrap gap-3">
+        {[
+          { label: "Default %", value: referrer.default_pct, hint: "All items" },
+          { label: "Traded %", value: referrer.traded_pct, hint: "R- items" },
+          { label: "Manufactured %", value: referrer.manufactured_pct, hint: "X- / PM- / RM-" },
+          { label: "1st Invoice %", value: referrer.first_invoice_pct, hint: "First order only" },
+        ].map(({ label, value, hint }) => (
+          <div key={label} className="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2.5 min-w-[110px]">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>
+            <p className="text-lg font-bold" style={{ color: value != null ? "#b5c76a" : "#52525b" }}>
+              {value != null ? `${value}%` : "—"}
+            </p>
+            <p className="text-[10px] text-zinc-600">{hint}</p>
+          </div>
+        ))}
       </div>
 
       {/* KPI strip */}
