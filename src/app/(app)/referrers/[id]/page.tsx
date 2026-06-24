@@ -51,20 +51,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const linkedLeadIds = new Set((links ?? []).map((l) => l.lead_id));
   const firstInvoiceUsedSet = new Set((links ?? []).filter((l) => l.first_invoice_used).map((l) => l.lead_id));
 
-  // Leads for this referrer
-  const { data: referralLeads } = await supabase
-    .from("leads")
-    .select("id, name, company_name, phone")
-    .eq("team_id", teamId)
-    .in("id", [...linkedLeadIds]);
-
-  // All leads for commission records display
-  const { data: allLeads } = await supabase
-    .from("leads")
-    .select("id, name, company_name")
-    .eq("team_id", teamId);
-
-  // ALL won invoices for linked customers
+  // ALL won invoices for linked customers — title is "INVOICE# · CUSTOMER NAME"
   const { data: invoices } = linkedLeadIds.size > 0
     ? await supabase
         .from("opportunities")
@@ -82,8 +69,15 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const paidTotal = (commissions ?? []).filter((c) => c.status === "paid").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
   const pendingIds = (commissions ?? []).filter((c) => c.status === "pending").map((c) => c.id);
 
-  const leadMap = new Map((allLeads ?? []).map((l) => [l.id, (l as { id: string; name: string; company_name: string | null }).company_name || l.name]));
-  const referralLeadMap = new Map((referralLeads ?? []).map((l) => [l.id, (l as { id: string; name: string; company_name: string | null }).company_name || l.name]));
+  // Resolve customer names from invoice titles (leads table is RLS-restricted)
+  const leadMap = new Map<string, string>();
+  for (const inv of invoices ?? []) {
+    if (!inv.lead_id || leadMap.has(inv.lead_id)) continue;
+    const nameFromTitle = inv.title?.split("·")[1]?.trim();
+    if (nameFromTitle) leadMap.set(inv.lead_id, nameFromTitle);
+  }
+  const referralLeadMap = leadMap;
+  const referralLeads = [...linkedLeadIds].map((id) => ({ id, name: leadMap.get(id) ?? "—" }));
   const linkMap = new Map((links ?? []).map((l) => [l.lead_id, l]));
 
   // Per-invoice commission calculation using referrer defaults
