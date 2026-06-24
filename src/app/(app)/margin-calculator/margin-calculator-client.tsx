@@ -1,14 +1,15 @@
 "use client";
 
 import { useState, useCallback, useRef } from "react";
-import { parsePdfInvoice, type ParsedRow } from "./actions";
+import { parsePdfInvoice } from "./actions";
 
 type Template = { id: string; name: string; sku: string | null; rate: number | null; cost_price: number | null; unit: string | null };
 type Customer = { id: string; company_name: string };
 type PriceList = { lead_id: string; item_id: string; custom_rate: number };
 type ReferralCustomer = { lead_id: string; referrer_id: string; traded_pct: number | null; manufactured_pct: number | null; default_pct: number | null; first_invoice_pct: number | null };
 
-type LineItem = { id: string; item_id: string; qty: number; override_rate: number | null; cost_override: number | null };
+// custom_name: for free-text rows (PDF import); item_id: for catalog rows
+type LineItem = { id: string; item_id: string; custom_name: string; qty: number; override_rate: number | null; cost_override: number | null };
 
 const CATEGORIES = [
   { prefix: "R-", key: "traded" as const },
@@ -42,10 +43,9 @@ export function MarginCalculatorClient({
   referralCustomers: ReferralCustomer[];
 }) {
   const [customerId, setCustomerId] = useState<string>("");
-  const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", qty: 1, override_rate: null, cost_override: null }]);
+  const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]);
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const [unmatched, setUnmatched] = useState<ParsedRow[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
@@ -72,55 +72,38 @@ export function MarginCalculatorClient({
     return Number(referral.default_pct ?? 0);
   }
 
-  // PDF upload handler
+  // PDF upload handler — add all rows as-is (no matching)
   async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setPdfParsing(true);
     setPdfError(null);
-    setUnmatched([]);
     const fd = new FormData();
     fd.set("pdf", file);
     const result = await parsePdfInvoice(fd);
     setPdfParsing(false);
     if (result.error) { setPdfError(result.error); return; }
 
-    const matched: LineItem[] = [];
-    const noMatch: ParsedRow[] = [];
+    const newLines: LineItem[] = result.rows.map((row) => ({
+      id: uid(),
+      item_id: "",
+      custom_name: row.name,
+      qty: row.qty,
+      override_rate: null,
+      cost_override: row.rate,
+    }));
 
-    for (const row of result.rows) {
-      // Fuzzy match: normalize names
-      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
-      const rowNorm = norm(row.name);
-      let best: Template | null = null;
-      let bestScore = 0;
-      for (const t of templates) {
-        const tNorm = norm(t.name);
-        if (tNorm === rowNorm) { best = t; bestScore = 100; break; }
-        if (tNorm.includes(rowNorm) || rowNorm.includes(tNorm)) {
-          const score = Math.min(tNorm.length, rowNorm.length) / Math.max(tNorm.length, rowNorm.length) * 100;
-          if (score > bestScore) { best = t; bestScore = score; }
-        }
-      }
-      if (best && bestScore >= 40) {
-        matched.push({ id: uid(), item_id: best.id, qty: row.qty, override_rate: null, cost_override: row.rate });
-      } else {
-        noMatch.push(row);
-      }
-    }
-
-    if (matched.length > 0) {
+    if (newLines.length > 0) {
       setLines((prev) => {
-        const hasEmpty = prev.length === 1 && prev[0].item_id === "";
-        return hasEmpty ? matched : [...prev, ...matched];
+        const hasEmpty = prev.length === 1 && prev[0].item_id === "" && prev[0].custom_name === "";
+        return hasEmpty ? newLines : [...prev, ...newLines];
       });
     }
-    setUnmatched(noMatch);
     // reset file input
     if (fileRef.current) fileRef.current.value = "";
   }
 
-  const addLine = useCallback(() => setLines((l) => [...l, { id: uid(), item_id: "", qty: 1, override_rate: null, cost_override: null }]), []);
+  const addLine = useCallback(() => setLines((l) => [...l, { id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]), []);
   const removeLine = useCallback((id: string) => setLines((l) => l.filter((x) => x.id !== id)), []);
   const updateLine = useCallback((id: string, patch: Partial<LineItem>) => {
     setLines((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -129,7 +112,7 @@ export function MarginCalculatorClient({
   // Totals
   let totalRevenue = 0, totalCost = 0, totalCommission = 0;
   const computed = lines.map((line) => {
-    const t = tMap.get(line.item_id);
+    const t = line.item_id ? tMap.get(line.item_id) : undefined;
     const stdSell = t ? sellingRate(line.item_id) : null;
     const sell = line.override_rate != null ? line.override_rate : (stdSell ?? 0);
     const cost = line.cost_override != null ? line.cost_override : (t?.cost_price != null ? Number(t.cost_price) : null);
@@ -190,15 +173,6 @@ export function MarginCalculatorClient({
         <span className="text-xs text-zinc-600">Upload a supplier invoice PDF — items + qty + cost price will be auto-filled</span>
       </div>
       {pdfError && <p className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-400">{pdfError}</p>}
-      {unmatched.length > 0 && (
-        <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm">
-          <p className="font-medium text-amber-400 mb-2">⚠️ {unmatched.length} item{unmatched.length > 1 ? "s" : ""} from PDF couldn't be matched to your catalog:</p>
-          <ul className="text-xs text-zinc-400 space-y-1">
-            {unmatched.map((r, i) => <li key={i}>{r.name} — Qty: {r.qty}, Rate: ₹{r.rate}</li>)}
-          </ul>
-          <p className="mt-2 text-xs text-zinc-500">Add them manually using "Add item" below, or sync Zoho to import these items.</p>
-        </div>
-      )}
 
       {/* Line items */}
       <div className="overflow-x-auto">
@@ -221,16 +195,26 @@ export function MarginCalculatorClient({
             {computed.map((line) => (
               <tr key={line.id} className="border-t border-zinc-800">
                 <td className="py-2 pr-3">
-                  <select
-                    value={line.item_id}
-                    onChange={(e) => updateLine(line.id, { item_id: e.target.value, override_rate: null })}
-                    className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none"
-                  >
-                    <option value="">— select item —</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
+                  {line.custom_name !== "" ? (
+                    <input
+                      type="text"
+                      value={line.custom_name}
+                      onChange={(e) => updateLine(line.id, { custom_name: e.target.value })}
+                      className="w-full rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none"
+                      placeholder="Item name"
+                    />
+                  ) : (
+                    <select
+                      value={line.item_id}
+                      onChange={(e) => updateLine(line.id, { item_id: e.target.value, override_rate: null })}
+                      className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none"
+                    >
+                      <option value="">— select item —</option>
+                      {templates.map((t) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td className="py-2 pr-3">
                   <input
