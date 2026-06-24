@@ -4,6 +4,7 @@ import { getMyMembership, getTeamMembers, getTeamSettings, firstDayOfMonth } fro
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiCard } from "@/components/kpi-card";
 import { TargetChart } from "@/components/target-chart";
+import { CollectionsChart } from "@/components/collections-chart";
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
@@ -108,7 +109,7 @@ export default async function DashboardPage({
       .in("status", ["open", "in_progress"]),
     supabase
       .from("opportunities")
-      .select("balance_due, owner_id")
+      .select("balance_due, owner_id, zoho_salesperson_name")
       .eq("team_id", teamId)
       .eq("stage", "won")
       .gt("balance_due", 0)
@@ -174,6 +175,19 @@ export default async function DashboardPage({
     0
   );
   const pendingCollCount = pendingCollRows?.length ?? 0;
+
+  // Collections chart: group by salesperson name
+  const collByPerson = new Map<string, number>();
+  for (const r of pendingCollRows ?? []) {
+    const label =
+      r.zoho_salesperson_name ??
+      (((members.find((m) => m.id === r.owner_id)?.profiles as unknown) as { full_name?: string } | null)?.full_name) ??
+      "Unassigned";
+    collByPerson.set(label, (collByPerson.get(label) ?? 0) + Number(r.balance_due ?? 0));
+  }
+  const collChartData = [...collByPerson.entries()]
+    .map(([name, pending]) => ({ name: name.split(" ")[0], pending }))
+    .sort((a, b) => b.pending - a.pending);
 
   // Chart data
   const chartData = members
@@ -307,6 +321,22 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Pending Collections by Salesperson</CardTitle>
+          <a href="/collections" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+            View details →
+          </a>
+        </CardHeader>
+        <CardContent>
+          {collChartData.length === 0 ? (
+            <EmptyState title="No outstanding collections" hint="All invoices are paid or balance data hasn't synced yet." />
+          ) : (
+            <CollectionsChart data={collChartData} currency={currency} />
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
