@@ -161,7 +161,7 @@ async function fetchTaxBreakdowns(
   ids: string[],
   opts: { concurrency?: number; deadlineMs?: number } = {}
 ): Promise<{
-  map: Map<string, { sub_total: number; tax_total: number }>;
+  map: Map<string, { sub_total: number; tax_total: number; balance?: number; due_date?: string | null; invoice_status?: string }>;
   attempted: number;
   succeeded: number;
   failed: number;
@@ -170,7 +170,7 @@ async function fetchTaxBreakdowns(
 }> {
   const concurrency = opts.concurrency ?? 3;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
-  const out = new Map<string, { sub_total: number; tax_total: number }>();
+  const out = new Map<string, { sub_total: number; tax_total: number; balance?: number; due_date?: string | null; invoice_status?: string }>();
   const key = resource === "invoices" ? "invoice" : "estimate";
   let succeeded = 0;
   let failed = 0;
@@ -178,15 +178,13 @@ async function fetchTaxBreakdowns(
   const errors: string[] = [];
 
   for (let i = 0; i < ids.length; i += concurrency) {
-    // Stop if we're about to blow the Vercel function timeout; remaining
-    // ids get picked up on the next sync (they still lack value_excl_tax).
     if (Date.now() > deadline) break;
     processed = i;
     const batch = ids.slice(i, i + concurrency);
     const results = await Promise.all(
       batch.map(async (id) => {
         try {
-          const res = await zohoFetch<Record<string, { sub_total?: number; tax_total?: number }>>(
+          const res = await zohoFetch<Record<string, { sub_total?: number; tax_total?: number; balance?: number; due_date?: string; status?: string }>>(
             integration,
             `/${resource}/${id}`
           );
@@ -195,7 +193,6 @@ async function fetchTaxBreakdowns(
             return { id, ok: false as const, error: `no '${key}' key in response` };
           }
           if (data.sub_total === undefined && data.tax_total === undefined) {
-            // Detail came back but no breakdown fields — unexpected
             return { id, ok: false as const, error: `${resource}/${id}: missing sub_total/tax_total` };
           }
           return {
@@ -203,6 +200,9 @@ async function fetchTaxBreakdowns(
             ok: true as const,
             sub_total: Number(data.sub_total ?? 0),
             tax_total: Number(data.tax_total ?? 0),
+            balance: data.balance !== undefined ? Number(data.balance) : undefined,
+            due_date: data.due_date ?? null,
+            invoice_status: data.status ?? undefined,
           };
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -212,7 +212,13 @@ async function fetchTaxBreakdowns(
     );
     results.forEach((r) => {
       if (r.ok) {
-        out.set(r.id, { sub_total: r.sub_total, tax_total: r.tax_total });
+        out.set(r.id, {
+          sub_total: r.sub_total,
+          tax_total: r.tax_total,
+          balance: r.balance,
+          due_date: r.due_date,
+          invoice_status: r.invoice_status,
+        });
         succeeded++;
       } else {
         failed++;
@@ -640,11 +646,18 @@ export async function syncFromZoho(
   // (so we don't overwrite previously-populated DB values with NULL).
   const invTaxFor = (inv: ZohoInvoice) => {
     const detail = invDetail.map.get(inv.invoice_id);
-    if (detail && (detail.sub_total > 0 || detail.tax_total > 0)) return detail;
-    if ((inv.sub_total ?? 0) > 0 || (inv.tax_total ?? 0) > 0) {
-      return { sub_total: inv.sub_total ?? 0, tax_total: inv.tax_total ?? 0 };
-    }
-    return undefined;
+    const hasTax = detail && (detail.sub_total > 0 || detail.tax_total > 0);
+    const tax = hasTax
+      ? { sub_total: detail.sub_total, tax_total: detail.tax_total }
+      : (inv.sub_total ?? 0) > 0 || (inv.tax_total ?? 0) > 0
+        ? { sub_total: inv.sub_total ?? 0, tax_total: inv.tax_total ?? 0 }
+        : undefined;
+    // Always prefer detail values for balance/due_date/status — list endpoint
+    // often returns stale or missing balance.
+    const balance = detail?.balance !== undefined ? detail.balance : (inv.balance ?? null);
+    const due_date = detail?.due_date !== undefined ? detail.due_date : toDateOrNull(inv.due_date);
+    const invoice_status = detail?.invoice_status ?? inv.status ?? null;
+    return tax ? { ...tax, balance, due_date, invoice_status } : { sub_total: 0, tax_total: 0, balance, due_date, invoice_status };
   };
 
   // Pass 1: for invoices with an estimate_id, update the existing proposal opp -> won
@@ -655,7 +668,7 @@ export async function syncFromZoho(
     if (!existingOppId) continue;
     linkedInvoiceIds.add(inv.invoice_id);
     const tax = invTaxFor(inv);
-    const stage = invoiceStageFor(inv.status);
+    const stage = invoiceStageFor(tax.invoice_status ?? inv.status);
     const updatePayload: Record<string, unknown> = {
       zoho_invoice_id: inv.invoice_id,
       zoho_customer_id: inv.customer_id,
@@ -663,24 +676,18 @@ export async function syncFromZoho(
       value: inv.total,
       stage,
       close_date: toDateOrNull(inv.date),
-      due_date: toDateOrNull(inv.due_date),
-      balance_due: inv.balance ?? null,
-      invoice_status: inv.status ?? null,
+      due_date: tax.due_date ?? toDateOrNull(inv.due_date),
+      balance_due: tax.balance ?? null,
+      invoice_status: tax.invoice_status ?? null,
       probability: stage === "won" ? 100 : stage === "lost" ? 0 : 50,
       zoho_salesperson_id: inv.salesperson_id ?? null,
       zoho_salesperson_name: inv.salesperson_name ?? null,
     };
-    // Keep owner_id in step with the invoice's salesperson. The proposal opp
-    // was owned per the *estimate's* salesperson; if the invoice carries a
-    // different (mapped) salesperson, ownership must follow it — otherwise the
-    // opp shows one name (salespersons page) but credits another member
-    // (targets/dashboard, which group by owner_id). Only override when the
-    // salesperson maps to a member, so manual opps / unmapped names are left be.
     const resolvedOwner = inv.salesperson_name
       ? salespersonToMember.get(inv.salesperson_name) ?? null
       : null;
     if (resolvedOwner) updatePayload.owner_id = resolvedOwner;
-    if (tax) {
+    if (tax.sub_total > 0 || tax.tax_total > 0) {
       updatePayload.value_excl_tax = tax.sub_total;
       updatePayload.tax_amount = tax.tax_total;
     }
@@ -691,7 +698,7 @@ export async function syncFromZoho(
   const unlinkedInvoices = invoices.filter((inv) => !linkedInvoiceIds.has(inv.invoice_id));
   const oppRows = unlinkedInvoices.map((inv) => {
     const tax = invTaxFor(inv);
-    const stage = invoiceStageFor(inv.status);
+    const stage = invoiceStageFor(tax.invoice_status ?? inv.status);
     const row: Record<string, unknown> = {
       team_id: integration.team_id,
       lead_id: customerToLead.get(inv.customer_id) ?? null,
@@ -701,16 +708,16 @@ export async function syncFromZoho(
       value: inv.total,
       stage,
       close_date: toDateOrNull(inv.date),
-      due_date: toDateOrNull(inv.due_date),
-      balance_due: inv.balance ?? null,
-      invoice_status: inv.status ?? null,
+      due_date: tax.due_date ?? toDateOrNull(inv.due_date),
+      balance_due: tax.balance ?? null,
+      invoice_status: tax.invoice_status ?? null,
       probability: stage === "won" ? 100 : stage === "lost" ? 0 : 50,
       zoho_salesperson_id: inv.salesperson_id ?? null,
       zoho_salesperson_name: inv.salesperson_name ?? null,
       owner_id:
         oppOwnerMapByInv.get(inv.invoice_id) ?? resolveOwner(inv.salesperson_name, defaultOwner),
     };
-    if (tax) {
+    if (tax.sub_total > 0 || tax.tax_total > 0) {
       row.value_excl_tax = tax.sub_total;
       row.tax_amount = tax.tax_total;
     }
