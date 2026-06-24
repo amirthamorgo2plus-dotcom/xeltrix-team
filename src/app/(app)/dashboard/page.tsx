@@ -1,4 +1,4 @@
-import { addDays, endOfMonth, format, getDay, getDate, parseISO, startOfMonth } from "date-fns";
+import { addDays, differenceInDays, endOfMonth, format, getDay, getDate, parseISO, startOfMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, firstDayOfMonth } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +109,7 @@ export default async function DashboardPage({
       .in("status", ["open", "in_progress"]),
     supabase
       .from("opportunities")
-      .select("balance_due, owner_id, zoho_salesperson_name")
+      .select("balance_due, due_date, owner_id, zoho_salesperson_name")
       .eq("team_id", teamId)
       .eq("stage", "won")
       .gt("balance_due", 0)
@@ -176,21 +176,36 @@ export default async function DashboardPage({
   );
   const pendingCollCount = pendingCollRows?.length ?? 0;
 
-  // Collections chart: group by salesperson name
-  const collByPerson = new Map<string, number>();
+  // Collections chart: group by salesperson + aging bucket
+  function agingKey(dueDateStr: string | null): "current" | "1-15" | "16-30" | "31-45" | "45+" {
+    if (!dueDateStr) return "current";
+    const days = differenceInDays(new Date(), parseISO(dueDateStr));
+    if (days <= 0) return "current";
+    if (days <= 15) return "1-15";
+    if (days <= 30) return "16-30";
+    if (days <= 45) return "31-45";
+    return "45+";
+  }
+  type CollRow = { current: number; "1-15": number; "16-30": number; "31-45": number; "45+": number; total: number };
+  const collByPerson = new Map<string, CollRow>();
   for (const r of pendingCollRows ?? []) {
     const label =
       r.zoho_salesperson_name ??
       (((members.find((m) => m.id === r.owner_id)?.profiles as unknown) as { full_name?: string } | null)?.full_name) ??
       "Unassigned";
-    collByPerson.set(label, (collByPerson.get(label) ?? 0) + Number(r.balance_due ?? 0));
+    const bucket = agingKey(r.due_date ?? null);
+    const amt = Number(r.balance_due ?? 0);
+    const prev = collByPerson.get(label) ?? { current: 0, "1-15": 0, "16-30": 0, "31-45": 0, "45+": 0, total: 0 };
+    prev[bucket] += amt;
+    prev.total += amt;
+    collByPerson.set(label, prev);
   }
   const collChartData = [...collByPerson.entries()]
-    .map(([name, pending]) => ({
-      name: name.length > 14 ? name.slice(0, 13) + "…" : name,
-      pending,
+    .map(([name, buckets]) => ({
+      name: name.length > 12 ? name.slice(0, 11) + "…" : name,
+      ...buckets,
     }))
-    .sort((a, b) => b.pending - a.pending);
+    .sort((a, b) => b.total - a.total);
 
   // Chart data
   const chartData = members
