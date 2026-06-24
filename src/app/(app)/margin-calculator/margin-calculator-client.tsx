@@ -409,9 +409,11 @@ export function MarginCalculatorClient({
               </p>
             </div>
 
-            {/* Mini route map (only when we have the customer's coordinates) */}
+            {/* Mini route map (only when we have the customer's coordinates).
+                `isolate relative z-0` contains Leaflet's high z-index panes/controls
+                so the map doesn't render on top of the rest of the page. */}
             {destCoords && (
-              <div className="w-full md:w-72">
+              <div className="isolate relative z-0 w-full md:w-72">
                 <VisitMap
                   height={170}
                   pins={[
