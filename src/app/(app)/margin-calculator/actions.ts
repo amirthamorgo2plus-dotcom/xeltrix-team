@@ -1,8 +1,6 @@
 "use server";
 
-// Direct lib import avoids pdf-parse hanging on test file load in Next.js
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (buf: Buffer) => Promise<{ text: string }>;
+import { extractText } from "unpdf";
 
 export type ParsedRow = { name: string; qty: number; rate: number };
 
@@ -15,9 +13,8 @@ export async function parsePdfInvoice(fd: FormData): Promise<{ rows: ParsedRow[]
   if (!file) return { rows: [], error: "No file uploaded" };
 
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
-    const result = await pdfParse(buf);
-    const text = result.text;
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const { text } = await extractText(buf, { mergePages: true });
 
     const rows: ParsedRow[] = [];
     const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
