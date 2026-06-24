@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
 
 function nullableNum(fd: FormData, key: string): number | null {
   const v = (fd.get(key) as string | null)?.trim();
@@ -22,5 +23,6 @@ export async function linkCustomer(fd: FormData) {
     notes: (fd.get("notes") as string | null)?.trim() || null,
   });
   if (error) return { error: error.message };
+  revalidatePath("/referral-customers");
   return { error: null };
 }

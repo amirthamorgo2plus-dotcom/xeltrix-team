@@ -12,17 +12,26 @@ export default async function ReferralCustomersPage() {
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const supabase = await createClient();
 
-  const [{ data: links }, { data: referrers }, { data: leads }, { data: commissions }, { data: wonOpps }] = await Promise.all([
+  const [{ data: links }, { data: referrers }, { data: commissions }, { data: wonOpps }, { data: allOpps }] = await Promise.all([
     supabase
       .from("lead_referrers")
       .select("id, lead_id, referrer_id, first_invoice_used, leads(name, company_name, phone)")
       .eq("team_id", teamId)
       .order("created_at", { ascending: false }),
     supabase.from("referrers").select("id, name").eq("team_id", teamId).order("name"),
-    supabase.from("leads").select("id, name, company_name, phone").eq("team_id", teamId).order("name"),
     supabase.from("referrer_commissions").select("lead_id, commission_amount, status").eq("team_id", teamId),
     supabase.from("opportunities").select("lead_id, zoho_salesperson_name, title").eq("team_id", teamId).neq("stage", "lost").ilike("zoho_salesperson_name", "%&%").limit(1000),
+    // Query leads via opportunities join — avoids direct leads table RLS issue
+    supabase.from("opportunities").select("lead_id, leads(id, name, company_name, phone)").eq("team_id", teamId).not("lead_id", "is", null).limit(2000),
   ]);
+
+  // Deduplicate leads from opportunities join
+  const leadDedupeMap = new Map<string, { id: string; name: string; company_name: string | null; phone: string | null }>();
+  for (const opp of allOpps ?? []) {
+    const l = (opp.leads as unknown) as { id: string; name: string; company_name: string | null; phone: string | null } | null;
+    if (l && l.id && !leadDedupeMap.has(l.id)) leadDedupeMap.set(l.id, l);
+  }
+  const leads = [...leadDedupeMap.values()].sort((a, b) => (a.company_name || a.name).localeCompare(b.company_name || b.name));
 
   const referrerMap = new Map((referrers ?? []).map((r) => [r.id, r.name]));
   const referrerByName = new Map((referrers ?? []).map((r) => [r.name.toLowerCase(), r]));
