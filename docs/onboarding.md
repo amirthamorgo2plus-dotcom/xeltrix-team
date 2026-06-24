@@ -1,77 +1,124 @@
-# Xeltrix Team — Quick Onboarding / விரைவு அறிமுகம்
+# Xeltrix Team — Onboarding Guide / அறிமுக வழிகாட்டி
 
-A short walkthrough of the everyday tools. / தினசரி பயன்படுத்தும் கருவிகளின் சுருக்கமான வழிகாட்டி.
-
----
-
-## 1. Margin Calculator — விலை & லாப கணக்கீடு
-
-**English**
-Use this to work out the profit on an order before quoting.
-
-1. **Customer** — pick an existing customer from the list, or type a new name.
-2. **Referred by** — choose the referrer (e.g. Dinesh). Their commission % loads automatically.
-3. **Date** — already set to today; change if needed.
-4. **Upload Quote PDF** — uploads a quotation; items, quantity and **selling price** fill in automatically.
-5. **Cost Price** — type the purchase/cost price for each item. Profit % appears instantly.
-6. **Commission %** — shows the referrer's default %. For a customer's **first invoice**, edit it to the first-invoice rate. Commission payable is shown.
-7. **Delivery (optional)** — tick "Add delivery cost estimate". For geocoded customers it auto-calculates distance from Coimbatore (₹15/km, editable). A small map shows the route.
-8. **Download PDF** — generates a clean report (customer, referrer, date, items, totals, commission, delivery) to print or save.
-
-**தமிழ்**
-ஒரு ஆர்டருக்கு விலை சொல்வதற்கு முன் லாபத்தைக் கணக்கிட இதைப் பயன்படுத்துங்கள்.
-
-1. **Customer (வாடிக்கையாளர்)** — பட்டியலில் இருந்து தேர்வு செய்யுங்கள், அல்லது புதிய பெயரைத் தட்டச்சு செய்யுங்கள்.
-2. **Referred by (யார் அறிமுகம்)** — அறிமுகப்படுத்தியவரைத் (உதா: Dinesh) தேர்வு செய்யுங்கள். அவரின் கமிஷன் % தானாக வரும்.
-3. **Date (தேதி)** — இன்றைய தேதி இருக்கும்; தேவைப்பட்டால் மாற்றலாம்.
-4. **Upload Quote PDF** — கோட்டேஷன் PDF-ஐ பதிவேற்றுங்கள்; பொருட்கள், அளவு, **விற்பனை விலை** தானாக நிரப்பப்படும்.
-5. **Cost Price (கொள்முதல் விலை)** — ஒவ்வொரு பொருளுக்கும் கொள்முதல் விலையைத் தட்டச்சு செய்யுங்கள். லாப % உடனே தெரியும்.
-6. **Commission %** — அறிமுகப்படுத்தியவரின் இயல்பு % காண்பிக்கும். **முதல் இன்வாய்ஸுக்கு** முதல்-இன்வாய்ஸ் விகிதத்தை திருத்துங்கள். செலுத்த வேண்டிய கமிஷன் தெரியும்.
-7. **Delivery (விருப்பம்)** — "Add delivery cost estimate" தேர்வு செய்யுங்கள். ஜியோகோட் செய்த வாடிக்கையாளர்களுக்கு கோயம்புத்தூரிலிருந்து தூரம் தானாக கணக்கிடப்படும் (₹15/கி.மீ, மாற்றலாம்). சிறிய வரைபடம் வழியைக் காண்பிக்கும்.
-8. **Download PDF** — அச்சிடவோ சேமிக்கவோ ஒரு சுத்தமான அறிக்கை உருவாக்கும்.
-
-> Tip / குறிப்பு: If a customer has no location, the delivery distance won't auto-fill — geocode them on the **Visits** page, or type the km manually, or leave it. / வாடிக்கையாளருக்கு இடம் இல்லையெனில் தூரம் தானாக வராது — **Visits** பக்கத்தில் ஜியோகோட் செய்யுங்கள், அல்லது கி.மீ-ஐ கைமுறையாகத் தட்டச்சு செய்யுங்கள்.
+A walkthrough of the whole app for new staff. Each item has English and Tamil.
+புதிய ஊழியர்களுக்கான முழு பயன்பாட்டு வழிகாட்டி. ஒவ்வொன்றும் ஆங்கிலம் & தமிழில்.
 
 ---
 
-## 2. Referral Customers — அறிமுக வாடிக்கையாளர்கள்
+## A. Getting Started / தொடங்குதல்
 
-**English**
-Link customers to the person who referred them, so commission can be tracked.
+**Command Center & Dashboard**
+- EN: Your home screen — shortcut tiles plus open leads, your role, and key numbers.
+- TA: உங்கள் முகப்புத் திரை — குறுக்குவழிகள், திறந்த லீட்ஸ், உங்கள் பங்கு, முக்கிய எண்கள்.
 
-1. Open **Referral Customers**.
-2. Customers detected from Zoho ("Main & Referrer" in the salesperson field) appear under **Detected**. Click **Link →** to confirm.
-3. Or use **+ Link Customer to Referrer** to link manually — pick the customer and the referrer.
-4. Linked customers show in the list with their referrer.
-
-**தமிழ்**
-வாடிக்கையாளர்களை அவர்களை அறிமுகப்படுத்தியவருடன் இணையுங்கள், கமிஷனைக் கண்காணிக்க.
-
-1. **Referral Customers** பக்கத்தைத் திறங்கள்.
-2. Zoho-வில் இருந்து கண்டறியப்பட்ட வாடிக்கையாளர்கள் **Detected** பகுதியில் வரும். **Link →** அழுத்தி உறுதிப்படுத்துங்கள்.
-3. அல்லது **+ Link Customer to Referrer** மூலம் கைமுறையாக இணையுங்கள் — வாடிக்கையாளர் & அறிமுகப்படுத்தியவரைத் தேர்வு செய்யுங்கள்.
-4. இணைக்கப்பட்ட வாடிக்கையாளர்கள் பட்டியலில் தெரிவார்கள்.
+**Profile**
+- EN: Update your name, phone and photo. Switch organisation here if you belong to more than one.
+- TA: பெயர், தொலைபேசி, புகைப்படம் புதுப்பிக்கவும். பல நிறுவனங்களில் இருந்தால் இங்கே மாற்றலாம்.
 
 ---
 
-## 3. Referrer Commission — அறிமுகப்படுத்தியவர் கமிஷன்
+## B. Attendance & Calendar / வருகை & நாட்காட்டி
 
-**English**
-See and report commission for each referrer.
+**Attendance**
+- EN: Check in when you start, check out when you finish. Summary shows monthly hours. Working Sundays / 1st Saturdays / holidays earns comp-off (never expires).
+- TA: தொடங்கும்போது செக்-இன், முடிக்கும்போது செக்-அவுட். Summary மாதாந்திர நேரம் காண்பிக்கும். ஞாயிறு / முதல் சனி / விடுமுறையில் வேலை செய்தால் ஈட்டப்பட்ட விடுப்பு கிடைக்கும்.
 
-1. Open **Referrers** and click a name (e.g. Dinesh).
-2. Set the rates with **Edit** — Default %, Traded %, Manufactured %, 1st Invoice %.
-3. **Referred Customer Invoices** lists all their customers' invoices. Commission is calculated on the **pre-GST value**; the **earliest invoice per customer** uses the 1st-invoice %.
-4. Click **Download PDF** for a commission statement.
-
-**தமிழ்**
-ஒவ்வொரு அறிமுகப்படுத்தியவரின் கமிஷனைப் பார்க்க & அறிக்கை எடுக்க.
-
-1. **Referrers** திறந்து ஒரு பெயரை அழுத்துங்கள் (உதா: Dinesh).
-2. **Edit** மூலம் விகிதங்களை அமைக்கவும் — Default %, Traded %, Manufactured %, 1st Invoice %.
-3. **Referred Customer Invoices** அவர்களின் வாடிக்கையாளர்களின் இன்வாய்ஸுகளைக் காண்பிக்கும். கமிஷன் **GST-க்கு முன் தொகையில்** கணக்கிடப்படும்; ஒவ்வொரு வாடிக்கையாளரின் **முதல் இன்வாய்ஸ்** முதல்-இன்வாய்ஸ் % பயன்படுத்தும்.
-4. கமிஷன் அறிக்கைக்கு **Download PDF** அழுத்துங்கள்.
+**Holidays & Calendar**
+- EN: Holidays lists official days off. Calendar overlays holidays, leaves, tasks and follow-ups by date.
+- TA: Holidays அதிகாரப்பூர்வ விடுமுறைகள். Calendar விடுமுறை, விடுப்பு, பணிகள், ஃபாலோ-அப்களை தேதி வாரியாகக் காண்பிக்கும்.
 
 ---
 
-*Questions? Ask the admin. / கேள்விகள்? நிர்வாகியிடம் கேளுங்கள்.*
+## C. Leads & Sales / லீட்ஸ் & விற்பனை
+
+**Leads**
+- EN: All inbound prospects. Add name/phone/source; update status (new → contacted → qualified → converted); add an address to plot on the map.
+- TA: அனைத்து புதிய வாய்ப்புகள். பெயர்/தொலைபேசி/மூலம் சேர்க்கவும்; நிலையை மாற்றவும்; வரைபடத்தில் காட்ட முகவரி சேர்க்கவும்.
+
+**Pipeline & Quotes**
+- EN: Pipeline shows each deal by stage. Quotes lists quotations synced from Zoho with value and status.
+- TA: Pipeline ஒவ்வொரு டீலையும் கட்டம் வாரியாகக் காண்பிக்கும். Quotes Zoho கோட்டேஷன்களை மதிப்பு & நிலையுடன் காண்பிக்கும்.
+
+**Follow-ups & Complaints**
+- EN: Follow-ups are dated reminders to contact a lead. Complaints logs customer issues to resolve and track.
+- TA: Follow-ups தேதியிட்ட நினைவூட்டல்கள். Complaints வாடிக்கையாளர் பிரச்சினைகளைப் பதிவு செய்யும்.
+
+**Visits**
+- EN: Field check-ins record your GPS. The map plots customers; use "Geocode customers" to add coordinates from addresses.
+- TA: கள வருகை உங்கள் GPS-ஐப் பதிவு செய்யும். வரைபடம் வாடிக்கையாளர்களைக் காட்டும்; முகவரியிலிருந்து இடம் சேர்க்க "Geocode customers" பயன்படுத்துங்கள்.
+- 💡 Geocoding here is what lets the Margin Calculator estimate delivery distance. / இங்கே ஜியோகோடிங் செய்தால்தான் Margin Calculator டெலிவரி தூரத்தைக் கணக்கிடும்.
+
+---
+
+## D. Money & Targets / பணம் & இலக்குகள்
+
+**Collections**
+- EN: Outstanding invoice balances per salesperson — plan payment follow-ups.
+- TA: விற்பனையாளர் வாரியாக வசூலிக்க வேண்டிய தொகை — வசூல் ஃபாலோ-அப் திட்டமிடவும்.
+
+**Expenses & Payments**
+- EN: Submit expenses with amount/category/customer. Payments (admins) shows what's due to staff/vendors.
+- TA: தொகை/வகை/வாடிக்கையாளருடன் செலவைச் சமர்ப்பிக்கவும். Payments (நிர்வாகி) செலுத்த வேண்டியதைக் காண்பிக்கும்.
+
+**Payment QR**
+- EN: Show this QR to a customer to collect payment instantly.
+- TA: உடனடியாக பணம் பெற வாடிக்கையாளருக்கு இந்த QR-ஐக் காட்டுங்கள்.
+
+**Targets & Performance**
+- EN: Targets shows goal vs. achieved. Salesperson performance ranks the team by results.
+- TA: Targets இலக்கை vs. அடைந்ததைக் காண்பிக்கும். Salesperson performance குழுவை வரிசைப்படுத்தும்.
+
+---
+
+## E. Products & Pricing / பொருட்கள் & விலை
+
+**Product Price List**
+- EN: Your catalog from Zoho — selling price, cost price, margin. Edit a cost price inline; sort by margin to find low-profit items.
+- TA: Zoho-விலிருந்து உங்கள் பொருட்கள் — விற்பனை விலை, கொள்முதல் விலை, மார்ஜின். கொள்முதல் விலையைத் திருத்தவும்; குறைந்த லாப பொருட்களைக் காண மார்ஜின் வாரியாக வரிசைப்படுத்தவும்.
+
+**Customer Price Lists**
+- EN: Special prices for specific customers (set per item or bulk-upload CSV). These load automatically in the Margin Calculator.
+- TA: குறிப்பிட்ட வாடிக்கையாளர்களுக்கான சிறப்பு விலைகள் (பொருள் வாரியாக அல்லது CSV). இவை Margin Calculator-ல் தானாக வரும்.
+
+**Margin Calculator**
+1. EN: Customer — pick existing or type a new name. / TA: இருப்பவரைத் தேர்வு செய்யுங்கள் அல்லது புதிய பெயர்.
+2. EN: Referred by — choose the referrer; commission % loads automatically. / TA: அறிமுகப்படுத்தியவரைத் தேர்வு செய்யுங்கள்; கமிஷன் % தானாக வரும்.
+3. EN: Add items two ways — (a) pick an item from the dropdown (cost + selling price load from our system), or (b) Upload Quote PDF to fill items, qty and selling price. / TA: பொருட்களைச் சேர்க்க: (அ) drop-down-ல் தேர்வு (கொள்முதல் & விற்பனை விலை சிஸ்டத்திலிருந்து வரும்), அல்லது (ஆ) Upload Quote PDF.
+4. EN: Cost Price — auto for catalog items; type it for new items. Profit % shows instantly. / TA: Cost Price — பட்டியல் பொருட்களுக்கு தானாக; புதியதற்கு தட்டச்சு. லாப % உடனே.
+5. EN: Commission % — defaults to referrer's rate; edit for a first invoice. / TA: Commission % — இயல்பு விகிதம்; முதல் இன்வாய்ஸுக்கு திருத்தவும்.
+6. EN: Delivery (optional) — estimates distance from Coimbatore (₹15/km, editable) with a route map. / TA: Delivery (விருப்பம்) — கோயம்புத்தூரிலிருந்து தூரம் (₹15/கி.மீ) + வரைபடம்.
+7. EN: Download PDF — a clean report with items, totals, commission and delivery. / TA: Download PDF — பொருட்கள், மொத்தம், கமிஷன், டெலிவரி அறிக்கை.
+- 💡 Selecting the customer first loads their special prices and referral commission. / முதலில் வாடிக்கையாளரைத் தேர்வு செய்தால் சிறப்பு விலை & கமிஷன் தானாக ஏற்றப்படும்.
+
+---
+
+## F. Referrals & Commission / அறிமுகம் & கமிஷன்
+
+**Referral Customers**
+- EN: Detected from Zoho appear under "Detected" — click "Link →". Or use "+ Link Customer to Referrer" manually.
+- TA: Zoho-வில் கண்டறியப்பட்டவர்கள் "Detected"-ல் வரும் — "Link →" அழுத்துங்கள். அல்லது "+ Link Customer to Referrer" கைமுறையாக.
+
+**Referrers & Commission**
+- EN: Open Referrers → a name → Edit to set rates (Default %, 1st Invoice %, etc.). "Referred Customer Invoices" lists all invoices; commission is on the pre-GST value; the earliest invoice per customer uses the 1st-invoice rate. Download PDF for a statement.
+- TA: Referrers → பெயர் → Edit மூலம் விகிதங்கள். "Referred Customer Invoices" அனைத்து இன்வாய்ஸ்; கமிஷன் GST-க்கு முன் தொகையில்; முதல் இன்வாய்ஸ் முதல்-இன்வாய்ஸ் விகிதம். அறிக்கைக்கு Download PDF.
+
+---
+
+## G. Tasks / பணிகள்
+
+**Tasks & Routines**
+- EN: Tasks lists your to-dos with due dates. Pending report shows overdue items. Routines (admins) auto-create repeating tasks.
+- TA: Tasks செய்ய வேண்டியவை தேதியுடன். Pending report தாமதமானவை. Routines (நிர்வாகி) மீண்டும் வரும் பணிகளை தானாக உருவாக்கும்.
+
+---
+
+## H. Admin (Managers) / நிர்வாகம் (மேலாளர்கள்)
+
+**Team & Integrations**
+- EN: Team members — add staff, set roles, map them to Zoho salesperson names. Integrations — connect Zoho Books so products, invoices and customers sync in.
+- TA: Team members — ஊழியர்களைச் சேர்த்து, பங்குகள், Zoho பெயர்களுடன் இணைக்கவும். Integrations — Zoho Books இணைத்தால் பொருட்கள்/இன்வாய்ஸ்/வாடிக்கையாளர்கள் ஒத்திசைக்கும்.
+
+---
+
+*This guide is also available inside the app under "Help". / இந்த வழிகாட்டி பயன்பாட்டில் "Help"-ல் கிடைக்கும்.*
+*Questions? Ask your admin or manager. / கேள்விகள்? உங்கள் நிர்வாகி அல்லது மேலாளரிடம் கேளுங்கள்.*
