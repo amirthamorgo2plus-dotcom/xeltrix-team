@@ -81,7 +81,11 @@ export default async function ReferralCustomersPage() {
         <p className="text-sm text-zinc-500">Customers who were referred by someone. Track their commission structure.</p>
       </div>
 
-      <LinkCustomerForm teamId={teamId} leads={unlinkedLeads} referrers={referrers ?? []} />
+      <LinkCustomerForm
+        teamId={teamId}
+        leads={unlinkedLeads.map((l) => ({ id: l.id, name: l.company_name || l.name, phone: l.phone }))}
+        referrers={referrers ?? []}
+      />
 
       {/* Auto-detected from Zoho */}
       {detected.length > 0 && (

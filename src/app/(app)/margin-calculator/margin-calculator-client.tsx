@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { parsePdfInvoice, type ParsedRow } from "./actions";
 
 type Template = { id: string; name: string; sku: string | null; rate: number | null; cost_price: number | null; unit: string | null };
 type Customer = { id: string; company_name: string };
 type PriceList = { lead_id: string; item_id: string; custom_rate: number };
 type ReferralCustomer = { lead_id: string; referrer_id: string; traded_pct: number | null; manufactured_pct: number | null; default_pct: number | null; first_invoice_pct: number | null };
 
-type LineItem = { id: string; item_id: string; qty: number; override_rate: number | null };
+type LineItem = { id: string; item_id: string; qty: number; override_rate: number | null; cost_override: number | null };
 
 const CATEGORIES = [
   { prefix: "R-", key: "traded" as const },
@@ -41,7 +42,11 @@ export function MarginCalculatorClient({
   referralCustomers: ReferralCustomer[];
 }) {
   const [customerId, setCustomerId] = useState<string>("");
-  const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", qty: 1, override_rate: null }]);
+  const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", qty: 1, override_rate: null, cost_override: null }]);
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [unmatched, setUnmatched] = useState<ParsedRow[]>([]);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
   const plMap = new Map<string, number>();
@@ -67,7 +72,55 @@ export function MarginCalculatorClient({
     return Number(referral.default_pct ?? 0);
   }
 
-  const addLine = useCallback(() => setLines((l) => [...l, { id: uid(), item_id: "", qty: 1, override_rate: null }]), []);
+  // PDF upload handler
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPdfParsing(true);
+    setPdfError(null);
+    setUnmatched([]);
+    const fd = new FormData();
+    fd.set("pdf", file);
+    const result = await parsePdfInvoice(fd);
+    setPdfParsing(false);
+    if (result.error) { setPdfError(result.error); return; }
+
+    const matched: LineItem[] = [];
+    const noMatch: ParsedRow[] = [];
+
+    for (const row of result.rows) {
+      // Fuzzy match: normalize names
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+      const rowNorm = norm(row.name);
+      let best: Template | null = null;
+      let bestScore = 0;
+      for (const t of templates) {
+        const tNorm = norm(t.name);
+        if (tNorm === rowNorm) { best = t; bestScore = 100; break; }
+        if (tNorm.includes(rowNorm) || rowNorm.includes(tNorm)) {
+          const score = Math.min(tNorm.length, rowNorm.length) / Math.max(tNorm.length, rowNorm.length) * 100;
+          if (score > bestScore) { best = t; bestScore = score; }
+        }
+      }
+      if (best && bestScore >= 40) {
+        matched.push({ id: uid(), item_id: best.id, qty: row.qty, override_rate: null, cost_override: row.rate });
+      } else {
+        noMatch.push(row);
+      }
+    }
+
+    if (matched.length > 0) {
+      setLines((prev) => {
+        const hasEmpty = prev.length === 1 && prev[0].item_id === "";
+        return hasEmpty ? matched : [...prev, ...matched];
+      });
+    }
+    setUnmatched(noMatch);
+    // reset file input
+    if (fileRef.current) fileRef.current.value = "";
+  }
+
+  const addLine = useCallback(() => setLines((l) => [...l, { id: uid(), item_id: "", qty: 1, override_rate: null, cost_override: null }]), []);
   const removeLine = useCallback((id: string) => setLines((l) => l.filter((x) => x.id !== id)), []);
   const updateLine = useCallback((id: string, patch: Partial<LineItem>) => {
     setLines((l) => l.map((x) => (x.id === id ? { ...x, ...patch } : x)));
@@ -79,7 +132,7 @@ export function MarginCalculatorClient({
     const t = tMap.get(line.item_id);
     const stdSell = t ? sellingRate(line.item_id) : null;
     const sell = line.override_rate != null ? line.override_rate : (stdSell ?? 0);
-    const cost = t?.cost_price != null ? Number(t.cost_price) : null;
+    const cost = line.cost_override != null ? line.cost_override : (t?.cost_price != null ? Number(t.cost_price) : null);
     const commPct = t ? commissionPct(line.item_id) : 0;
 
     const revenue = sell * line.qty;
@@ -128,6 +181,25 @@ export function MarginCalculatorClient({
         )}
       </div>
 
+      {/* PDF upload */}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors ${pdfParsing ? "border-zinc-700 text-zinc-500" : "border-dashed border-zinc-600 text-zinc-400 hover:border-[#b5c76a]/50 hover:text-[#b5c76a]"}`}>
+          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Purchase PDF"}
+          <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={pdfParsing} />
+        </label>
+        <span className="text-xs text-zinc-600">Upload a supplier invoice PDF — items + qty + cost price will be auto-filled</span>
+      </div>
+      {pdfError && <p className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-400">{pdfError}</p>}
+      {unmatched.length > 0 && (
+        <div className="rounded-md border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm">
+          <p className="font-medium text-amber-400 mb-2">⚠️ {unmatched.length} item{unmatched.length > 1 ? "s" : ""} from PDF couldn't be matched to your catalog:</p>
+          <ul className="text-xs text-zinc-400 space-y-1">
+            {unmatched.map((r, i) => <li key={i}>{r.name} — Qty: {r.qty}, Rate: ₹{r.rate}</li>)}
+          </ul>
+          <p className="mt-2 text-xs text-zinc-500">Add them manually using "Add item" below, or sync Zoho to import these items.</p>
+        </div>
+      )}
+
       {/* Line items */}
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -137,7 +209,7 @@ export function MarginCalculatorClient({
               <th className="pb-2 pr-3 w-20 text-right">Qty</th>
               <th className="pb-2 pr-3 text-right">Sell Rate</th>
               <th className="pb-2 pr-3 text-right">Override Rate</th>
-              <th className="pb-2 pr-3 text-right">Cost</th>
+              <th className="pb-2 pr-3 text-right">Cost Price</th>
               <th className="pb-2 pr-3 text-right">Revenue</th>
               <th className="pb-2 pr-3 text-center">Gross %</th>
               <th className="pb-2 pr-3 text-right">Comm %</th>
@@ -184,8 +256,17 @@ export function MarginCalculatorClient({
                     className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-zinc-500 text-xs">
-                  {line.cost != null ? fmt(line.cost) : "—"}
+                <td className="py-2 pr-3">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="—"
+                    value={line.cost_override ?? (line.cost != null ? line.cost : "")}
+                    onChange={(e) => updateLine(line.id, { cost_override: e.target.value ? Number(e.target.value) : null })}
+                    className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm focus:border-[#b5c76a] focus:outline-none tabular-nums"
+                    style={{ color: line.cost_override != null ? "#b5c76a" : "#71717a" }}
+                  />
                 </td>
                 <td className="py-2 pr-3 text-right tabular-nums text-zinc-200">{fmt(line.revenue)}</td>
                 <td className="py-2 pr-3 text-center">
