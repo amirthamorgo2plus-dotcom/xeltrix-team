@@ -15,7 +15,7 @@ export default async function ReferralCustomersPage() {
   const [{ data: links }, { data: referrers }, { data: commissions }, { data: wonOpps }, { data: allOpps }] = await Promise.all([
     supabase
       .from("lead_referrers")
-      .select("id, lead_id, referrer_id, first_invoice_used, leads(name, company_name, phone)")
+      .select("id, lead_id, referrer_id, first_invoice_used")
       .eq("team_id", teamId)
       .order("created_at", { ascending: false }),
     supabase.from("referrers").select("id, name").eq("team_id", teamId).order("name"),
@@ -168,8 +168,8 @@ export default async function ReferralCustomersPage() {
                 </thead>
                 <tbody>
                   {(links ?? []).map((lk) => {
-                    const joined = lk.leads as { name?: string; company_name?: string; phone?: string } | null;
-                    const customerName = joined?.company_name || joined?.name || "—";
+                    const joined = leadMap.get(lk.lead_id);
+                    const customerName = joined?.name || "—";
                     const comm = leadCommMap.get(lk.lead_id) ?? { pending: 0, paid: 0 };
                     return (
                       <tr key={lk.id} className="border-t border-zinc-800 hover:bg-zinc-800/30 transition-colors">
