@@ -4,6 +4,7 @@ import { differenceInDays, format, parseISO } from "date-fns";
 import Link from "next/link";
 import { ExportButton } from "@/components/export-button";
 
+
 // ── Aging helpers ────────────────────────────────────────────────────────────
 
 type AgingBucket = "current" | "1-15" | "16-30" | "31-45" | "45+";
@@ -150,22 +151,7 @@ export default async function CollectionsPage({
           <h1 className="text-xl font-semibold">Collections</h1>
           <p className="mt-0.5 text-sm text-zinc-500">Outstanding invoice balances from customers</p>
         </div>
-        <div className="flex items-center gap-2">
-          <ExportButton
-            filename="collections"
-            headers={["Invoice", "Customer", "Total", "Balance Due", "Due Date", "Aging", "Salesperson", "Status"]}
-            rows={enriched.map((r) => [
-              invoiceNumber(r),
-              customerName(r),
-              String(r.value ?? ""),
-              String(r.balance_due ?? ""),
-              r.due_date ?? "",
-              BUCKET_LABEL[r.bucket],
-              salespersonLabel(r),
-              r.invoice_status ?? "",
-            ])}
-          />
-        </div>
+        <ExportButton href="/api/export/collections" />
       </div>
 
       {/* Salesperson filter */}
