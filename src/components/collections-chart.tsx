@@ -3,7 +3,6 @@
 import {
   Bar,
   BarChart,
-  CartesianGrid,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -26,7 +25,7 @@ const BUCKETS: { key: keyof Omit<Row, "name" | "total">; label: string; color: s
   { key: "1-15",    label: "1–15 days",  color: "#eab308" },
   { key: "16-30",   label: "16–30 days", color: "#f97316" },
   { key: "31-45",   label: "31–45 days", color: "#ef4444" },
-  { key: "45+",     label: ">45 days",   color: "#991b1b" },
+  { key: "45+",     label: ">45 days",   color: "#7f1d1d" },
 ];
 
 export function CollectionsChart({ data, currency }: { data: Row[]; currency: string }) {
@@ -37,21 +36,31 @@ export function CollectionsChart({ data, currency }: { data: Row[]; currency: st
       maximumFractionDigits: 0,
     }).format(v);
 
+  // Height scales with number of people so bars aren't squished
+  const barHeight = 36;
+  const chartH = Math.max(220, data.length * barHeight + 60);
+
   return (
-    <div className="h-80 w-full">
+    <div style={{ height: chartH }} className="w-full">
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 4 }} barCategoryGap="30%">
-          <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" vertical={false} />
+        <BarChart
+          layout="vertical"
+          data={data}
+          margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
+          barSize={22}
+        >
           <XAxis
-            dataKey="name"
-            tick={{ fontSize: 11, fill: "#a1a1aa" }}
+            type="number"
+            tickFormatter={(v) => fmt(Number(v))}
+            tick={{ fontSize: 10, fill: "#71717a" }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
-            tickFormatter={(v) => fmt(Number(v))}
-            tick={{ fontSize: 10, fill: "#71717a" }}
-            width={90}
+            type="category"
+            dataKey="name"
+            width={110}
+            tick={{ fontSize: 12, fill: "#d4d4d8" }}
             axisLine={false}
             tickLine={false}
           />
@@ -68,7 +77,7 @@ export function CollectionsChart({ data, currency }: { data: Row[]; currency: st
             cursor={{ fill: "rgba(255,255,255,0.04)" }}
           />
           <Legend
-            wrapperStyle={{ fontSize: 11, color: "#a1a1aa", paddingTop: 8 }}
+            wrapperStyle={{ fontSize: 11, color: "#a1a1aa", paddingTop: 6 }}
             iconType="square"
             iconSize={10}
           />
@@ -79,7 +88,13 @@ export function CollectionsChart({ data, currency }: { data: Row[]; currency: st
               name={b.label}
               stackId="a"
               fill={b.color}
-              radius={i === BUCKETS.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+              radius={
+                i === 0
+                  ? [4, 0, 0, 4]
+                  : i === BUCKETS.length - 1
+                    ? [0, 4, 4, 0]
+                    : [0, 0, 0, 0]
+              }
             />
           ))}
         </BarChart>
