@@ -46,6 +46,8 @@ export function MarginCalculatorClient({
   const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]);
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [referredBy, setReferredBy] = useState("");
+  const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
   const fileRef = useRef<HTMLInputElement>(null);
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
@@ -55,7 +57,11 @@ export function MarginCalculatorClient({
   }
   const referral = referralCustomers.find((r) => r.lead_id === customerId) ?? null;
   const customerName = customers.find((c) => c.id === customerId)?.company_name ?? "—";
-  const referrerName = referral?.referrer_name ?? "—";
+  // Manual "Referred by" wins; else the selected referral customer's referrer
+  const referrerName = referredBy.trim() || referral?.referrer_name || "";
+  const reportDateLabel = reportDate
+    ? new Date(reportDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+    : "";
 
   function sellingRate(itemId: string): number | null {
     const key = `${customerId}::${itemId}`;
@@ -203,9 +209,9 @@ export function MarginCalculatorClient({
       <div class="head">
         <div>
           <h1>Margin Calculation</h1>
-          <div class="meta">Customer: <b>${customerName}</b>${referral ? ` &nbsp;•&nbsp; Referred by: <b>${referrerName}</b>` : ""}</div>
+          <div class="meta">Customer: <b>${customerName}</b>${referrerName ? ` &nbsp;•&nbsp; Referred by: <b>${referrerName}</b>` : ""}</div>
         </div>
-        <div class="meta">Xeltrix Chemicals Private Limited</div>
+        <div class="meta">Xeltrix Chemicals Private Limited${reportDateLabel ? `<br>${reportDateLabel}` : ""}</div>
       </div>
       <table>
         <thead><tr>
@@ -235,24 +241,45 @@ export function MarginCalculatorClient({
   return (
     <div className="flex flex-col gap-6">
       {/* Customer selector */}
-      <div>
-        <label className="mb-1.5 block text-xs font-medium text-zinc-400">Customer (optional — loads custom prices + commission rates)</label>
-        <select
-          value={customerId}
-          onChange={(e) => setCustomerId(e.target.value)}
-          className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none w-72"
-        >
-          <option value="">— Standard rates, no referral —</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>{c.company_name}</option>
-          ))}
-        </select>
-        {referral && (
-          <p className="mt-1.5 text-xs text-amber-400">
-            Referral active — commission rates: Traded {referral.traded_pct ?? "—"}%, Manufactured {referral.manufactured_pct ?? "—"}%, Default {referral.default_pct ?? "—"}%
-          </p>
-        )}
+      <div className="flex flex-wrap items-end gap-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">Customer (optional — loads custom prices + commission rates)</label>
+          <select
+            value={customerId}
+            onChange={(e) => setCustomerId(e.target.value)}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none w-72"
+          >
+            <option value="">— Standard rates, no referral —</option>
+            {customers.map((c) => (
+              <option key={c.id} value={c.id}>{c.company_name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">Referred by</label>
+          <input
+            type="text"
+            value={referredBy}
+            onChange={(e) => setReferredBy(e.target.value)}
+            placeholder={referral?.referrer_name ?? "Person name"}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none w-52"
+          />
+        </div>
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">Date</label>
+          <input
+            type="date"
+            value={reportDate}
+            onChange={(e) => setReportDate(e.target.value)}
+            className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none"
+          />
+        </div>
       </div>
+      {referral && (
+        <p className="-mt-2 text-xs text-amber-400">
+          Referral active — commission rates: Traded {referral.traded_pct ?? "—"}%, Manufactured {referral.manufactured_pct ?? "—"}%, Default {referral.default_pct ?? "—"}%
+        </p>
+      )}
 
       {/* PDF upload */}
       <div className="flex flex-wrap items-center gap-3">
@@ -442,10 +469,10 @@ export function MarginCalculatorClient({
                 <p className="text-base font-bold">Margin Calculation</p>
                 <p className="text-xs text-zinc-600 mt-0.5">
                   Customer: <span className="font-semibold text-zinc-900">{customerName}</span>
-                  {referral && <> &nbsp;•&nbsp; Referred by: <span className="font-semibold text-zinc-900">{referrerName}</span></>}
+                  {referrerName && <> &nbsp;•&nbsp; Referred by: <span className="font-semibold text-zinc-900">{referrerName}</span></>}
                 </p>
               </div>
-              <p className="text-xs text-zinc-500">Xeltrix Chemicals Pvt Ltd</p>
+              <p className="text-xs text-zinc-500 text-right">Xeltrix Chemicals Pvt Ltd{reportDateLabel && <><br/>{reportDateLabel}</>}</p>
             </div>
             <table className="mt-3 w-full text-xs">
               <thead>
