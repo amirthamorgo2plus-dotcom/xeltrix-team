@@ -375,6 +375,7 @@ export async function syncFromZoho(
     name: it.name,
     sku: it.sku ?? null,
     rate: it.rate ?? null,
+    cost_price: it.purchase_rate ?? null,
     unit: it.unit ?? null,
     active: (it.status ?? "active") === "active",
     updated_at: new Date().toISOString(),

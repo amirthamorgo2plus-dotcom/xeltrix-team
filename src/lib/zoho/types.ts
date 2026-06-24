@@ -59,6 +59,7 @@ export type ZohoItem = {
   name: string;
   sku?: string;
   rate?: number;
+  purchase_rate?: number;
   unit?: string;
   status?: string;
 };
