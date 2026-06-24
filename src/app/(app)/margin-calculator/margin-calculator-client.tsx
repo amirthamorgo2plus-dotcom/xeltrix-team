@@ -351,6 +351,28 @@ export function MarginCalculatorClient({
               </tr>
             ))}
           </tbody>
+          {reportRows.length > 0 && (
+            <tfoot>
+              <tr className="border-t-2 border-zinc-700 font-semibold">
+                <td className="py-3 pr-3 text-zinc-300">Total</td>
+                <td className="py-3 pr-3 text-right tabular-nums text-zinc-300">
+                  {reportRows.reduce((s, l) => s + l.qty, 0)}
+                </td>
+                <td />
+                <td className="py-3 pr-3 text-right tabular-nums text-zinc-300">{fmt(totalCost)}</td>
+                <td className="py-3 pr-3 text-right tabular-nums text-zinc-100">{fmt(totalRevenue)}</td>
+                <td className="py-3 pr-3 text-center">
+                  {totalGrossMargin != null ? (
+                    <span className="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+                      style={{ color: marginColor(totalGrossMargin), background: `${marginColor(totalGrossMargin)}18` }}>
+                      {totalGrossMargin.toFixed(1)}%
+                    </span>
+                  ) : <span className="text-zinc-600 text-xs">—</span>}
+                </td>
+                <td />
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
