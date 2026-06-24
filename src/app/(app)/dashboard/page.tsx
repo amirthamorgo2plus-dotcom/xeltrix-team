@@ -67,6 +67,7 @@ export default async function DashboardPage({
     { data: openLeads },
     { data: openTasks },
     { data: openComplaints },
+    { data: pendingCollRows },
   ] = await Promise.all([
     supabase
       .from("v_target_vs_achieved")
@@ -105,6 +106,13 @@ export default async function DashboardPage({
       .select("id")
       .eq("team_id", teamId)
       .in("status", ["open", "in_progress"]),
+    supabase
+      .from("opportunities")
+      .select("balance_due, owner_id")
+      .eq("team_id", teamId)
+      .eq("stage", "won")
+      .gt("balance_due", 0)
+      .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
   ]);
 
   // KPIs
@@ -159,6 +167,13 @@ export default async function DashboardPage({
     (s, o) => s + Number(o.value_excl_tax ?? o.value ?? 0),
     0
   );
+
+  // Pending collections
+  const pendingCollTotal = (pendingCollRows ?? []).reduce(
+    (s, r) => s + Number(r.balance_due ?? 0),
+    0
+  );
+  const pendingCollCount = pendingCollRows?.length ?? 0;
 
   // Chart data
   const chartData = members
@@ -249,6 +264,13 @@ export default async function DashboardPage({
           value={String(openComplaints?.length ?? 0)}
           hint="Unresolved"
           href="/complaints"
+        />
+        <KpiCard
+          label="Pending Collections"
+          value={fmtMoney(pendingCollTotal, currency)}
+          hint={`${pendingCollCount} invoice${pendingCollCount !== 1 ? "s" : ""} outstanding`}
+          href="/collections"
+          tone={pendingCollTotal > 0 ? "danger" : "success"}
         />
       </div>
 

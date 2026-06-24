@@ -22,6 +22,7 @@ import {
   Receipt,
   MapPin,
   QrCode,
+  BadgeIndianRupee,
   type LucideIcon,
 } from "lucide-react";
 
@@ -47,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/quotes",        label: "Quotes",     icon: FileText },
       { href: "/follow-ups",    label: "Follow-ups", icon: Bell },
       { href: "/complaints",    label: "Complaints", icon: AlertCircle },
+      { href: "/collections",   label: "Collections", icon: BadgeIndianRupee },
     ],
   },
   {

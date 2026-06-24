@@ -42,6 +42,7 @@ export type ZohoInvoice = {
   invoice_number: string;
   status: string;       // draft | sent | viewed | overdue | paid | void
   total: number;        // incl. tax
+  balance?: number;     // outstanding balance (0 when fully paid)
   sub_total?: number;   // excl. tax
   tax_total?: number;
   date: string;         // YYYY-MM-DD
