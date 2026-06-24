@@ -27,6 +27,7 @@ import {
   HandCoins,
   ListChecks,
   Calculator,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -99,6 +100,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/margin-calculator", label: "Margin Calculator", icon: Calculator },
   { href: "/team", label: "Team members", icon: Users2, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug, adminOnly: true },
+  { href: "/help", label: "Help", icon: HelpCircle },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
