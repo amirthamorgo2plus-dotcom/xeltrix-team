@@ -24,6 +24,8 @@ function LinkModal({
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedLead, setSelectedLead] = useState(preset?.leadId ?? "");
+  const [selectedReferrer, setSelectedReferrer] = useState(preset?.referrerId ?? "");
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -45,14 +47,14 @@ function LinkModal({
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="lead_id">Customer *</Label>
-            <select id="lead_id" name="lead_id" required defaultValue={preset?.leadId ?? ""} className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
+            <select id="lead_id" name="lead_id" required value={selectedLead} onChange={(e) => setSelectedLead(e.target.value)} className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
               <option value="">Select customer…</option>
               {leads.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="referrer_id">Referrer *</Label>
-            <select id="referrer_id" name="referrer_id" required defaultValue={preset?.referrerId ?? ""} className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
+            <select id="referrer_id" name="referrer_id" required value={selectedReferrer} onChange={(e) => setSelectedReferrer(e.target.value)} className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
               <option value="">Select referrer…</option>
               {referrers.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
