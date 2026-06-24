@@ -69,6 +69,24 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const existingOppIds = new Set((commissions ?? []).map((c) => c.opportunity_id));
   const availableInvoices = (invoices ?? []).filter((inv) => !existingOppIds.has(inv.id));
 
+  // Auto-detect from Zoho: won invoices where salesperson name ends with "& <referrer name>"
+  const { data: zohoDetected } = await supabase
+    .from("opportunities")
+    .select("id, title, value, close_date, zoho_salesperson_name, lead_id")
+    .eq("team_id", teamId)
+    .eq("stage", "won")
+    .ilike("zoho_salesperson_name", `%& ${referrer.name}`);
+
+  // Exclude already-logged commissions
+  const detectedNew = (zohoDetected ?? []).filter((inv) => !existingOppIds.has(inv.id));
+
+  // Get lead names for detected invoices
+  const detectedLeadIds = [...new Set(detectedNew.map((i) => i.lead_id).filter(Boolean))];
+  const { data: detectedLeads } = detectedLeadIds.length > 0
+    ? await supabase.from("leads").select("id, name, company_name").in("id", detectedLeadIds)
+    : { data: [] };
+  const detectedLeadMap = new Map((detectedLeads ?? []).map((l) => [l.id, l.company_name || l.name]));
+
   const pendingTotal = (commissions ?? []).filter((c) => c.status === "pending").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
   const paidTotal = (commissions ?? []).filter((c) => c.status === "paid").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
   const pendingIds = (commissions ?? []).filter((c) => c.status === "pending").map((c) => c.id);
@@ -109,6 +127,67 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
       {/* Mark paid */}
       {pendingIds.length > 0 && (
         <MarkPaidPanel pendingIds={pendingIds} pendingTotal={pendingTotal} />
+      )}
+
+      {/* Auto-detected from Zoho salesperson name */}
+      {detectedNew.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400 font-medium">
+                {detectedNew.length} detected
+              </span>
+              Invoices Detected from Zoho
+            </CardTitle>
+            <p className="text-xs text-zinc-500 mt-1">
+              These won invoices have <span className="text-zinc-300">"&amp; {referrer.name}"</span> in the salesperson field — commission not yet logged.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-zinc-500">
+                  <tr>
+                    <th className="pb-2 pr-4">Customer</th>
+                    <th className="pb-2 pr-4">Invoice</th>
+                    <th className="pb-2 pr-4">Salesperson</th>
+                    <th className="pb-2 pr-4">Close Date</th>
+                    <th className="pb-2 text-right">Invoice Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detectedNew.map((inv) => (
+                    <tr key={inv.id} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
+                      <td className="py-2.5 pr-4 font-medium text-zinc-100">
+                        {detectedLeadMap.get(inv.lead_id ?? "") ?? "—"}
+                      </td>
+                      <td className="py-2.5 pr-4 text-zinc-400 text-xs">{inv.title ?? "—"}</td>
+                      <td className="py-2.5 pr-4 text-zinc-500 text-xs">{inv.zoho_salesperson_name ?? "—"}</td>
+                      <td className="py-2.5 pr-4 text-zinc-500 text-xs">
+                        {inv.close_date ? format(parseISO(inv.close_date), "dd MMM yyyy") : "—"}
+                      </td>
+                      <td className="py-2.5 text-right tabular-nums font-semibold text-zinc-100">
+                        {fmt(Number(inv.value ?? 0))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-zinc-700">
+                    <td colSpan={4} className="pt-3 text-xs text-zinc-500">Total detected</td>
+                    <td className="pt-3 text-right tabular-nums font-bold text-[#b5c76a]">
+                      {fmt(detectedNew.reduce((s, i) => s + Number(i.value ?? 0), 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="mt-4 text-xs text-zinc-500">
+              To log commission, use <span className="text-zinc-300">"Add Commission for Invoice"</span> below — or{" "}
+              <span className="text-zinc-300">link these customers</span> via Referral Customers first if not already linked.
+            </p>
+          </CardContent>
+        </Card>
       )}
 
       {/* Add commission for invoice */}
