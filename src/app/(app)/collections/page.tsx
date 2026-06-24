@@ -179,7 +179,7 @@ export default async function CollectionsPage({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-zinc-500">Salesperson:</span>
           <Link
-            href={customerFilter ? `/collections?customer=${customerFilter}` : "/collections"}
+            href="/collections"
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               !memberFilter
                 ? "bg-[#b5c76a]/10 text-[#b5c76a]"
@@ -191,7 +191,7 @@ export default async function CollectionsPage({
           {members.map((m) => (
             <Link
               key={m.id}
-              href={customerFilter ? `/collections?member=${m.id}&customer=${customerFilter}` : `/collections?member=${m.id}`}
+              href={`/collections?member=${m.id}`}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 memberFilter === m.id
                   ? "bg-[#b5c76a]/10 text-[#b5c76a]"
