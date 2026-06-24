@@ -1,15 +1,5 @@
 "use client";
 
-import {
-  Bar,
-  BarChart,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-
 type Row = {
   name: string;
   current: number;
@@ -20,12 +10,12 @@ type Row = {
   total: number;
 };
 
-const BUCKETS: { key: keyof Omit<Row, "name" | "total">; label: string; color: string }[] = [
-  { key: "current", label: "Current",    color: "#b5c76a" },
-  { key: "1-15",    label: "1–15 days",  color: "#eab308" },
-  { key: "16-30",   label: "16–30 days", color: "#f97316" },
-  { key: "31-45",   label: "31–45 days", color: "#ef4444" },
-  { key: "45+",     label: ">45 days",   color: "#7f1d1d" },
+const BUCKETS: { key: keyof Omit<Row, "name" | "total">; label: string; color: string; muted: string }[] = [
+  { key: "current", label: "Current",    color: "#b5c76a", muted: "rgba(181,199,106,0.12)" },
+  { key: "1-15",    label: "1–15 days",  color: "#eab308", muted: "rgba(234,179,8,0.10)"   },
+  { key: "16-30",   label: "16–30 days", color: "#f97316", muted: "rgba(249,115,22,0.10)"  },
+  { key: "31-45",   label: "31–45 days", color: "#ef4444", muted: "rgba(239,68,68,0.10)"   },
+  { key: "45+",     label: ">45 days",   color: "#f87171", muted: "rgba(248,113,113,0.10)" },
 ];
 
 export function CollectionsChart({ data, currency }: { data: Row[]; currency: string }) {
@@ -36,69 +26,74 @@ export function CollectionsChart({ data, currency }: { data: Row[]; currency: st
       maximumFractionDigits: 0,
     }).format(v);
 
-  // Height scales with number of people so bars aren't squished
-  const barHeight = 36;
-  const chartH = Math.max(220, data.length * barHeight + 60);
+  const grandTotal = data.reduce((s, r) => s + r.total, 0);
 
   return (
-    <div style={{ height: chartH }} className="w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart
-          layout="vertical"
-          data={data}
-          margin={{ top: 4, right: 16, left: 0, bottom: 4 }}
-          barSize={22}
-        >
-          <XAxis
-            type="number"
-            tickFormatter={(v) => fmt(Number(v))}
-            tick={{ fontSize: 10, fill: "#71717a" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={110}
-            tick={{ fontSize: 12, fill: "#d4d4d8" }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <Tooltip
-            contentStyle={{
-              background: "#1a1a1a",
-              border: "1px solid #2a2a2a",
-              borderRadius: 8,
-              fontSize: 12,
-            }}
-            labelStyle={{ color: "#f4f4f5", fontWeight: 600, marginBottom: 4 }}
-            itemStyle={{ color: "#d4d4d8" }}
-            formatter={(v, name) => [fmt(Number(v)), name]}
-            cursor={{ fill: "rgba(255,255,255,0.04)" }}
-          />
-          <Legend
-            wrapperStyle={{ fontSize: 11, color: "#a1a1aa", paddingTop: 6 }}
-            iconType="square"
-            iconSize={10}
-          />
-          {BUCKETS.map((b, i) => (
-            <Bar
-              key={b.key}
-              dataKey={b.key}
-              name={b.label}
-              stackId="a"
-              fill={b.color}
-              radius={
-                i === 0
-                  ? [4, 0, 0, 4]
-                  : i === BUCKETS.length - 1
-                    ? [0, 4, 4, 0]
-                    : [0, 0, 0, 0]
-              }
-            />
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-zinc-800">
+            <th className="py-2.5 pr-4 text-left text-xs font-medium text-zinc-500 w-36">Salesperson</th>
+            {BUCKETS.map((b) => (
+              <th key={b.key} className="px-3 py-2.5 text-right text-xs font-medium" style={{ color: b.color }}>
+                {b.label}
+              </th>
+            ))}
+            <th className="pl-4 py-2.5 text-right text-xs font-medium text-zinc-400">Total</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-zinc-800/50">
+          {data.map((row) => (
+            <tr key={row.name} className="hover:bg-zinc-800/30 transition-colors">
+              <td className="py-3 pr-4 font-medium text-zinc-200 text-xs leading-tight">{row.name}</td>
+              {BUCKETS.map((b) => {
+                const val = row[b.key];
+                return (
+                  <td key={b.key} className="px-3 py-3 text-right tabular-nums">
+                    {val > 0 ? (
+                      <span
+                        className="inline-block rounded px-2 py-0.5 text-xs font-medium"
+                        style={{ color: b.color, background: b.muted }}
+                      >
+                        {fmt(val)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-700">—</span>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="pl-4 py-3 text-right tabular-nums text-sm font-semibold text-zinc-100">
+                {fmt(row.total)}
+              </td>
+            </tr>
           ))}
-        </BarChart>
-      </ResponsiveContainer>
+        </tbody>
+        {data.length > 1 && (
+          <tfoot>
+            <tr className="border-t border-zinc-700">
+              <td className="py-3 pr-4 text-xs font-semibold text-zinc-400">Total</td>
+              {BUCKETS.map((b) => {
+                const bucketTotal = data.reduce((s, r) => s + r[b.key], 0);
+                return (
+                  <td key={b.key} className="px-3 py-3 text-right tabular-nums">
+                    {bucketTotal > 0 ? (
+                      <span className="text-xs font-semibold" style={{ color: b.color }}>
+                        {fmt(bucketTotal)}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-zinc-700">—</span>
+                    )}
+                  </td>
+                );
+              })}
+              <td className="pl-4 py-3 text-right tabular-nums text-sm font-bold text-zinc-50">
+                {fmt(grandTotal)}
+              </td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
     </div>
   );
 }
