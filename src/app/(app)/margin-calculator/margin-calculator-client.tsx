@@ -42,7 +42,7 @@ export function MarginCalculatorClient({
   priceLists: PriceList[];
   referralCustomers: ReferralCustomer[];
 }) {
-  const [customerId, setCustomerId] = useState<string>("");
+  const [customerInput, setCustomerInput] = useState<string>("");
   const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]);
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -54,8 +54,14 @@ export function MarginCalculatorClient({
   for (const pl of priceLists) {
     plMap.set(`${pl.lead_id}::${pl.item_id}`, pl.custom_rate);
   }
+  // Match the typed customer to an existing one (to load custom prices + commission).
+  // If no match, it's a new/ad-hoc customer name used only for the report header.
+  const matchedCustomer = customers.find(
+    (c) => c.company_name.toLowerCase() === customerInput.trim().toLowerCase()
+  );
+  const customerId = matchedCustomer?.id ?? "";
   const referral = referralCustomers.find((r) => r.lead_id === customerId) ?? null;
-  const customerName = customers.find((c) => c.id === customerId)?.company_name ?? "—";
+  const customerName = customerInput.trim() || "—";
   // Manual "Referred by" wins; else the selected referral customer's referrer
   const referrerName = referredBy.trim() || referral?.referrer_name || "";
   const reportDateLabel = reportDate
@@ -242,17 +248,23 @@ export function MarginCalculatorClient({
       {/* Customer selector */}
       <div className="flex flex-wrap items-end gap-4">
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-zinc-400">Customer (optional — loads custom prices + commission rates)</label>
-          <select
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
+          <label className="mb-1.5 block text-xs font-medium text-zinc-400">Customer (pick existing or type a new name)</label>
+          <input
+            type="text"
+            list="customer-options"
+            value={customerInput}
+            onChange={(e) => setCustomerInput(e.target.value)}
+            placeholder="Select or type customer…"
             className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none w-72"
-          >
-            <option value="">— Standard rates, no referral —</option>
+          />
+          <datalist id="customer-options">
             {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.company_name}</option>
+              <option key={c.id} value={c.company_name} />
             ))}
-          </select>
+          </datalist>
+          {matchedCustomer && (
+            <p className="mt-1 text-[11px] text-[#b5c76a]">✓ Existing customer — custom prices &amp; commission loaded</p>
+          )}
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-400">Referred by</label>
