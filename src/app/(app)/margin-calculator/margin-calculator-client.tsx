@@ -382,8 +382,11 @@ export function MarginCalculatorClient({
             </div>
             <div className="text-xs text-zinc-500">
               {autoKm != null
-                ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> from Coimbatore · {delivery.perKm}/km</>
-                : <span className="text-amber-400">No coordinates for this customer — enter distance manually</span>}
+                ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> from Coimbatore · ₹{delivery.perKm}/km</>
+                : <span className="text-amber-400">
+                    Customer not geocoded — add it on the{" "}
+                    <a href="/visits" className="underline hover:text-amber-300">Visits</a> page (Geocode customers), or enter distance manually. Otherwise leave it.
+                  </span>}
             </div>
             <div>
               <label className="mb-1 block text-[11px] text-zinc-500">Delivery cost ₹ (override)</label>
