@@ -1,6 +1,6 @@
 "use server";
 
-import { extractText } from "unpdf";
+import { extractText, getDocumentProxy } from "unpdf";
 
 export type ParsedRow = { name: string; qty: number; rate: number };
 
@@ -14,7 +14,8 @@ export async function parsePdfInvoice(fd: FormData): Promise<{ rows: ParsedRow[]
 
   try {
     const buf = new Uint8Array(await file.arrayBuffer());
-    const { text } = await extractText(buf, { mergePages: true });
+    const pdf = await getDocumentProxy(buf);
+    const { text } = await extractText(pdf, { mergePages: true });
 
     const rows: ParsedRow[] = [];
     const lines = text.split("\n").map((l: string) => l.trim()).filter(Boolean);
