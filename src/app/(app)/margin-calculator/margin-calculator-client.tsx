@@ -271,8 +271,8 @@ export function MarginCalculatorClient({
             <tr>
               <th className="pb-2 pr-3 w-64">Item</th>
               <th className="pb-2 pr-3 w-20 text-right">Qty</th>
-              <th className="pb-2 pr-3 text-right">Sell Rate</th>
               <th className="pb-2 pr-3 text-right">Cost Price</th>
+              <th className="pb-2 pr-3 text-right">Sell Rate</th>
               <th className="pb-2 pr-3 text-right">Revenue</th>
               <th className="pb-2 pr-3 text-center">Gross %</th>
               <th className="pb-2 w-6" />
@@ -319,9 +319,10 @@ export function MarginCalculatorClient({
                     min="0"
                     step="0.01"
                     placeholder="—"
-                    value={line.override_rate ?? (line.stdSell != null ? line.stdSell : "")}
-                    onChange={(e) => updateLine(line.id, { override_rate: e.target.value ? Number(e.target.value) : null })}
-                    className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
+                    value={line.cost_override ?? (line.cost != null ? line.cost : "")}
+                    onChange={(e) => updateLine(line.id, { cost_override: e.target.value ? Number(e.target.value) : null })}
+                    className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm focus:border-[#b5c76a] focus:outline-none tabular-nums"
+                    style={{ color: line.cost_override != null ? "#b5c76a" : "#71717a" }}
                   />
                 </td>
                 <td className="py-2 pr-3 text-right">
@@ -330,10 +331,9 @@ export function MarginCalculatorClient({
                     min="0"
                     step="0.01"
                     placeholder="—"
-                    value={line.cost_override ?? (line.cost != null ? line.cost : "")}
-                    onChange={(e) => updateLine(line.id, { cost_override: e.target.value ? Number(e.target.value) : null })}
-                    className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm focus:border-[#b5c76a] focus:outline-none tabular-nums"
-                    style={{ color: line.cost_override != null ? "#b5c76a" : "#71717a" }}
+                    value={line.override_rate ?? (line.stdSell != null ? line.stdSell : "")}
+                    onChange={(e) => updateLine(line.id, { override_rate: e.target.value ? Number(e.target.value) : null })}
+                    className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
                 </td>
                 <td className="py-2 pr-3 text-right tabular-nums text-zinc-200">{fmt(line.revenue)}</td>
@@ -358,8 +358,8 @@ export function MarginCalculatorClient({
                 <td className="py-3 pr-3 text-right tabular-nums text-zinc-300">
                   {reportRows.reduce((s, l) => s + l.qty, 0)}
                 </td>
-                <td />
                 <td className="py-3 pr-3 text-right tabular-nums text-zinc-300">{fmt(totalCost)}</td>
+                <td />
                 <td className="py-3 pr-3 text-right tabular-nums text-zinc-100">{fmt(totalRevenue)}</td>
                 <td className="py-3 pr-3 text-center">
                   {totalGrossMargin != null ? (
