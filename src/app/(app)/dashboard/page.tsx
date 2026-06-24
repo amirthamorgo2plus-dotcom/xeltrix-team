@@ -186,7 +186,10 @@ export default async function DashboardPage({
     collByPerson.set(label, (collByPerson.get(label) ?? 0) + Number(r.balance_due ?? 0));
   }
   const collChartData = [...collByPerson.entries()]
-    .map(([name, pending]) => ({ name: name.split(" ")[0], pending }))
+    .map(([name, pending]) => ({
+      name: name.length > 14 ? name.slice(0, 13) + "…" : name,
+      pending,
+    }))
     .sort((a, b) => b.pending - a.pending);
 
   // Chart data
