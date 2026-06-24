@@ -58,7 +58,7 @@ function fmtMoney(v: number) {
 export default async function CollectionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ member?: string }>;
+  searchParams: Promise<{ member?: string; customer?: string }>;
 }) {
   const sp = await searchParams;
   const me = await getMyMembership();
@@ -66,8 +66,9 @@ export default async function CollectionsPage({
   const supabase = await createClient();
 
   const memberFilter = sp.member && sp.member !== "all" ? sp.member : null;
+  const customerFilter = sp.customer && sp.customer !== "all" ? sp.customer : null;
 
-  // Fetch all won opportunities that have a balance due
+  // Fetch all won opportunities that have a balance due (filtered by salesperson if set)
   const query = supabase
     .from("opportunities")
     .select(
@@ -86,10 +87,26 @@ export default async function CollectionsPage({
 
   // ── Compute per-row aging bucket ─────────────────────────────────────────
   type Row = NonNullable<typeof rows>[number] & { bucket: AgingBucket };
-  const enriched: Row[] = (rows ?? []).map((r) => ({
+  const allEnriched: Row[] = (rows ?? []).map((r) => ({
     ...r,
     bucket: agingBucket(r.due_date),
   }));
+
+  // ── Build unique customer list from salesperson-filtered rows ────────────
+  const customerMap = new Map<string, string>(); // leadId → name
+  for (const r of allEnriched) {
+    const lead = Array.isArray(r.lead) ? r.lead[0] : r.lead;
+    if (lead?.id && lead?.name) customerMap.set(lead.id, lead.name);
+  }
+  const customerList = [...customerMap.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+
+  // ── Apply customer filter in-memory ──────────────────────────────────────
+  const enriched = customerFilter
+    ? allEnriched.filter((r) => {
+        const lead = Array.isArray(r.lead) ? r.lead[0] : r.lead;
+        return lead?.id === customerFilter;
+      })
+    : allEnriched;
 
   // ── Summary totals by aging bucket ───────────────────────────────────────
   const summary: Record<AgingBucket, number> = {
@@ -162,7 +179,7 @@ export default async function CollectionsPage({
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-zinc-500">Salesperson:</span>
           <Link
-            href="/collections"
+            href={customerFilter ? `/collections?customer=${customerFilter}` : "/collections"}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               !memberFilter
                 ? "bg-[#b5c76a]/10 text-[#b5c76a]"
@@ -174,7 +191,7 @@ export default async function CollectionsPage({
           {members.map((m) => (
             <Link
               key={m.id}
-              href={`/collections?member=${m.id}`}
+              href={customerFilter ? `/collections?member=${m.id}&customer=${customerFilter}` : `/collections?member=${m.id}`}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 memberFilter === m.id
                   ? "bg-[#b5c76a]/10 text-[#b5c76a]"
@@ -184,6 +201,41 @@ export default async function CollectionsPage({
               {memberName(m)}
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* Customer filter */}
+      {customerList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-zinc-500">Customer:</span>
+          <Link
+            href={memberFilter ? `/collections?member=${memberFilter}` : "/collections"}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              !customerFilter
+                ? "bg-[#b5c76a]/10 text-[#b5c76a]"
+                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+            }`}
+          >
+            All
+          </Link>
+          {customerList.map(([id, name]) => {
+            const href = memberFilter
+              ? `/collections?member=${memberFilter}&customer=${id}`
+              : `/collections?customer=${id}`;
+            return (
+              <Link
+                key={id}
+                href={href}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  customerFilter === id
+                    ? "bg-[#b5c76a]/10 text-[#b5c76a]"
+                    : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                }`}
+              >
+                {name}
+              </Link>
+            );
+          })}
         </div>
       )}
 
