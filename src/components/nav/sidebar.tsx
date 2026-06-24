@@ -33,18 +33,19 @@ function NavRow({
       <div
         className={`group relative flex items-center rounded-md text-sm transition-colors ${
           selfActive
-            ? "bg-emerald-500/10 text-emerald-300"
+            ? "text-[#b5c76a]"
             : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
         }`}
+        style={selfActive ? { background: "rgb(181 199 106 / 0.12)" } : undefined}
       >
         {selfActive && (
-          <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-emerald-400" />
+          <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#b5c76a]" />
         )}
         <Link href={href} className="flex flex-1 items-center gap-3 px-3 py-2">
           <Icon
             className={`h-4 w-4 transition-colors ${
               selfActive
-                ? "text-emerald-400"
+                ? "text-[#b5c76a]"
                 : "text-zinc-500 group-hover:text-zinc-200"
             }`}
           />
@@ -76,16 +77,17 @@ function NavRow({
                 href={c.href}
                 className={`group relative flex items-center gap-3 rounded-md py-1.5 pl-10 pr-3 text-sm transition-colors ${
                   active
-                    ? "bg-emerald-500/10 text-emerald-300"
+                    ? "text-[#b5c76a]"
                     : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
                 }`}
+                style={active ? { background: "rgb(181 199 106 / 0.12)" } : undefined}
               >
                 {active && (
-                  <span className="absolute inset-y-1 left-7 w-0.5 rounded-r bg-emerald-400" />
+                  <span className="absolute inset-y-1 left-7 w-0.5 rounded-r bg-[#b5c76a]" />
                 )}
                 <c.icon
                   className={`h-3.5 w-3.5 ${
-                    active ? "text-emerald-400" : "text-zinc-600 group-hover:text-zinc-300"
+                    active ? "text-[#b5c76a]" : "text-zinc-600 group-hover:text-zinc-300"
                   }`}
                 />
                 <span className="truncate">{c.label}</span>
@@ -111,13 +113,13 @@ export function Sidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-zinc-800 bg-zinc-950 p-4 text-zinc-300 md:flex">
+    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r p-4 text-zinc-300 md:flex" style={{ background: "#1a1a1a", borderColor: "#2a2a2a" }}>
       <div className="mb-6 flex items-center gap-2.5 px-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/molec.png"
+          src="/xeltrix-team-logo.png"
           alt=""
-          className="h-9 w-9 rounded-lg bg-zinc-900 object-contain p-0.5"
+          className="h-9 w-9 rounded-lg object-contain"
         />
         <div className="flex flex-col leading-tight">
           <span className="text-base font-semibold text-zinc-50">Xeltrix Team</span>
@@ -149,7 +151,7 @@ export function Sidebar({
         <span className="truncate">Our website</span>
       </a>
 
-      <div className="mt-2 border-t border-zinc-800 pt-3 text-[10px] uppercase tracking-wider text-zinc-600">
+      <div className="mt-2 border-t pt-3 text-[10px] uppercase tracking-wider text-zinc-600" style={{ borderColor: "#2a2a2a" }}>
         v1 · {new Date().getFullYear()}
       </div>
     </aside>

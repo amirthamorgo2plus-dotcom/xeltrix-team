@@ -26,17 +26,18 @@ function MobileRow({ item, pathname }: { item: NavItem; pathname: string }) {
       <div
         className={`group relative flex items-center rounded-md text-sm ${
           selfActive
-            ? "bg-emerald-500/10 text-emerald-300"
+            ? "text-[#b5c76a]"
             : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
         }`}
+        style={selfActive ? { background: "rgb(181 199 106 / 0.12)" } : undefined}
       >
         {selfActive && (
-          <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-emerald-400" />
+          <span className="absolute inset-y-1 left-0 w-0.5 rounded-r bg-[#b5c76a]" />
         )}
         <Link href={href} className="flex flex-1 items-center gap-3 px-3 py-2">
           <Icon
             className={`h-4 w-4 ${
-              selfActive ? "text-emerald-400" : "text-zinc-500 group-hover:text-zinc-200"
+              selfActive ? "text-[#b5c76a]" : "text-zinc-500 group-hover:text-zinc-200"
             }`}
           />
           {label}
@@ -65,13 +66,14 @@ function MobileRow({ item, pathname }: { item: NavItem; pathname: string }) {
                 href={c.href}
                 className={`group relative flex items-center gap-3 rounded-md py-1.5 pl-10 pr-3 text-sm ${
                   active
-                    ? "bg-emerald-500/10 text-emerald-300"
+                    ? "text-[#b5c76a]"
                     : "text-zinc-500 hover:bg-zinc-900 hover:text-zinc-200"
                 }`}
+                style={active ? { background: "rgb(181 199 106 / 0.12)" } : undefined}
               >
                 <c.icon
                   className={`h-3.5 w-3.5 ${
-                    active ? "text-emerald-400" : "text-zinc-600 group-hover:text-zinc-300"
+                    active ? "text-[#b5c76a]" : "text-zinc-600 group-hover:text-zinc-300"
                   }`}
                 />
                 {c.label}
@@ -126,14 +128,14 @@ export function MobileNav({
             onClick={() => setOpen(false)}
             aria-hidden
           />
-          <aside className="fixed left-0 top-0 flex h-full w-64 flex-col overflow-y-auto border-r border-zinc-800 bg-zinc-950 p-4 text-zinc-300 shadow-2xl">
+          <aside className="fixed left-0 top-0 flex h-full w-64 flex-col overflow-y-auto border-r p-4 text-zinc-300 shadow-2xl" style={{ background: "#1a1a1a", borderColor: "#2a2a2a" }}>
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src="/molec.png"
+                  src="/xeltrix-team-logo.png"
                   alt=""
-                  className="h-8 w-8 rounded-lg bg-zinc-900 object-contain p-0.5"
+                  className="h-8 w-8 rounded-lg object-contain"
                 />
                 <span className="text-base font-semibold text-zinc-50">Xeltrix Team</span>
               </div>

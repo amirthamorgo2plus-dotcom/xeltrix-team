@@ -152,8 +152,8 @@ export function LoginForm({
       </form>
 
       {sent && (
-        <div className="flex flex-col gap-3 rounded-md border border-emerald-300/60 bg-emerald-50/50 p-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
-          <p className="text-sm text-emerald-700 dark:text-emerald-300">
+        <div className="flex flex-col gap-3 rounded-md border p-3" style={{ borderColor: "rgb(181 199 106 / 0.3)", background: "rgb(181 199 106 / 0.07)" }}>
+          <p className="text-sm" style={{ color: "#b5c76a" }}>
             Check your email and <strong>enter the 6-digit code below</strong>. The code is the
             most reliable — the link can fail if your email opens it in a different app.
           </p>

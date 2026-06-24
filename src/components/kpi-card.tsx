@@ -20,19 +20,19 @@ export function KpiCard({
 }) {
   const toneClass =
     tone === "success"
-      ? "text-emerald-600 dark:text-emerald-400"
+      ? "text-[#b5c76a]"
       : tone === "warning"
-        ? "text-amber-600 dark:text-amber-400"
+        ? "text-amber-400"
         : tone === "danger"
-          ? "text-red-600 dark:text-red-400"
-          : "text-zinc-900 dark:text-zinc-50";
+          ? "text-red-400"
+          : "text-zinc-50";
 
   const body = (
     <Card
       className={cn(
         "transition-all",
         href &&
-          "cursor-pointer hover:border-emerald-400 hover:shadow-md hover:shadow-emerald-500/10 dark:hover:border-emerald-500/50"
+          "cursor-pointer hover:border-[#b5c76a]/60 hover:shadow-md hover:shadow-[#b5c76a]/10"
       )}
     >
       <CardHeader>

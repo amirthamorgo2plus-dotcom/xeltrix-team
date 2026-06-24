@@ -28,7 +28,7 @@ const BUCKET_LABEL: Record<AgingBucket, string> = {
 };
 
 const BUCKET_COLOR: Record<AgingBucket, string> = {
-  "current": "bg-emerald-500/15 text-emerald-400",
+  "current": "bg-[#b5c76a]/10 text-[#b5c76a]",
   "1-15":    "bg-yellow-500/15 text-yellow-400",
   "16-30":   "bg-orange-500/15 text-orange-400",
   "31-45":   "bg-red-500/15 text-red-400",
@@ -36,7 +36,7 @@ const BUCKET_COLOR: Record<AgingBucket, string> = {
 };
 
 const BUCKET_DOT: Record<AgingBucket, string> = {
-  "current": "bg-emerald-400",
+  "current": "bg-[#b5c76a]",
   "1-15":    "bg-yellow-400",
   "16-30":   "bg-orange-400",
   "31-45":   "bg-red-400",
@@ -165,7 +165,7 @@ export default async function CollectionsPage({
             href="/collections"
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
               !memberFilter
-                ? "bg-emerald-500/15 text-emerald-400"
+                ? "bg-[#b5c76a]/10 text-[#b5c76a]"
                 : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
             }`}
           >
@@ -177,7 +177,7 @@ export default async function CollectionsPage({
               href={`/collections?member=${m.id}`}
               className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
                 memberFilter === m.id
-                  ? "bg-emerald-500/15 text-emerald-400"
+                  ? "bg-[#b5c76a]/10 text-[#b5c76a]"
                   : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
               }`}
             >
@@ -285,7 +285,7 @@ export default async function CollectionsPage({
                           href={wa}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 hover:border-emerald-600 hover:text-emerald-400 transition-colors"
+                          className="rounded-lg border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 hover:border-[#b5c76a]/60 hover:text-[#b5c76a] transition-colors"
                         >
                           WhatsApp
                         </a>
