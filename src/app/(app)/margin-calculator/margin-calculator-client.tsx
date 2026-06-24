@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { parsePdfInvoice } from "./actions";
 
 type Template = { id: string; name: string; sku: string | null; rate: number | null; cost_price: number | null; unit: string | null };
@@ -48,7 +48,6 @@ export function MarginCalculatorClient({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [referredBy, setReferredBy] = useState("");
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
   const plMap = new Map<string, number>();
@@ -80,8 +79,8 @@ export function MarginCalculatorClient({
     return Number(referral.default_pct ?? 0);
   }
 
-  // PDF upload handler — add all rows as-is (no matching)
-  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  // PDF upload handler — mapTo decides whether the PDF rate is cost or selling price
+  async function handlePdfUpload(e: React.ChangeEvent<HTMLInputElement>, mapTo: "cost" | "sell") {
     const file = e.target.files?.[0];
     if (!file) return;
     setPdfParsing(true);
@@ -97,8 +96,8 @@ export function MarginCalculatorClient({
       item_id: "",
       custom_name: row.name,
       qty: row.qty,
-      override_rate: null,
-      cost_override: row.rate,
+      override_rate: mapTo === "sell" ? row.rate : null,
+      cost_override: mapTo === "cost" ? row.rate : null,
     }));
 
     if (newLines.length > 0) {
@@ -107,8 +106,8 @@ export function MarginCalculatorClient({
         return hasEmpty ? newLines : [...prev, ...newLines];
       });
     }
-    // reset file input
-    if (fileRef.current) fileRef.current.value = "";
+    // reset file input so the same file can be re-uploaded
+    e.target.value = "";
   }
 
   const addLine = useCallback(() => setLines((l) => [...l, { id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]), []);
@@ -281,13 +280,17 @@ export function MarginCalculatorClient({
         </p>
       )}
 
-      {/* PDF upload */}
+      {/* PDF upload — choose what the PDF rate represents */}
       <div className="flex flex-wrap items-center gap-3">
         <label className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors ${pdfParsing ? "border-zinc-700 text-zinc-500" : "border-dashed border-zinc-600 text-zinc-400 hover:border-[#b5c76a]/50 hover:text-[#b5c76a]"}`}>
-          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Purchase PDF"}
-          <input ref={fileRef} type="file" accept="application/pdf" className="hidden" onChange={handlePdfUpload} disabled={pdfParsing} />
+          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Purchase PDF (cost)"}
+          <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handlePdfUpload(e, "cost")} disabled={pdfParsing} />
         </label>
-        <span className="text-xs text-zinc-600">Upload a supplier invoice PDF — items + qty + cost price will be auto-filled</span>
+        <label className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors ${pdfParsing ? "border-zinc-700 text-zinc-500" : "border-dashed border-zinc-600 text-zinc-400 hover:border-[#b5c76a]/50 hover:text-[#b5c76a]"}`}>
+          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Quote PDF (selling)"}
+          <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handlePdfUpload(e, "sell")} disabled={pdfParsing} />
+        </label>
+        <span className="text-xs text-zinc-600">Purchase PDF → fills Cost Price · Quote PDF → fills Sell Rate</span>
       </div>
       {pdfError && <p className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-400">{pdfError}</p>}
 
