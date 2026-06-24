@@ -26,7 +26,7 @@ export default async function ReferralCustomersPage({
     supabase.from("referrers").select("id, name").eq("team_id", teamId).order("name"),
     supabase.from("leads").select("id, name, company_name, phone").eq("team_id", teamId).order("name"),
     supabase.from("referrer_commissions").select("lead_id, commission_amount, status").eq("team_id", teamId),
-    supabase.from("opportunities").select("lead_id, zoho_salesperson_name").eq("team_id", teamId).eq("stage", "won").not("zoho_salesperson_name", "is", null),
+    supabase.from("opportunities").select("lead_id, zoho_salesperson_name, title").eq("team_id", teamId).neq("stage", "lost").ilike("zoho_salesperson_name", "%&%").limit(1000),
   ]);
 
   const referrerMap = new Map((referrers ?? []).map((r) => [r.id, r.name]));
@@ -47,22 +47,30 @@ export default async function ReferralCustomersPage({
   const unlinkedLeads = (leads ?? []).filter((l) => !linkedLeadIds.has(l.id));
 
   // Auto-detect from Zoho: parse "SomeOne & ReferrerName" → find matching referrer
-  type Detected = { lead_id: string; leadName: string; referrerId: string; referrerName: string; salesperson: string };
-  const detectedMap = new Map<string, Detected>(); // key = lead_id::referrer_id
+  type Detected = { lead_id: string | null; leadName: string; referrerId: string; referrerName: string; salesperson: string };
+  const detectedMap = new Map<string, Detected>();
   for (const opp of wonOpps ?? []) {
     const sp = opp.zoho_salesperson_name ?? "";
     const ampIdx = sp.indexOf("&");
     if (ampIdx === -1) continue;
     const afterAmp = sp.slice(ampIdx + 1).trim().toLowerCase();
-    const referrer = referrerByName.get(afterAmp);
+    // Try exact match first, then check if any referrer name is contained
+    let referrer = referrerByName.get(afterAmp);
+    if (!referrer) {
+      for (const [rname, r] of referrerByName) {
+        if (afterAmp.includes(rname)) { referrer = r; break; }
+      }
+    }
     if (!referrer) continue;
-    if (!opp.lead_id) continue;
-    if (linkedLeadIds.has(opp.lead_id)) continue; // already linked
-    const key = `${opp.lead_id}::${referrer.id}`;
+    if (opp.lead_id && linkedLeadIds.has(opp.lead_id)) continue;
+    const key = `${opp.lead_id ?? "null"}::${referrer.id}`;
     if (!detectedMap.has(key)) {
+      const custName = opp.lead_id
+        ? (leadMap.get(opp.lead_id)?.name ?? opp.title?.split("·")[1]?.trim() ?? opp.lead_id)
+        : (opp.title?.split("·")[1]?.trim() ?? "Unknown customer");
       detectedMap.set(key, {
-        lead_id: opp.lead_id,
-        leadName: leadMap.get(opp.lead_id)?.name ?? opp.lead_id,
+        lead_id: opp.lead_id ?? null,
+        leadName: custName,
         referrerId: referrer.id,
         referrerName: referrer.name,
         salesperson: sp,
@@ -118,12 +126,16 @@ export default async function ReferralCustomersPage({
                       <td className="py-2.5 pr-4 text-[#b5c76a] font-medium">{d.referrerName}</td>
                       <td className="py-2.5 pr-4 text-zinc-500 text-xs">{d.salesperson}</td>
                       <td className="py-2.5">
-                        <a
-                          href={`/referral-customers?link_lead=${d.lead_id}&link_referrer=${d.referrerId}`}
-                          className="rounded-md border border-[#b5c76a]/30 bg-[#b5c76a]/10 px-3 py-1 text-xs text-[#b5c76a] hover:bg-[#b5c76a]/20 transition-colors"
-                        >
-                          Link →
-                        </a>
+                        {d.lead_id ? (
+                          <a
+                            href={`/referral-customers?link_lead=${d.lead_id}&link_referrer=${d.referrerId}`}
+                            className="rounded-md border border-[#b5c76a]/30 bg-[#b5c76a]/10 px-3 py-1 text-xs text-[#b5c76a] hover:bg-[#b5c76a]/20 transition-colors"
+                          >
+                            Link →
+                          </a>
+                        ) : (
+                          <span className="text-xs text-zinc-600">No lead record</span>
+                        )}
                       </td>
                     </tr>
                   ))}
