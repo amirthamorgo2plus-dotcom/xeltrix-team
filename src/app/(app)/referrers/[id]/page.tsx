@@ -49,15 +49,14 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
     .eq("team_id", teamId);
 
   const linkedLeadIds = new Set((links ?? []).map((l) => l.lead_id));
-  const firstInvoiceUsedSet = new Set((links ?? []).filter((l) => l.first_invoice_used).map((l) => l.lead_id));
 
-  // ALL won invoices for linked customers — title is "INVOICE# · CUSTOMER NAME"
+  // Only actual invoices (zoho_invoice_id set) for linked customers — excludes quotes/estimates
   const { data: invoices } = linkedLeadIds.size > 0
     ? await supabase
         .from("opportunities")
         .select("id, title, value, close_date, zoho_salesperson_name, lead_id")
         .eq("team_id", teamId)
-        .neq("stage", "lost")
+        .not("zoho_invoice_id", "is", null)
         .in("lead_id", [...linkedLeadIds])
         .order("close_date", { ascending: false })
     : { data: [] };
@@ -80,13 +79,9 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const referralLeads = [...linkedLeadIds].map((id) => ({ id, name: leadMap.get(id) ?? "—" }));
   const linkMap = new Map((links ?? []).map((l) => [l.lead_id, l]));
 
-  // Per-invoice commission calculation using referrer defaults
+  // Per-invoice commission — default % only for now (first-invoice logic TBD)
   const ref = referrer!;
-  function calcCommission(leadId: string, invValue: number): { pct: number; amount: number; reason: string } {
-    const firstUsed = firstInvoiceUsedSet.has(leadId);
-    if (!firstUsed && ref.first_invoice_pct != null) {
-      return { pct: ref.first_invoice_pct, amount: (invValue * ref.first_invoice_pct) / 100, reason: "1st invoice" };
-    }
+  function calcCommission(_leadId: string, invValue: number): { pct: number; amount: number; reason: string } {
     const pct = ref.default_pct ?? 0;
     return { pct, amount: (invValue * pct) / 100, reason: "default" };
   }
