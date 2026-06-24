@@ -1,7 +1,8 @@
 "use server";
 
+// Direct lib import avoids pdf-parse hanging on test file load in Next.js
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse") as (buf: Buffer) => Promise<{ text: string }>;
+const pdfParse = require("pdf-parse/lib/pdf-parse.js") as (buf: Buffer) => Promise<{ text: string }>;
 
 export type ParsedRow = { name: string; qty: number; rate: number };
 
