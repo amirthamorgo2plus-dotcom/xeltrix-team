@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state";
 import { AddCommissionForm } from "./add-commission-form";
 import { MarkPaidPanel } from "./mark-paid-panel";
 import { EditReferrerForm } from "./edit-referrer-form";
+import { CommissionReportButton, type ReportRow } from "./commission-report-button";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
@@ -103,6 +104,24 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
     return { pct, amount: (invValue * pct) / 100, reason: "default" };
   }
 
+  // Rows for the downloadable PDF report
+  const reportRows: ReportRow[] = (invoices ?? []).map((inv) => {
+    const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
+    const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
+    const comm = calcCommission(inv.lead_id ?? "", base, inv.id);
+    return {
+      customer: referralLeadMap.get(inv.lead_id ?? "") ?? leadMap.get(inv.lead_id ?? "") ?? "—",
+      invoice: inv.title ?? "—",
+      date: inv.close_date ? format(parseISO(inv.close_date), "dd MMM yyyy") : null,
+      taxable: base,
+      pct: logged ? Number(logged.commission_pct ?? 0) : comm.pct,
+      commission: logged ? Number(logged.commission_amount ?? 0) : comm.amount,
+      isFirst: !logged && comm.reason === "1st invoice",
+      status: logged ? (logged.status === "paid" ? "Paid" : "Pending") : "Not logged",
+    };
+  });
+  const generatedOn = format(new Date(), "dd MMM yyyy");
+
   return (
     <div className="flex flex-col gap-6">
       {/* Header */}
@@ -174,13 +193,16 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
         <CardHeader>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <CardTitle>Referred Customer Invoices</CardTitle>
-            <div className="flex gap-2 text-xs">
+            <div className="flex items-center gap-2 text-xs">
               <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-400">
                 {availableInvoices.length} not logged
               </span>
               <span className="rounded-full bg-[#b5c76a]/10 px-2 py-0.5 text-[#b5c76a]">
                 {existingOppIds.size} logged
               </span>
+              {reportRows.length > 0 && (
+                <CommissionReportButton referrerName={referrer.name} rows={reportRows} generatedOn={generatedOn} />
+              )}
             </div>
           </div>
           <p className="mt-1 text-xs text-zinc-500">All won invoices for customers linked to {referrer.name}. Commission is estimated from referrer default rates.</p>
