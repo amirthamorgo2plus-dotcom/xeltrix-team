@@ -12,7 +12,7 @@ export default async function ReferralCustomersPage() {
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const supabase = await createClient();
 
-  const [{ data: links }, { data: referrers }, { data: commissions }, { data: wonOpps }, { data: leadsRaw }] = await Promise.all([
+  const [{ data: links }, { data: referrers }, { data: commissions }, { data: wonOpps }, { data: allOpps }, { data: leadsRaw }] = await Promise.all([
     supabase
       .from("lead_referrers")
       .select("id, lead_id, referrer_id, first_invoice_used")
@@ -21,15 +21,30 @@ export default async function ReferralCustomersPage() {
     supabase.from("referrers").select("id, name").eq("team_id", teamId).order("name"),
     supabase.from("referrer_commissions").select("lead_id, commission_amount, status").eq("team_id", teamId),
     supabase.from("opportunities").select("lead_id, zoho_salesperson_name, title").eq("team_id", teamId).neq("stage", "lost").ilike("zoho_salesperson_name", "%&%").limit(1000),
-    // Direct leads query (team-scoped RLS allows it)
+    // All opportunities — titles are "INVOICE# · CUSTOMER NAME", reliable source of customer names
+    supabase.from("opportunities").select("lead_id, title").eq("team_id", teamId).not("lead_id", "is", null).limit(3000),
+    // Direct leads query (may be RLS-restricted; used as supplement when available)
     supabase.from("leads").select("id, name, company_name, phone").eq("team_id", teamId).limit(2000),
   ]);
 
-  const leads = (leadsRaw ?? []).sort((a, b) => (a.company_name || a.name).localeCompare(b.company_name || b.name));
+  // Build lead_id -> name map. Prefer leads table; fall back to opportunity title.
+  const leadMap = new Map<string, { name: string; phone: string | null }>();
+  for (const l of leadsRaw ?? []) {
+    leadMap.set(l.id, { name: l.company_name || l.name, phone: l.phone });
+  }
+  for (const opp of allOpps ?? []) {
+    if (!opp.lead_id || leadMap.has(opp.lead_id)) continue;
+    const nameFromTitle = opp.title?.split("·")[1]?.trim();
+    if (nameFromTitle) leadMap.set(opp.lead_id, { name: nameFromTitle, phone: null });
+  }
+
+  // Customer list for the dropdown — from the combined map
+  const leads = [...leadMap.entries()]
+    .map(([id, v]) => ({ id, name: v.name, company_name: v.name, phone: v.phone }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const referrerMap = new Map((referrers ?? []).map((r) => [r.id, r.name]));
   const referrerByName = new Map((referrers ?? []).map((r) => [r.name.toLowerCase(), r]));
-  const leadMap = new Map((leads ?? []).map((l) => [l.id, { name: l.company_name || l.name, phone: l.phone }]));
 
   // Commission totals per lead
   const leadCommMap = new Map<string, { pending: number; paid: number }>();
