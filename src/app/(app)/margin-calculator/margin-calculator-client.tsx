@@ -272,12 +272,9 @@ export function MarginCalculatorClient({
               <th className="pb-2 pr-3 w-64">Item</th>
               <th className="pb-2 pr-3 w-20 text-right">Qty</th>
               <th className="pb-2 pr-3 text-right">Sell Rate</th>
-              <th className="pb-2 pr-3 text-right">Override Rate</th>
               <th className="pb-2 pr-3 text-right">Cost Price</th>
               <th className="pb-2 pr-3 text-right">Revenue</th>
               <th className="pb-2 pr-3 text-center">Gross %</th>
-              <th className="pb-2 pr-3 text-right">Comm %</th>
-              <th className="pb-2 text-center">Net %</th>
               <th className="pb-2 w-6" />
             </tr>
           </thead>
@@ -316,16 +313,13 @@ export function MarginCalculatorClient({
                     className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
                 </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-zinc-400 text-xs">
-                  {line.stdSell != null ? fmt(line.stdSell) : "—"}
-                </td>
                 <td className="py-2 pr-3">
                   <input
                     type="number"
                     min="0"
                     step="0.01"
                     placeholder="—"
-                    value={line.override_rate ?? ""}
+                    value={line.override_rate ?? (line.stdSell != null ? line.stdSell : "")}
                     onChange={(e) => updateLine(line.id, { override_rate: e.target.value ? Number(e.target.value) : null })}
                     className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
@@ -348,17 +342,6 @@ export function MarginCalculatorClient({
                     <span className="rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums"
                       style={{ color: marginColor(line.grossMargin), background: `${marginColor(line.grossMargin)}18` }}>
                       {line.grossMargin.toFixed(1)}%
-                    </span>
-                  ) : <span className="text-zinc-600 text-xs">—</span>}
-                </td>
-                <td className="py-2 pr-3 text-right tabular-nums text-xs text-amber-400">
-                  {line.commPct > 0 ? `${line.commPct}%` : "—"}
-                </td>
-                <td className="py-2 pr-3 text-center">
-                  {line.netMargin != null ? (
-                    <span className="rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums"
-                      style={{ color: marginColor(line.netMargin), background: `${marginColor(line.netMargin)}18` }}>
-                      {line.netMargin.toFixed(1)}%
                     </span>
                   ) : <span className="text-zinc-600 text-xs">—</span>}
                 </td>
