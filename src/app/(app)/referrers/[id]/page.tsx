@@ -79,9 +79,26 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const referralLeads = [...linkedLeadIds].map((id) => ({ id, name: leadMap.get(id) ?? "—" }));
   const linkMap = new Map((links ?? []).map((l) => [l.lead_id, l]));
 
-  // Per-invoice commission — default % only for now (first-invoice logic TBD)
+  // Identify the earliest invoice per customer (by date) — that one gets the 1st-invoice %
+  const firstInvoiceIdByLead = new Map<string, string>();
+  {
+    const earliest = new Map<string, { id: string; date: string }>();
+    for (const inv of invoices ?? []) {
+      if (!inv.lead_id) continue;
+      const date = inv.close_date ?? "9999-12-31";
+      const prev = earliest.get(inv.lead_id);
+      if (!prev || date < prev.date) earliest.set(inv.lead_id, { id: inv.id, date });
+    }
+    for (const [lead, v] of earliest) firstInvoiceIdByLead.set(lead, v.id);
+  }
+
+  // Per-invoice commission: 1st invoice per customer → first_invoice_pct, else default_pct
   const ref = referrer!;
-  function calcCommission(_leadId: string, invValue: number): { pct: number; amount: number; reason: string } {
+  function calcCommission(leadId: string, invValue: number, invId: string): { pct: number; amount: number; reason: string } {
+    const isFirst = firstInvoiceIdByLead.get(leadId) === invId;
+    if (isFirst && ref.first_invoice_pct != null) {
+      return { pct: ref.first_invoice_pct, amount: (invValue * ref.first_invoice_pct) / 100, reason: "1st invoice" };
+    }
     const pct = ref.default_pct ?? 0;
     return { pct, amount: (invValue * pct) / 100, reason: "default" };
   }
@@ -188,7 +205,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                 <tbody>
                   {(invoices ?? []).map((inv) => {
                     const invAmt = Number(inv.value ?? 0);
-                    const comm = calcCommission(inv.lead_id ?? "", invAmt);
+                    const comm = calcCommission(inv.lead_id ?? "", invAmt, inv.id);
                     const isLogged = existingOppIds.has(inv.id);
                     const loggedRecord = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
                     return (
@@ -205,6 +222,9 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                           <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
                             {isLogged && loggedRecord ? `${loggedRecord.commission_pct}%` : `${comm.pct}%`}
                           </span>
+                          {!isLogged && comm.reason === "1st invoice" && (
+                            <span className="ml-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">1st</span>
+                          )}
                         </td>
                         <td className="py-2.5 pr-4 text-right tabular-nums font-semibold" style={{ color: "#b5c76a" }}>
                           {isLogged && loggedRecord
@@ -234,7 +254,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                     <td className="pt-3 text-right tabular-nums font-bold" style={{ color: "#b5c76a" }}>
                       {fmt((invoices ?? []).reduce((s, inv) => {
                         const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
-                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", Number(inv.value ?? 0)).amount);
+                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", Number(inv.value ?? 0), inv.id).amount);
                       }, 0))}
                     </td>
                     <td />
