@@ -37,9 +37,7 @@ export default async function ReferralCustomersPage() {
     leadCommMap.set(c.lead_id, prev);
   }
 
-  // Leads not yet linked
   const linkedLeadIds = new Set((links ?? []).map((l) => l.lead_id));
-  const unlinkedLeads = (leads ?? []).filter((l) => !linkedLeadIds.has(l.id));
 
   // Auto-detect from Zoho: parse "SomeOne & ReferrerName" → find matching referrer
   type Detected = { lead_id: string | null; leadName: string; referrerId: string; referrerName: string; salesperson: string };
@@ -83,7 +81,7 @@ export default async function ReferralCustomersPage() {
 
       <LinkCustomerForm
         teamId={teamId}
-        leads={unlinkedLeads.map((l) => ({ id: l.id, name: l.company_name || l.name, phone: l.phone }))}
+        leads={(leads ?? []).map((l) => ({ id: l.id, name: l.company_name || l.name, phone: l.phone }))}
         referrers={referrers ?? []}
       />
 
