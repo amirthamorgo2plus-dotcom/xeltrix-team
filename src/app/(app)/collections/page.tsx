@@ -103,7 +103,12 @@ export default async function CollectionsPage({
   }
 
   // ── Salesperson name helper ───────────────────────────────────────────────
-  const memberMap = new Map(members.map((m) => [m.id, m.full_name ?? m.email]));
+  const memberMap = new Map(
+    members.map((m) => [
+      m.id,
+      ((m.profiles as unknown) as { full_name?: string } | null)?.full_name ?? m.email,
+    ])
+  );
   function salespersonLabel(r: Row) {
     return r.zoho_salesperson_name ?? memberMap.get(r.owner_id ?? "") ?? "Unassigned";
   }
