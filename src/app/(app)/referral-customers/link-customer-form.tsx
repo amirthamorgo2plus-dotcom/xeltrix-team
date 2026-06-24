@@ -10,9 +10,17 @@ import { linkCustomer } from "./actions";
 type Lead = { id: string; name: string; phone: string | null };
 type Referrer = { id: string; name: string };
 
-export function LinkCustomerForm({ teamId, leads, referrers }: { teamId: string; leads: Lead[]; referrers: Referrer[] }) {
+export function LinkCustomerForm({
+  teamId, leads, referrers, defaultLeadId, defaultReferrerId,
+}: {
+  teamId: string;
+  leads: Lead[];
+  referrers: Referrer[];
+  defaultLeadId?: string;
+  defaultReferrerId?: string;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!defaultLeadId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,14 +55,14 @@ export function LinkCustomerForm({ teamId, leads, referrers }: { teamId: string;
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="lead_id">Customer *</Label>
-          <select id="lead_id" name="lead_id" required className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
+          <select id="lead_id" name="lead_id" required defaultValue={defaultLeadId ?? ""} className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
             <option value="">Select customer…</option>
             {leads.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="referrer_id">Referrer *</Label>
-          <select id="referrer_id" name="referrer_id" required className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
+          <select id="referrer_id" name="referrer_id" required defaultValue={defaultReferrerId ?? ""} className="h-10 rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-100">
             <option value="">Select referrer…</option>
             {referrers.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>

@@ -7,24 +7,31 @@ import { LinkCustomerForm } from "./link-customer-form";
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
 
-export default async function ReferralCustomersPage() {
+export default async function ReferralCustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ link_lead?: string; link_referrer?: string }>;
+}) {
+  const sp = await searchParams;
   const m = await getMyMembership();
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const supabase = await createClient();
 
-  const [{ data: links }, { data: referrers }, { data: leads }, { data: commissions }] = await Promise.all([
+  const [{ data: links }, { data: referrers }, { data: leads }, { data: commissions }, { data: wonOpps }] = await Promise.all([
     supabase
       .from("lead_referrers")
       .select("id, lead_id, referrer_id, default_commission_pct, first_commission_pct, traded_commission_pct, manufactured_commission_pct, first_invoice_used, active, notes")
       .eq("team_id", teamId)
       .order("created_at", { ascending: false }),
     supabase.from("referrers").select("id, name").eq("team_id", teamId).order("name"),
-    supabase.from("leads").select("id, name, phone").eq("team_id", teamId).order("name"),
+    supabase.from("leads").select("id, name, company_name, phone").eq("team_id", teamId).order("name"),
     supabase.from("referrer_commissions").select("lead_id, commission_amount, status").eq("team_id", teamId),
+    supabase.from("opportunities").select("lead_id, zoho_salesperson_name").eq("team_id", teamId).eq("stage", "won").not("zoho_salesperson_name", "is", null),
   ]);
 
   const referrerMap = new Map((referrers ?? []).map((r) => [r.id, r.name]));
-  const leadMap = new Map((leads ?? []).map((l) => [l.id, { name: l.name, phone: l.phone }]));
+  const referrerByName = new Map((referrers ?? []).map((r) => [r.name.toLowerCase(), r]));
+  const leadMap = new Map((leads ?? []).map((l) => [l.id, { name: l.company_name || l.name, phone: l.phone }]));
 
   // Commission totals per lead
   const leadCommMap = new Map<string, { pending: number; paid: number }>();
@@ -39,6 +46,31 @@ export default async function ReferralCustomersPage() {
   const linkedLeadIds = new Set((links ?? []).map((l) => l.lead_id));
   const unlinkedLeads = (leads ?? []).filter((l) => !linkedLeadIds.has(l.id));
 
+  // Auto-detect from Zoho: parse "SomeOne & ReferrerName" → find matching referrer
+  type Detected = { lead_id: string; leadName: string; referrerId: string; referrerName: string; salesperson: string };
+  const detectedMap = new Map<string, Detected>(); // key = lead_id::referrer_id
+  for (const opp of wonOpps ?? []) {
+    const sp = opp.zoho_salesperson_name ?? "";
+    const ampIdx = sp.indexOf("&");
+    if (ampIdx === -1) continue;
+    const afterAmp = sp.slice(ampIdx + 1).trim().toLowerCase();
+    const referrer = referrerByName.get(afterAmp);
+    if (!referrer) continue;
+    if (!opp.lead_id) continue;
+    if (linkedLeadIds.has(opp.lead_id)) continue; // already linked
+    const key = `${opp.lead_id}::${referrer.id}`;
+    if (!detectedMap.has(key)) {
+      detectedMap.set(key, {
+        lead_id: opp.lead_id,
+        leadName: leadMap.get(opp.lead_id)?.name ?? opp.lead_id,
+        referrerId: referrer.id,
+        referrerName: referrer.name,
+        salesperson: sp,
+      });
+    }
+  }
+  const detected = [...detectedMap.values()];
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -48,9 +80,59 @@ export default async function ReferralCustomersPage() {
 
       <LinkCustomerForm
         teamId={teamId}
-        leads={unlinkedLeads}
+        leads={sp.link_lead ? (leads ?? []) : unlinkedLeads}
         referrers={referrers ?? []}
+        defaultLeadId={sp.link_lead}
+        defaultReferrerId={sp.link_referrer}
       />
+
+      {/* Auto-detected from Zoho */}
+      {detected.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400 font-medium">
+                {detected.length} detected
+              </span>
+              Detected from Zoho Salesperson Names
+            </CardTitle>
+            <p className="mt-1 text-xs text-zinc-500">
+              These customers have <span className="text-zinc-300">"Main & Referrer"</span> in their Zoho salesperson field but haven't been linked yet. Link them to start tracking commission.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-zinc-500">
+                  <tr>
+                    <th className="pb-2 pr-4">Customer</th>
+                    <th className="pb-2 pr-4">Referrer</th>
+                    <th className="pb-2 pr-4">Zoho Salesperson</th>
+                    <th className="pb-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {detected.map((d) => (
+                    <tr key={`${d.lead_id}::${d.referrerId}`} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
+                      <td className="py-2.5 pr-4 font-medium text-zinc-100">{d.leadName}</td>
+                      <td className="py-2.5 pr-4 text-[#b5c76a] font-medium">{d.referrerName}</td>
+                      <td className="py-2.5 pr-4 text-zinc-500 text-xs">{d.salesperson}</td>
+                      <td className="py-2.5">
+                        <a
+                          href={`/referral-customers?link_lead=${d.lead_id}&link_referrer=${d.referrerId}`}
+                          className="rounded-md border border-[#b5c76a]/30 bg-[#b5c76a]/10 px-3 py-1 text-xs text-[#b5c76a] hover:bg-[#b5c76a]/20 transition-colors"
+                        >
+                          Link →
+                        </a>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
