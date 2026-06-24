@@ -8,13 +8,15 @@ export default async function MarginCalculatorPage() {
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
 
   const supabase = await createClient();
-  const [{ data: templates }, { data: customers }, { data: priceLists }, { data: referralCustomers }, { data: allOpps }] = await Promise.all([
+  const [{ data: templates }, { data: customers }, { data: priceLists }, { data: referralCustomers }, { data: allOpps }, { data: referrersList }] = await Promise.all([
     supabase.from("opportunity_templates").select("id, name, sku, rate, cost_price, unit").eq("team_id", teamId).eq("active", true).order("name").limit(500),
     supabase.from("leads").select("id, company_name").eq("team_id", teamId).order("company_name").limit(500),
     supabase.from("customer_price_lists").select("lead_id, item_id, custom_rate").eq("team_id", teamId),
     supabase.from("lead_referrers").select("lead_id, referrer_id, traded_pct, manufactured_pct, default_pct, first_invoice_pct, referrers(name)").eq("team_id", teamId),
     // Opportunity titles ("INVOICE# · CUSTOMER NAME") — reliable customer list when leads table is RLS-restricted
     supabase.from("opportunities").select("lead_id, title").eq("team_id", teamId).not("lead_id", "is", null).limit(3000),
+    // Referrers list for the "Referred by" dropdown
+    supabase.from("referrers").select("id, name, default_pct, traded_pct, manufactured_pct, first_invoice_pct").eq("team_id", teamId).order("name"),
   ]);
 
   // Build customer list: prefer leads table; fall back to opportunity titles
@@ -59,6 +61,7 @@ export default async function MarginCalculatorPage() {
             customers={customerRows}
             priceLists={priceLists ?? []}
             referralCustomers={referralRows}
+            referrers={referrersList ?? []}
           />
         </CardContent>
       </Card>

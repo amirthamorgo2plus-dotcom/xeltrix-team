@@ -7,6 +7,7 @@ type Template = { id: string; name: string; sku: string | null; rate: number | n
 type Customer = { id: string; company_name: string };
 type PriceList = { lead_id: string; item_id: string; custom_rate: number };
 type ReferralCustomer = { lead_id: string; referrer_id: string; referrer_name: string | null; traded_pct: number | null; manufactured_pct: number | null; default_pct: number | null; first_invoice_pct: number | null };
+type Referrer = { id: string; name: string; default_pct: number | null; traded_pct: number | null; manufactured_pct: number | null; first_invoice_pct: number | null };
 
 // custom_name: for free-text rows (PDF import); item_id: for catalog rows
 type LineItem = { id: string; item_id: string; custom_name: string; qty: number; override_rate: number | null; cost_override: number | null };
@@ -36,17 +37,19 @@ export function MarginCalculatorClient({
   customers,
   priceLists,
   referralCustomers,
+  referrers,
 }: {
   templates: Template[];
   customers: Customer[];
   priceLists: PriceList[];
   referralCustomers: ReferralCustomer[];
+  referrers: Referrer[];
 }) {
   const [customerInput, setCustomerInput] = useState<string>("");
   const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]);
   const [pdfParsing, setPdfParsing] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const [referredBy, setReferredBy] = useState("");
+  const [referrerId, setReferrerId] = useState("");
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
@@ -60,10 +63,21 @@ export function MarginCalculatorClient({
     (c) => c.company_name.toLowerCase() === customerInput.trim().toLowerCase()
   );
   const customerId = matchedCustomer?.id ?? "";
-  const referral = referralCustomers.find((r) => r.lead_id === customerId) ?? null;
   const customerName = customerInput.trim() || "—";
-  // Manual "Referred by" wins; else the selected referral customer's referrer
-  const referrerName = referredBy.trim() || referral?.referrer_name || "";
+
+  // Commission source: chosen referrer (dropdown) wins; else the customer's referral link
+  const selectedReferrer = referrers.find((r) => r.id === referrerId) ?? null;
+  const customerReferral = referralCustomers.find((r) => r.lead_id === customerId) ?? null;
+  const referral = selectedReferrer
+    ? {
+        traded_pct: selectedReferrer.traded_pct,
+        manufactured_pct: selectedReferrer.manufactured_pct,
+        default_pct: selectedReferrer.default_pct,
+        first_invoice_pct: selectedReferrer.first_invoice_pct,
+        referrer_name: selectedReferrer.name,
+      }
+    : customerReferral;
+  const referrerName = referral?.referrer_name || "";
   const reportDateLabel = reportDate
     ? new Date(reportDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     : "";
@@ -268,13 +282,18 @@ export function MarginCalculatorClient({
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-400">Referred by</label>
-          <input
-            type="text"
-            value={referredBy}
-            onChange={(e) => setReferredBy(e.target.value)}
-            placeholder={referral?.referrer_name ?? "Person name"}
+          <select
+            value={referrerId}
+            onChange={(e) => setReferrerId(e.target.value)}
             className="rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none w-52"
-          />
+          >
+            <option value="">— None —</option>
+            {referrers.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}{r.default_pct != null ? ` (${r.default_pct}%)` : ""}
+              </option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="mb-1.5 block text-xs font-medium text-zinc-400">Date</label>
@@ -292,17 +311,13 @@ export function MarginCalculatorClient({
         </p>
       )}
 
-      {/* PDF upload — choose what the PDF rate represents */}
+      {/* PDF upload — quote: rates fill Sell Rate */}
       <div className="flex flex-wrap items-center gap-3">
         <label className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors ${pdfParsing ? "border-zinc-700 text-zinc-500" : "border-dashed border-zinc-600 text-zinc-400 hover:border-[#b5c76a]/50 hover:text-[#b5c76a]"}`}>
-          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Purchase PDF (cost)"}
-          <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handlePdfUpload(e, "cost")} disabled={pdfParsing} />
-        </label>
-        <label className={`inline-flex h-9 cursor-pointer items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors ${pdfParsing ? "border-zinc-700 text-zinc-500" : "border-dashed border-zinc-600 text-zinc-400 hover:border-[#b5c76a]/50 hover:text-[#b5c76a]"}`}>
-          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Quote PDF (selling)"}
+          {pdfParsing ? "⏳ Parsing…" : "📄 Upload Quote PDF"}
           <input type="file" accept="application/pdf" className="hidden" onChange={(e) => handlePdfUpload(e, "sell")} disabled={pdfParsing} />
         </label>
-        <span className="text-xs text-zinc-600">Purchase PDF → fills Cost Price · Quote PDF → fills Sell Rate</span>
+        <span className="text-xs text-zinc-600">Upload a quote PDF — items, qty &amp; selling price auto-filled. Enter cost price to see margin.</span>
       </div>
       {pdfError && <p className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-400">{pdfError}</p>}
 
