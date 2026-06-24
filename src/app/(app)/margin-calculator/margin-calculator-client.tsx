@@ -74,6 +74,8 @@ export function MarginCalculatorClient({
   const [deliveryOn, setDeliveryOn] = useState(false);
   const [manualKm, setManualKm] = useState<string>("");
   const [deliveryOverride, setDeliveryOverride] = useState<string>("");
+  const [perKmInput, setPerKmInput] = useState<string>("");
+  const [commPctInput, setCommPctInput] = useState<string>("");
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
   const plMap = new Map<string, number>();
@@ -101,6 +103,10 @@ export function MarginCalculatorClient({
       }
     : customerReferral;
   const referrerName = referral?.referrer_name || "";
+  // Single editable commission % — defaults to referrer's default %, editable (e.g. first invoice differs)
+  const commissionDefault = referral?.default_pct != null ? Number(referral.default_pct) : 0;
+  const firstInvoicePct = referral?.first_invoice_pct != null ? Number(referral.first_invoice_pct) : null;
+  const effectiveCommPct = commPctInput.trim() !== "" ? Number(commPctInput) : commissionDefault;
   const reportDateLabel = reportDate
     ? new Date(reportDate + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     : "";
@@ -177,10 +183,12 @@ export function MarginCalculatorClient({
 
     totalRevenue += revenue;
     if (costTotal != null) totalCost += costTotal;
-    totalCommission += commission;
 
     return { ...line, t, stdSell, sell, cost, commPct, revenue, costTotal, commission, grossMargin, netMargin };
   });
+
+  // Commission payable = order revenue × the (editable) commission %
+  totalCommission = referral ? (totalRevenue * effectiveCommPct) / 100 : 0;
 
   const totalGrossMargin = totalRevenue > 0 && totalCost > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : null;
   const totalNetMargin = totalGrossMargin != null ? ((totalRevenue - totalCost - totalCommission) / totalRevenue) * 100 : null;
@@ -189,8 +197,9 @@ export function MarginCalculatorClient({
   const destCoords = customerId ? coordsByLead[customerId] : undefined;
   const autoKm = destCoords ? haversineKm(origin, destCoords) * delivery.roadFactor : null;
   const distanceKm = manualKm.trim() !== "" ? Number(manualKm) : autoKm;
+  const effPerKm = perKmInput.trim() !== "" ? Number(perKmInput) : delivery.perKm;
   const autoDeliveryCost = distanceKm != null && Number.isFinite(distanceKm)
-    ? delivery.base + distanceKm * delivery.perKm
+    ? delivery.base + distanceKm * effPerKm
     : null;
   const deliveryCost = !deliveryOn
     ? 0
@@ -286,8 +295,11 @@ export function MarginCalculatorClient({
           <td class="r">${reportTotalProfitPct.toFixed(1)}%</td>
         </tr></tfoot>
       </table>
+      ${referral && totalCommission > 0
+        ? `<p style="margin-top:10px;font-size:12px"><b>Referral commission (${effectiveCommPct}%${referrerName ? `, ${referrerName}` : ""}):</b> ${inr(totalCommission)}</p>`
+        : ""}
       ${deliveryOn && deliveryCost > 0
-        ? `<p style="margin-top:10px;font-size:12px"><b>Delivery (est.):</b> ${inr(deliveryCost)}${distanceKm != null ? ` &nbsp;(≈ ${distanceKm.toFixed(1)} km)` : ""}</p>`
+        ? `<p style="margin-top:4px;font-size:12px"><b>Delivery (est.):</b> ${inr(deliveryCost)}${distanceKm != null ? ` &nbsp;(≈ ${distanceKm.toFixed(1)} km)` : ""}</p>`
         : ""}
       <p class="ts">Generated from Xeltrix Team — Margin Calculator</p>
       <script>window.onload = () => { window.print(); }</script>
@@ -348,9 +360,27 @@ export function MarginCalculatorClient({
         </div>
       </div>
       {referral && (
-        <p className="-mt-2 text-xs text-amber-400">
-          Referral active — commission rates: Traded {referral.traded_pct ?? "—"}%, Manufactured {referral.manufactured_pct ?? "—"}%, Default {referral.default_pct ?? "—"}%
-        </p>
+        <div className="-mt-1 flex flex-wrap items-end gap-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+          <div>
+            <label className="mb-1 block text-[11px] text-zinc-400">Commission %</label>
+            <input
+              type="number" min="0" step="0.1"
+              value={commPctInput}
+              onChange={(e) => setCommPctInput(e.target.value)}
+              placeholder={String(commissionDefault)}
+              className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-amber-300 focus:border-amber-400 focus:outline-none tabular-nums"
+            />
+          </div>
+          <p className="pb-1.5 text-xs text-zinc-500">
+            Default <span className="text-zinc-300">{commissionDefault}%</span>
+            {firstInvoicePct != null && <> · 1st invoice <span className="text-zinc-300">{firstInvoicePct}%</span></>}
+            {" "}— edit for first order
+          </p>
+          <p className="pb-1 ml-auto text-sm">
+            <span className="text-zinc-500 text-xs">Commission payable ({effectiveCommPct}%):</span>{" "}
+            <span className="font-semibold text-amber-300 tabular-nums">{fmt(totalCommission)}</span>
+          </p>
+        </div>
       )}
 
       {/* PDF upload — quote: rates fill Sell Rate */}
@@ -385,6 +415,16 @@ export function MarginCalculatorClient({
                   />
                 </div>
                 <div>
+                  <label className="mb-1 block text-[11px] text-zinc-500">Rate ₹/km</label>
+                  <input
+                    type="number" min="0" step="1"
+                    value={perKmInput}
+                    onChange={(e) => setPerKmInput(e.target.value)}
+                    placeholder={String(delivery.perKm)}
+                    className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
+                  />
+                </div>
+                <div>
                   <label className="mb-1 block text-[11px] text-zinc-500">Delivery ₹ (override)</label>
                   <input
                     type="number" min="0" step="1"
@@ -394,14 +434,14 @@ export function MarginCalculatorClient({
                     className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-[#b5c76a] focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
                 </div>
-                <div className="pb-1 text-sm">
+                <div className="pb-1.5 text-sm">
                   <span className="text-zinc-500 text-xs">Delivery:</span>{" "}
                   <span className="font-semibold text-zinc-100 tabular-nums">{fmt(deliveryCost)}</span>
                 </div>
               </div>
               <p className="text-xs text-zinc-500">
                 {autoKm != null
-                  ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> straight-line from Coimbatore · ₹{delivery.perKm}/km</>
+                  ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> straight-line from Coimbatore · ₹{effPerKm}/km</>
                   : <span className="text-amber-400">
                       Customer not geocoded — add it on the{" "}
                       <a href="/visits" className="underline hover:text-amber-300">Visits</a> page (Geocode customers), or enter distance manually. Otherwise leave it.
@@ -677,12 +717,22 @@ export function MarginCalculatorClient({
                 </tr>
               </tfoot>
             </table>
-            {deliveryOn && deliveryCost > 0 && (
-              <p className="px-4 py-2 text-xs text-zinc-700">
-                <span className="font-semibold">Delivery (est.):</span> {fmt(deliveryCost)}
-                {distanceKm != null && <span className="text-zinc-500"> &nbsp;(≈ {distanceKm.toFixed(1)} km)</span>}
-              </p>
-            )}
+            {(referral && totalCommission > 0) || (deliveryOn && deliveryCost > 0) ? (
+              <div className="px-4 py-2 text-xs text-zinc-700 space-y-0.5">
+                {referral && totalCommission > 0 && (
+                  <p>
+                    <span className="font-semibold">Referral commission ({effectiveCommPct}%):</span> {fmt(totalCommission)}
+                    {referrerName && <span className="text-zinc-500"> &nbsp;— {referrerName}</span>}
+                  </p>
+                )}
+                {deliveryOn && deliveryCost > 0 && (
+                  <p>
+                    <span className="font-semibold">Delivery (est.):</span> {fmt(deliveryCost)}
+                    {distanceKm != null && <span className="text-zinc-500"> &nbsp;(≈ {distanceKm.toFixed(1)} km)</span>}
+                  </p>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       )}
