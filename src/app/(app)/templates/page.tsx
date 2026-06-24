@@ -18,15 +18,34 @@ function fmtMoney(v: number | null, currency = "INR") {
 
 type StatusFilter = "all" | "active" | "inactive";
 
+const CATEGORIES = [
+  { prefix: "A-",  label: "Assets",           color: "#a78bfa" },
+  { prefix: "R-",  label: "Traded",            color: "#38bdf8" },
+  { prefix: "PM-", label: "Packing Materials", color: "#fb923c" },
+  { prefix: "RM-", label: "Raw Materials",     color: "#facc15" },
+  { prefix: "X-",  label: "Xeltrix Products",  color: "#b5c76a" },
+] as const;
+
+type CategoryKey = typeof CATEGORIES[number]["prefix"] | "all";
+
+function categoryOf(name: string): typeof CATEGORIES[number]["prefix"] | null {
+  for (const c of CATEGORIES) {
+    if (name.toUpperCase().startsWith(c.prefix)) return c.prefix;
+  }
+  return null;
+}
+
 export default async function TemplatesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: StatusFilter; sort?: string }>;
+  searchParams: Promise<{ q?: string; status?: StatusFilter; cat?: string; sort?: string }>;
 }) {
   const sp = await searchParams;
   const q = (sp.q ?? "").trim();
   const status: StatusFilter =
     sp.status === "active" || sp.status === "inactive" ? sp.status : "all";
+  const cat: CategoryKey =
+    (CATEGORIES.find((c) => c.prefix === sp.cat)?.prefix) ?? "all";
   const sort = resolveSort(sp.sort, { withNewest: false });
 
   const settings = await getTeamSettings();
@@ -48,24 +67,47 @@ export default async function TemplatesPage({
   if (status === "active") query = query.eq("active", true);
   if (status === "inactive") query = query.eq("active", false);
 
-  const { data: templates } = await query.limit(500);
+  const { data: rawTemplates } = await query.limit(500);
 
-  function chip(value: StatusFilter, label: string) {
-    const isActive = status === value;
+  // Category filter applied in-memory (prefix on name)
+  const templates = cat === "all"
+    ? (rawTemplates ?? [])
+    : (rawTemplates ?? []).filter((t) => categoryOf(t.name) === cat);
+
+  function buildParams(overrides: Record<string, string | undefined>) {
     const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (value !== "all") params.set("status", value);
-    if (sort.key !== "name_asc") params.set("sort", sort.key);
-    const href = `/templates${params.size ? `?${params}` : ""}`;
+    const merged = { q: q || undefined, status: status !== "all" ? status : undefined, cat: cat !== "all" ? cat : undefined, sort: sort.key !== "name_asc" ? sort.key : undefined, ...overrides };
+    for (const [k, v] of Object.entries(merged)) if (v) params.set(k, v);
+    return params.size ? `?${params}` : "";
+  }
+
+  function statusChip(value: StatusFilter, label: string) {
+    const isActive = status === value;
     return (
       <Link
         key={value}
-        href={href}
+        href={`/templates${buildParams({ status: value !== "all" ? value : undefined })}`}
         className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
           isActive
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-            : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900"
+            ? "border-[#b5c76a]/40 bg-[#b5c76a]/10 text-[#b5c76a]"
+            : "border-zinc-700 text-zinc-400 hover:bg-zinc-800"
         }`}
+      >
+        {label}
+      </Link>
+    );
+  }
+
+  function catChip(prefix: CategoryKey, label: string, color: string) {
+    const isActive = cat === prefix;
+    return (
+      <Link
+        key={prefix}
+        href={`/templates${buildParams({ cat: prefix !== "all" ? prefix : undefined })}`}
+        className="rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+        style={isActive
+          ? { borderColor: `${color}50`, background: `${color}18`, color }
+          : { borderColor: "#3f3f46", color: "#a1a1aa" }}
       >
         {label}
       </Link>
@@ -84,7 +126,7 @@ export default async function TemplatesPage({
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>{templates?.length ?? 0} products</CardTitle>
+            <CardTitle>{templates.length} product{templates.length === 1 ? "" : "s"}{cat !== "all" ? ` · ${CATEGORIES.find(c => c.prefix === cat)?.label}` : ""}</CardTitle>
             <SortControl
               current={sort.key}
               basePath="/templates"
@@ -97,39 +139,34 @@ export default async function TemplatesPage({
           </div>
         </CardHeader>
         <CardContent>
-          <form className="mb-3 flex gap-2" action="/templates">
-            {status !== "all" && (
-              <input type="hidden" name="status" value={status} />
-            )}
-            {sort.key !== "name_asc" && (
-              <input type="hidden" name="sort" value={sort.key} />
-            )}
-            <Input
-              name="q"
-              defaultValue={q}
-              placeholder="Search by name or SKU…"
-              className="max-w-sm"
-            />
-            <button
-              type="submit"
-              className="inline-flex h-10 items-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-zinc-50 hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-            >
+          <form className="mb-4 flex gap-2" action="/templates">
+            {status !== "all" && <input type="hidden" name="status" value={status} />}
+            {cat !== "all" && <input type="hidden" name="cat" value={cat} />}
+            {sort.key !== "name_asc" && <input type="hidden" name="sort" value={sort.key} />}
+            <Input name="q" defaultValue={q} placeholder="Search by name or SKU…" className="max-w-sm" />
+            <button type="submit" className="inline-flex h-10 items-center rounded-md bg-zinc-800 px-4 text-sm font-medium text-zinc-50 hover:bg-zinc-700">
               Search
             </button>
-            {(q || status !== "all") && (
-              <a
-                href="/templates"
-                className="inline-flex h-10 items-center rounded-md border border-zinc-300 px-4 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-              >
+            {(q || status !== "all" || cat !== "all") && (
+              <a href="/templates" className="inline-flex h-10 items-center rounded-md border border-zinc-700 px-4 text-sm text-zinc-400 hover:bg-zinc-800">
                 Clear
               </a>
             )}
           </form>
 
-          <div className="mb-4 flex flex-wrap gap-2">
-            {chip("all", "All")}
-            {chip("active", "Active only")}
-            {chip("inactive", "Inactive only")}
+          {/* Category filter */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-zinc-500 shrink-0">Category:</span>
+            {catChip("all", "All", "#a1a1aa")}
+            {CATEGORIES.map((c) => catChip(c.prefix, c.label, c.color))}
+          </div>
+
+          {/* Status filter */}
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-zinc-500 shrink-0">Status:</span>
+            {statusChip("all", "All")}
+            {statusChip("active", "Active")}
+            {statusChip("inactive", "Inactive")}
           </div>
 
           {!templates || templates.length === 0 ? (
