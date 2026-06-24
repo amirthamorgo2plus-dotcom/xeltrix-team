@@ -9,12 +9,13 @@ import { addCommission } from "./actions";
 
 type Invoice = { id: string; title: string; value: number; leadName: string; closeDate: string | null };
 type LinkInfo = { default_commission_pct: number; first_commission_pct: number | null; traded_commission_pct: number | null; manufactured_commission_pct: number | null; first_invoice_used: boolean };
+type ReferrerDefaults = { default_pct: number | null; traded_pct: number | null; manufactured_pct: number | null; first_invoice_pct: number | null };
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
 
 export function AddCommissionForm({
-  teamId, referrerId, invoices, linkMap, leadIds, invoiceLeadMap,
+  teamId, referrerId, invoices, linkMap, leadIds, invoiceLeadMap, referrerDefaults,
 }: {
   teamId: string;
   referrerId: string;
@@ -22,6 +23,7 @@ export function AddCommissionForm({
   linkMap: Record<string, LinkInfo>;
   leadIds: Record<string, string>;
   invoiceLeadMap: Record<string, string>;
+  referrerDefaults: ReferrerDefaults;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -34,21 +36,30 @@ export function AddCommissionForm({
   function getSuggestedPct(invId: string, cat: string): number {
     const leadId = invoiceLeadMap[invId];
     const link = linkMap[leadId];
-    if (!link) return 5;
-    if (cat === "traded" && link.traded_commission_pct != null) return link.traded_commission_pct;
-    if (cat === "manufactured" && link.manufactured_commission_pct != null) return link.manufactured_commission_pct;
-    if (!link.first_invoice_used && link.first_commission_pct != null) return link.first_commission_pct;
-    return link.default_commission_pct;
+    // Per-customer overrides take priority, then referrer-level defaults
+    const tradedPct = link?.traded_commission_pct ?? referrerDefaults.traded_pct;
+    const mfgPct = link?.manufactured_commission_pct ?? referrerDefaults.manufactured_pct;
+    const firstPct = link?.first_commission_pct ?? referrerDefaults.first_invoice_pct;
+    const defaultPct = link?.default_commission_pct ?? referrerDefaults.default_pct ?? 0;
+    const firstUsed = link?.first_invoice_used ?? false;
+
+    if (cat === "traded" && tradedPct != null) return tradedPct;
+    if (cat === "manufactured" && mfgPct != null) return mfgPct;
+    if (!firstUsed && firstPct != null) return firstPct;
+    return defaultPct;
   }
 
   function getReason(invId: string, cat: string): string {
     const leadId = invoiceLeadMap[invId];
     const link = linkMap[leadId];
-    if (!link) return "default";
     if (customPct) return "manual_override";
-    if (cat === "traded" && link.traded_commission_pct != null) return "traded_rate";
-    if (cat === "manufactured" && link.manufactured_commission_pct != null) return "manufactured_rate";
-    if (!link.first_invoice_used && link.first_commission_pct != null) return "first_invoice";
+    const tradedPct = link?.traded_commission_pct ?? referrerDefaults.traded_pct;
+    const mfgPct = link?.manufactured_commission_pct ?? referrerDefaults.manufactured_pct;
+    const firstPct = link?.first_commission_pct ?? referrerDefaults.first_invoice_pct;
+    const firstUsed = link?.first_invoice_used ?? false;
+    if (cat === "traded" && tradedPct != null) return "traded_rate";
+    if (cat === "manufactured" && mfgPct != null) return "manufactured_rate";
+    if (!firstUsed && firstPct != null) return "first_invoice";
     return "default";
   }
 

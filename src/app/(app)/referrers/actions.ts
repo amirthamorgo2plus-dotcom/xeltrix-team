@@ -4,12 +4,20 @@ import { createClient } from "@/lib/supabase/server";
 
 export async function saveReferrer(fd: FormData) {
   const supabase = await createClient();
+  const num = (key: string) => {
+    const v = fd.get(key);
+    return v && String(v).trim() !== "" ? Number(v) : null;
+  };
   const { error } = await supabase.from("referrers").insert({
     team_id: fd.get("team_id") as string,
     name: (fd.get("name") as string).trim(),
     phone: (fd.get("phone") as string | null)?.trim() || null,
     email: (fd.get("email") as string | null)?.trim() || null,
     bank_details: (fd.get("bank_details") as string | null)?.trim() || null,
+    default_pct: num("default_pct"),
+    traded_pct: num("traded_pct"),
+    manufactured_pct: num("manufactured_pct"),
+    first_invoice_pct: num("first_invoice_pct"),
   });
   if (error) return { error: error.message };
   return { error: null };

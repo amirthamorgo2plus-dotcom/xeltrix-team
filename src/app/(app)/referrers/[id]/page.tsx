@@ -26,7 +26,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
 
   const { data: referrer } = await supabase
     .from("referrers")
-    .select("id, name, phone, email, bank_details")
+    .select("id, name, phone, email, bank_details, default_pct, traded_pct, manufactured_pct, first_invoice_pct")
     .eq("id", id)
     .eq("team_id", teamId)
     .single();
@@ -135,6 +135,12 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
           ]))}
           leadIds={Object.fromEntries(referralLeads.map((l) => [l.id, l.name]))}
           invoiceLeadMap={Object.fromEntries((invoices ?? []).map((inv) => [inv.id, inv.lead_id ?? ""]))}
+          referrerDefaults={{
+            default_pct: referrer.default_pct ?? null,
+            traded_pct: referrer.traded_pct ?? null,
+            manufactured_pct: referrer.manufactured_pct ?? null,
+            first_invoice_pct: referrer.first_invoice_pct ?? null,
+          }}
         />
       )}
 

@@ -59,6 +59,32 @@ export function ReferrerForm({ teamId }: { teamId: string }) {
           <Input id="bank_details" name="bank_details" placeholder="UPI / Account / IFSC" />
         </div>
       </div>
+
+      <div>
+        <p className="mb-3 text-xs font-medium text-zinc-400 uppercase tracking-wide">Default Commission Rates</p>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="default_pct">Default %</Label>
+            <Input id="default_pct" name="default_pct" type="number" min="0" max="100" step="0.1" placeholder="e.g. 5" />
+            <p className="text-[11px] text-zinc-600">All items</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="traded_pct">Traded %</Label>
+            <Input id="traded_pct" name="traded_pct" type="number" min="0" max="100" step="0.1" placeholder="e.g. 3" />
+            <p className="text-[11px] text-zinc-600">R- items</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="manufactured_pct">Manufactured %</Label>
+            <Input id="manufactured_pct" name="manufactured_pct" type="number" min="0" max="100" step="0.1" placeholder="e.g. 8" />
+            <p className="text-[11px] text-zinc-600">X- / PM- / RM-</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="first_invoice_pct">1st Invoice %</Label>
+            <Input id="first_invoice_pct" name="first_invoice_pct" type="number" min="0" max="100" step="0.1" placeholder="e.g. 10" />
+            <p className="text-[11px] text-zinc-600">First order only</p>
+          </div>
+        </div>
+      </div>
       {error && <p className="text-sm text-red-400">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save Referrer"}</Button>

@@ -11,7 +11,7 @@ export default async function ReferrersPage() {
 
   const { data: referrers } = await supabase
     .from("referrers")
-    .select("id, name, phone, email, bank_details, created_at")
+    .select("id, name, phone, email, bank_details, default_pct, traded_pct, manufactured_pct, first_invoice_pct, created_at")
     .eq("team_id", teamId)
     .order("name");
 
@@ -55,8 +55,10 @@ export default async function ReferrersPage() {
                   <tr>
                     <th className="pb-2 pr-4">Name</th>
                     <th className="pb-2 pr-4">Phone</th>
-                    <th className="pb-2 pr-4">Email</th>
-                    <th className="pb-2 pr-4">Bank Details</th>
+                    <th className="pb-2 pr-4 text-center">Default %</th>
+                    <th className="pb-2 pr-4 text-center">Traded %</th>
+                    <th className="pb-2 pr-4 text-center">Mfg %</th>
+                    <th className="pb-2 pr-4 text-center">1st Inv %</th>
                     <th className="pb-2 pr-4 text-right">Pending</th>
                     <th className="pb-2 text-right">Paid to Date</th>
                   </tr>
@@ -72,8 +74,10 @@ export default async function ReferrersPage() {
                           </a>
                         </td>
                         <td className="py-3 pr-4 text-zinc-400">{r.phone || "—"}</td>
-                        <td className="py-3 pr-4 text-zinc-400">{r.email || "—"}</td>
-                        <td className="py-3 pr-4 text-zinc-400 max-w-[160px] truncate">{r.bank_details || "—"}</td>
+                        <td className="py-3 pr-4 text-center tabular-nums text-zinc-300">{r.default_pct != null ? `${r.default_pct}%` : "—"}</td>
+                        <td className="py-3 pr-4 text-center tabular-nums text-zinc-400">{r.traded_pct != null ? `${r.traded_pct}%` : "—"}</td>
+                        <td className="py-3 pr-4 text-center tabular-nums text-zinc-400">{r.manufactured_pct != null ? `${r.manufactured_pct}%` : "—"}</td>
+                        <td className="py-3 pr-4 text-center tabular-nums text-zinc-400">{r.first_invoice_pct != null ? `${r.first_invoice_pct}%` : "—"}</td>
                         <td className="py-3 pr-4 text-right tabular-nums">
                           {s.pending > 0 ? (
                             <span className="font-semibold text-amber-400">{fmt(s.pending)}</span>
