@@ -54,7 +54,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const { data: invoices } = linkedLeadIds.size > 0
     ? await supabase
         .from("opportunities")
-        .select("id, title, value, close_date, zoho_salesperson_name, lead_id")
+        .select("id, title, value, value_excl_tax, close_date, zoho_salesperson_name, lead_id")
         .eq("team_id", teamId)
         .not("zoho_invoice_id", "is", null)
         .in("lead_id", [...linkedLeadIds])
@@ -196,7 +196,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                     <th className="pb-2 pr-4">Customer</th>
                     <th className="pb-2 pr-4">Invoice</th>
                     <th className="pb-2 pr-4">Date</th>
-                    <th className="pb-2 pr-4 text-right">Invoice Amt</th>
+                    <th className="pb-2 pr-4 text-right">Taxable Amt (excl. GST)</th>
                     <th className="pb-2 pr-3 text-center">Rate</th>
                     <th className="pb-2 pr-4 text-right">Est. Commission</th>
                     <th className="pb-2">Status</th>
@@ -204,7 +204,8 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                 </thead>
                 <tbody>
                   {(invoices ?? []).map((inv) => {
-                    const invAmt = Number(inv.value ?? 0);
+                    // Commission is on the pre-GST taxable value (value_excl_tax), not the GST-inclusive total
+                    const invAmt = Number(inv.value_excl_tax ?? inv.value ?? 0);
                     const comm = calcCommission(inv.lead_id ?? "", invAmt, inv.id);
                     const isLogged = existingOppIds.has(inv.id);
                     const loggedRecord = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
@@ -248,13 +249,14 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                   <tr className="border-t border-zinc-700">
                     <td colSpan={3} className="pt-3 text-xs text-zinc-500">Total</td>
                     <td className="pt-3 text-right tabular-nums font-bold text-zinc-200">
-                      {fmt((invoices ?? []).reduce((s, i) => s + Number(i.value ?? 0), 0))}
+                      {fmt((invoices ?? []).reduce((s, i) => s + Number(i.value_excl_tax ?? i.value ?? 0), 0))}
                     </td>
                     <td />
                     <td className="pt-3 text-right tabular-nums font-bold" style={{ color: "#b5c76a" }}>
                       {fmt((invoices ?? []).reduce((s, inv) => {
                         const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
-                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", Number(inv.value ?? 0), inv.id).amount);
+                        const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
+                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", base, inv.id).amount);
                       }, 0))}
                     </td>
                     <td />
