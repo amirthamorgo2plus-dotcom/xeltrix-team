@@ -12,8 +12,18 @@ export default async function MarginCalculatorPage() {
     supabase.from("opportunity_templates").select("id, name, sku, rate, cost_price, unit").eq("team_id", teamId).eq("active", true).order("name").limit(500),
     supabase.from("leads").select("id, company_name").eq("team_id", teamId).order("company_name").limit(500),
     supabase.from("customer_price_lists").select("lead_id, item_id, custom_rate").eq("team_id", teamId),
-    supabase.from("lead_referrers").select("lead_id, referrer_id, traded_pct, manufactured_pct, default_pct, first_invoice_pct").eq("team_id", teamId),
+    supabase.from("lead_referrers").select("lead_id, referrer_id, traded_pct, manufactured_pct, default_pct, first_invoice_pct, referrers(name)").eq("team_id", teamId),
   ]);
+
+  const referralRows = (referralCustomers ?? []).map((r) => ({
+    lead_id: r.lead_id,
+    referrer_id: r.referrer_id,
+    referrer_name: ((r.referrers as unknown) as { name?: string } | null)?.name ?? null,
+    traded_pct: r.traded_pct,
+    manufactured_pct: r.manufactured_pct,
+    default_pct: r.default_pct,
+    first_invoice_pct: r.first_invoice_pct,
+  }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,7 +42,7 @@ export default async function MarginCalculatorPage() {
             templates={templates ?? []}
             customers={customers ?? []}
             priceLists={priceLists ?? []}
-            referralCustomers={referralCustomers ?? []}
+            referralCustomers={referralRows}
           />
         </CardContent>
       </Card>

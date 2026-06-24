@@ -6,7 +6,7 @@ import { parsePdfInvoice } from "./actions";
 type Template = { id: string; name: string; sku: string | null; rate: number | null; cost_price: number | null; unit: string | null };
 type Customer = { id: string; company_name: string };
 type PriceList = { lead_id: string; item_id: string; custom_rate: number };
-type ReferralCustomer = { lead_id: string; referrer_id: string; traded_pct: number | null; manufactured_pct: number | null; default_pct: number | null; first_invoice_pct: number | null };
+type ReferralCustomer = { lead_id: string; referrer_id: string; referrer_name: string | null; traded_pct: number | null; manufactured_pct: number | null; default_pct: number | null; first_invoice_pct: number | null };
 
 // custom_name: for free-text rows (PDF import); item_id: for catalog rows
 type LineItem = { id: string; item_id: string; custom_name: string; qty: number; override_rate: number | null; cost_override: number | null };
@@ -54,6 +54,8 @@ export function MarginCalculatorClient({
     plMap.set(`${pl.lead_id}::${pl.item_id}`, pl.custom_rate);
   }
   const referral = referralCustomers.find((r) => r.lead_id === customerId) ?? null;
+  const customerName = customers.find((c) => c.id === customerId)?.company_name ?? "—";
+  const referrerName = referral?.referrer_name ?? "—";
 
   function sellingRate(itemId: string): number | null {
     const key = `${customerId}::${itemId}`;
@@ -140,6 +142,94 @@ export function MarginCalculatorClient({
     if (pct >= 35) return "#b5c76a";
     if (pct >= 20) return "#eab308";
     return "#ef4444";
+  }
+
+  function lineName(line: (typeof computed)[number]): string {
+    if (line.custom_name) return line.custom_name;
+    return line.t?.name ?? "";
+  }
+
+  // Rows that have a name + a usable selling price — what shows in the report
+  const reportRows = computed.filter((l) => lineName(l) && l.sell > 0);
+  const reportTotalCost = reportRows.reduce((s, l) => s + (l.costTotal ?? 0), 0);
+  const reportTotalSales = reportRows.reduce((s, l) => s + l.revenue, 0);
+  const reportTotalProfit = reportTotalSales - reportTotalCost;
+  const reportTotalProfitPct = reportTotalSales > 0 ? (reportTotalProfit / reportTotalSales) * 100 : 0;
+
+  const inr = (v: number) =>
+    new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(v);
+
+  // Build a clean printable report in a new window (Save as PDF or print)
+  function printReport() {
+    const rowsHtml = reportRows
+      .map((l, i) => {
+        const cost = l.cost ?? 0;
+        const costVal = l.costTotal ?? 0;
+        const profit = l.revenue - costVal;
+        const profitPct = l.revenue > 0 ? (profit / l.revenue) * 100 : 0;
+        const pColor = profitPct >= 35 ? "#1a7a2e" : profitPct >= 20 ? "#9a7d00" : "#c0392b";
+        const pBg = profitPct >= 35 ? "#e7f4ea" : profitPct >= 20 ? "#fdf6e3" : "#fdecea";
+        return `<tr>
+          <td class="c">${i + 1}</td>
+          <td>${lineName(l).replace(/</g, "&lt;")}</td>
+          <td class="c">${l.qty}</td>
+          <td class="r">${inr(cost)}</td>
+          <td class="r">${inr(l.sell)}</td>
+          <td class="r">${inr(costVal)}</td>
+          <td class="r">${inr(l.revenue)}</td>
+          <td class="r" style="color:${pColor}">${inr(profit)}</td>
+          <td class="r" style="color:${pColor};background:${pBg};font-weight:600">${profitPct.toFixed(1)}%</td>
+        </tr>`;
+      })
+      .join("");
+
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Margin Report — ${customerName}</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { font-family: Arial, Helvetica, sans-serif; margin: 24px; color: #1a1a1a; }
+      .head { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; }
+      .head h1 { font-size:18px; margin:0 0 4px; }
+      .meta { font-size:12px; color:#444; }
+      .meta b { color:#1a1a1a; }
+      table { width:100%; border-collapse:collapse; font-size:12px; }
+      th { background:#b5c76a; color:#1a1a1a; padding:7px 8px; text-align:left; border:1px solid #94a653; font-size:11px; text-transform:uppercase; }
+      td { padding:6px 8px; border:1px solid #ddd; }
+      tr:nth-child(even) td { background:#fafafa; }
+      .c { text-align:center; }
+      .r { text-align:right; font-variant-numeric:tabular-nums; }
+      tfoot td { font-weight:700; background:#f0f3e6 !important; border-top:2px solid #94a653; }
+      .ts { font-size:11px; color:#888; margin-top:10px; }
+    </style></head><body>
+      <div class="head">
+        <div>
+          <h1>Margin Calculation</h1>
+          <div class="meta">Customer: <b>${customerName}</b>${referral ? ` &nbsp;•&nbsp; Referred by: <b>${referrerName}</b>` : ""}</div>
+        </div>
+        <div class="meta">Xeltrix Chemicals Private Limited</div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>S.No</th><th>Product Name</th><th>Qty</th>
+          <th>Purchase Price (Unit)</th><th>Selling Price (Unit)</th>
+          <th>Cost Value</th><th>Sales Value</th><th>Profit ₹</th><th>Profit %</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot><tr>
+          <td colspan="5" class="r">TOTAL</td>
+          <td class="r">${inr(reportTotalCost)}</td>
+          <td class="r">${inr(reportTotalSales)}</td>
+          <td class="r">${inr(reportTotalProfit)}</td>
+          <td class="r">${reportTotalProfitPct.toFixed(1)}%</td>
+        </tr></tfoot>
+      </table>
+      <p class="ts">Generated from Xeltrix Team — Margin Calculator</p>
+      <script>window.onload = () => { window.print(); }</script>
+    </body></html>`;
+
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
   }
 
   return (
@@ -323,6 +413,85 @@ export function MarginCalculatorClient({
               Commission payable: {fmt(totalCommission)}
             </p>
           )}
+        </div>
+      )}
+
+      {/* Report preview (spreadsheet format) + print/download */}
+      {reportRows.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Report Preview</h3>
+            <button
+              onClick={printReport}
+              className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors"
+              style={{ background: "#b5c76a", color: "#1a1a1a" }}
+            >
+              🖨️ Print / Download PDF
+            </button>
+          </div>
+
+          {/* Light themed, screenshot-friendly */}
+          <div className="overflow-x-auto rounded-lg border border-zinc-300 bg-white text-zinc-900">
+            <div className="flex items-start justify-between gap-4 px-4 pt-4">
+              <div>
+                <p className="text-base font-bold">Margin Calculation</p>
+                <p className="text-xs text-zinc-600 mt-0.5">
+                  Customer: <span className="font-semibold text-zinc-900">{customerName}</span>
+                  {referral && <> &nbsp;•&nbsp; Referred by: <span className="font-semibold text-zinc-900">{referrerName}</span></>}
+                </p>
+              </div>
+              <p className="text-xs text-zinc-500">Xeltrix Chemicals Pvt Ltd</p>
+            </div>
+            <table className="mt-3 w-full text-xs">
+              <thead>
+                <tr style={{ background: "#b5c76a" }} className="text-left uppercase text-[10px] text-zinc-900">
+                  <th className="px-2 py-1.5 text-center">S.No</th>
+                  <th className="px-2 py-1.5">Product Name</th>
+                  <th className="px-2 py-1.5 text-center">Qty</th>
+                  <th className="px-2 py-1.5 text-right">Purchase ₹/u</th>
+                  <th className="px-2 py-1.5 text-right">Selling ₹/u</th>
+                  <th className="px-2 py-1.5 text-right">Cost Value</th>
+                  <th className="px-2 py-1.5 text-right">Sales Value</th>
+                  <th className="px-2 py-1.5 text-right">Profit ₹</th>
+                  <th className="px-2 py-1.5 text-right">Profit %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportRows.map((l, i) => {
+                  const cost = l.cost ?? 0;
+                  const costVal = l.costTotal ?? 0;
+                  const profit = l.revenue - costVal;
+                  const profitPct = l.revenue > 0 ? (profit / l.revenue) * 100 : 0;
+                  const pColor = profitPct >= 35 ? "#1a7a2e" : profitPct >= 20 ? "#9a7d00" : "#c0392b";
+                  const pBg = profitPct >= 35 ? "#e7f4ea" : profitPct >= 20 ? "#fdf6e3" : "#fdecea";
+                  return (
+                    <tr key={l.id} className="border-t border-zinc-200">
+                      <td className="px-2 py-1.5 text-center text-zinc-500">{i + 1}</td>
+                      <td className="px-2 py-1.5 font-medium">{lineName(l)}</td>
+                      <td className="px-2 py-1.5 text-center tabular-nums">{l.qty}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{inr(cost)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{inr(l.sell)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{inr(costVal)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{inr(l.revenue)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: pColor }}>{inr(profit)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold" style={{ color: pColor, background: pBg }}>
+                        {profitPct.toFixed(1)}%
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: "#f0f3e6" }} className="border-t-2 font-bold" >
+                  <td colSpan={5} className="px-2 py-2 text-right">TOTAL</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{inr(reportTotalCost)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{inr(reportTotalSales)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{inr(reportTotalProfit)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums">{reportTotalProfitPct.toFixed(1)}%</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
     </div>
