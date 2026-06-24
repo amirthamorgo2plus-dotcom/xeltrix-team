@@ -3,13 +3,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-function nullableNum(fd: FormData, key: string): number | null {
-  const v = (fd.get(key) as string | null)?.trim();
-  if (!v) return null;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-
 export async function linkCustomer(fd: FormData) {
   const supabase = await createClient();
   const { error } = await supabase.from("lead_referrers").upsert({
