@@ -313,7 +313,7 @@ export function MarginCalculatorClient({
                     className="w-20 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
                 </td>
-                <td className="py-2 pr-3">
+                <td className="py-2 pr-3 text-right">
                   <input
                     type="number"
                     min="0"
@@ -324,7 +324,7 @@ export function MarginCalculatorClient({
                     className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
                   />
                 </td>
-                <td className="py-2 pr-3">
+                <td className="py-2 pr-3 text-right">
                   <input
                     type="number"
                     min="0"
