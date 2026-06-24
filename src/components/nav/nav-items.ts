@@ -25,6 +25,8 @@ import {
   BadgeIndianRupee,
   UserPlus,
   HandCoins,
+  ListChecks,
+  Calculator,
   type LucideIcon,
 } from "lucide-react";
 
@@ -93,6 +95,8 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { href: "/templates", label: "Product price list", icon: Package },
+  { href: "/price-lists", label: "Customer Price Lists", icon: ListChecks, adminOnly: true },
+  { href: "/margin-calculator", label: "Margin Calculator", icon: Calculator },
   { href: "/team", label: "Team members", icon: Users2, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug, adminOnly: true },
   { href: "/profile", label: "Profile", icon: User },

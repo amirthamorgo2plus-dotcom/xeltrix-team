@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SortControl, resolveSort } from "@/components/sort-control";
+import { CostPriceCell } from "./cost-price-cell";
 
 function fmtMoney(v: number | null, currency = "INR") {
   if (v === null || v === undefined) return "—";
@@ -57,7 +58,7 @@ export default async function TemplatesPage({
   const supabase = await createClient();
   let query = supabase
     .from("opportunity_templates")
-    .select("id, name, sku, rate, unit, active, zoho_item_id")
+    .select("id, name, sku, rate, unit, active, zoho_item_id, cost_price")
     .eq("team_id", teamId)
     .order(sort.column, { ascending: sort.ascending });
 
@@ -181,27 +182,42 @@ export default async function TemplatesPage({
                   <tr>
                     <th className="pb-2 pr-4">Name</th>
                     <th className="pb-2 pr-4">SKU</th>
-                    <th className="pb-2 pr-4 text-right">Rate</th>
+                    <th className="pb-2 pr-4 text-right">Selling Rate</th>
+                    <th className="pb-2 pr-4 text-right">Cost Price</th>
+                    <th className="pb-2 pr-4 text-center">Margin %</th>
                     <th className="pb-2 pr-4">Unit</th>
                     <th className="pb-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {templates.map((t) => (
-                    <tr key={t.id} className="border-t border-zinc-200 dark:border-zinc-800">
-                      <td className="py-2 pr-4 font-medium">{t.name}</td>
-                      <td className="py-2 pr-4 text-zinc-500">{t.sku || "—"}</td>
-                      <td className="py-2 pr-4 text-right tabular-nums">{fmtMoney(t.rate, currency)}</td>
-                      <td className="py-2 pr-4 text-zinc-500">{t.unit || "—"}</td>
-                      <td className="py-2">
-                        {t.active ? (
-                          <Badge tone="success">Active</Badge>
-                        ) : (
-                          <Badge tone="muted">Inactive</Badge>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {templates.map((t) => {
+                    const cost = t.cost_price != null ? Number(t.cost_price) : null;
+                    const rate = Number(t.rate ?? 0);
+                    const margin = cost != null && rate > 0 ? ((rate - cost) / rate) * 100 : null;
+                    const marginColor = margin == null ? "" : margin >= 35 ? "#b5c76a" : margin >= 20 ? "#eab308" : "#ef4444";
+                    return (
+                      <tr key={t.id} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
+                        <td className="py-2.5 pr-4 font-medium text-zinc-100">{t.name}</td>
+                        <td className="py-2.5 pr-4 text-zinc-500 font-mono text-xs">{t.sku || "—"}</td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-300">{fmtMoney(t.rate, currency)}</td>
+                        <td className="py-2.5 pr-4 text-right">
+                          <CostPriceCell id={t.id} cost={cost} currency={currency} />
+                        </td>
+                        <td className="py-2.5 pr-4 text-center">
+                          {margin != null ? (
+                            <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold tabular-nums"
+                              style={{ color: marginColor, background: `${marginColor}18` }}>
+                              {margin.toFixed(1)}%
+                            </span>
+                          ) : <span className="text-xs text-zinc-600">—</span>}
+                        </td>
+                        <td className="py-2.5 pr-4 text-zinc-500">{t.unit || "—"}</td>
+                        <td className="py-2.5">
+                          {t.active ? <Badge tone="success">Active</Badge> : <Badge tone="muted">Inactive</Badge>}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
