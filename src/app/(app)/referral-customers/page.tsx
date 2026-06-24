@@ -170,7 +170,6 @@ export default async function ReferralCustomersPage() {
                   <tr>
                     <th className="pb-2 pr-4">Customer</th>
                     <th className="pb-2 pr-4">Referrer</th>
-                    <th className="pb-2 pr-4 text-center">1st Invoice</th>
                     <th className="pb-2 pr-4 text-right">Commission Pending</th>
                     <th className="pb-2 text-right">Commission Paid</th>
                   </tr>
@@ -190,11 +189,6 @@ export default async function ReferralCustomersPage() {
                           <a href={`/referrers/${lk.referrer_id}`} className="text-[#b5c76a] font-medium hover:underline">
                             {referrerMap.get(lk.referrer_id) ?? "—"}
                           </a>
-                        </td>
-                        <td className="py-3 pr-4 text-center text-xs">
-                          {lk.first_invoice_used
-                            ? <span className="text-zinc-500">✅ Used</span>
-                            : <span className="text-amber-400">⬜ Not yet</span>}
                         </td>
                         <td className="py-3 pr-4 text-right tabular-nums">
                           {comm.pending > 0
