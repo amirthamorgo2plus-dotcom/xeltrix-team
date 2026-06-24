@@ -118,10 +118,10 @@ export default async function ReferralCustomersPage() {
                         {d.lead_id ? (
                           <QuickLinkButton
                             teamId={teamId}
-                            leads={leads ?? []}
-                            referrers={referrers ?? []}
                             leadId={d.lead_id}
                             referrerId={d.referrerId}
+                            leadName={d.leadName}
+                            referrerName={d.referrerName}
                           />
                         ) : (
                           <span className="text-xs text-zinc-600">No lead record</span>
