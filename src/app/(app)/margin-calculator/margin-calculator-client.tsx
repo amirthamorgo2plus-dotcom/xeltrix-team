@@ -32,18 +32,37 @@ function uid() {
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(v);
 
+type Coords = { lat: number; lng: number };
+
+// Great-circle distance in km between two coordinates
+function haversineKm(a: Coords, b: Coords): number {
+  const R = 6371;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 export function MarginCalculatorClient({
   templates,
   customers,
   priceLists,
   referralCustomers,
   referrers,
+  coordsByLead,
+  origin,
+  delivery,
 }: {
   templates: Template[];
   customers: Customer[];
   priceLists: PriceList[];
   referralCustomers: ReferralCustomer[];
   referrers: Referrer[];
+  coordsByLead: Record<string, Coords>;
+  origin: Coords;
+  delivery: { base: number; perKm: number; roadFactor: number };
 }) {
   const [customerInput, setCustomerInput] = useState<string>("");
   const [lines, setLines] = useState<LineItem[]>([{ id: uid(), item_id: "", custom_name: "", qty: 1, override_rate: null, cost_override: null }]);
@@ -51,6 +70,9 @@ export function MarginCalculatorClient({
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [referrerId, setReferrerId] = useState("");
   const [reportDate, setReportDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [deliveryOn, setDeliveryOn] = useState(false);
+  const [manualKm, setManualKm] = useState<string>("");
+  const [deliveryOverride, setDeliveryOverride] = useState<string>("");
 
   const tMap = new Map(templates.map((t) => [t.id, t]));
   const plMap = new Map<string, number>();
@@ -162,6 +184,22 @@ export function MarginCalculatorClient({
   const totalGrossMargin = totalRevenue > 0 && totalCost > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : null;
   const totalNetMargin = totalGrossMargin != null ? ((totalRevenue - totalCost - totalCommission) / totalRevenue) * 100 : null;
 
+  // Delivery (optional, approximate straight-line distance × road factor)
+  const destCoords = customerId ? coordsByLead[customerId] : undefined;
+  const autoKm = destCoords ? haversineKm(origin, destCoords) * delivery.roadFactor : null;
+  const distanceKm = manualKm.trim() !== "" ? Number(manualKm) : autoKm;
+  const autoDeliveryCost = distanceKm != null && Number.isFinite(distanceKm)
+    ? delivery.base + distanceKm * delivery.perKm
+    : null;
+  const deliveryCost = !deliveryOn
+    ? 0
+    : deliveryOverride.trim() !== ""
+      ? Number(deliveryOverride)
+      : (autoDeliveryCost ?? 0);
+  const netAfterDelivery = totalRevenue > 0
+    ? ((totalRevenue - totalCost - totalCommission - deliveryCost) / totalRevenue) * 100
+    : null;
+
   function marginColor(pct: number | null) {
     if (pct == null) return "#71717a";
     if (pct >= 35) return "#b5c76a";
@@ -247,6 +285,9 @@ export function MarginCalculatorClient({
           <td class="r">${reportTotalProfitPct.toFixed(1)}%</td>
         </tr></tfoot>
       </table>
+      ${deliveryOn && deliveryCost > 0
+        ? `<p style="margin-top:10px;font-size:12px"><b>Delivery (est.):</b> ${inr(deliveryCost)}${distanceKm != null ? ` &nbsp;(≈ ${distanceKm.toFixed(1)} km)` : ""}</p>`
+        : ""}
       <p class="ts">Generated from Xeltrix Team — Margin Calculator</p>
       <script>window.onload = () => { window.print(); }</script>
     </body></html>`;
@@ -320,6 +361,47 @@ export function MarginCalculatorClient({
         <span className="text-xs text-zinc-600">Upload a quote PDF — items, qty &amp; selling price auto-filled. Enter cost price to see margin.</span>
       </div>
       {pdfError && <p className="rounded-md border border-red-500/20 bg-red-500/5 px-3 py-2 text-sm text-red-400">{pdfError}</p>}
+
+      {/* Delivery (optional) */}
+      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+        <label className="flex items-center gap-2 text-sm font-medium text-zinc-300 cursor-pointer">
+          <input type="checkbox" checked={deliveryOn} onChange={(e) => setDeliveryOn(e.target.checked)} className="accent-[#b5c76a]" />
+          Add delivery cost estimate
+        </label>
+        {deliveryOn && (
+          <div className="mt-3 flex flex-wrap items-end gap-4">
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-500">Distance (km)</label>
+              <input
+                type="number" min="0" step="0.1"
+                value={manualKm}
+                onChange={(e) => setManualKm(e.target.value)}
+                placeholder={autoKm != null ? autoKm.toFixed(1) : "enter km"}
+                className="w-28 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-zinc-100 focus:border-[#b5c76a] focus:outline-none tabular-nums"
+              />
+            </div>
+            <div className="text-xs text-zinc-500">
+              {autoKm != null
+                ? <>Auto ≈ <span className="text-zinc-300">{autoKm.toFixed(1)} km</span> from Coimbatore · {delivery.perKm}/km</>
+                : <span className="text-amber-400">No coordinates for this customer — enter distance manually</span>}
+            </div>
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-500">Delivery cost ₹ (override)</label>
+              <input
+                type="number" min="0" step="1"
+                value={deliveryOverride}
+                onChange={(e) => setDeliveryOverride(e.target.value)}
+                placeholder={autoDeliveryCost != null ? autoDeliveryCost.toFixed(0) : "—"}
+                className="w-32 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-[#b5c76a] focus:border-[#b5c76a] focus:outline-none tabular-nums"
+              />
+            </div>
+            <div className="text-sm">
+              <span className="text-zinc-500 text-xs">Delivery:</span>{" "}
+              <span className="font-semibold text-zinc-100 tabular-nums">{fmt(deliveryCost)}</span>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Line items */}
       <div className="overflow-x-auto">
@@ -470,6 +552,23 @@ export function MarginCalculatorClient({
               ) : <p className="text-xl font-bold text-zinc-600">—</p>}
             </div>
           </div>
+          {deliveryOn && deliveryCost > 0 && (
+            <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4 border-t border-zinc-800 pt-4">
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Delivery (est.)</p>
+                <p className="text-xl font-bold tabular-nums text-zinc-100">{fmt(deliveryCost)}</p>
+                {distanceKm != null && <p className="text-[11px] text-zinc-600">≈ {distanceKm.toFixed(1)} km</p>}
+              </div>
+              <div>
+                <p className="text-xs text-zinc-500 mb-1">Net Margin (incl. delivery)</p>
+                {netAfterDelivery != null ? (
+                  <p className="text-xl font-bold tabular-nums" style={{ color: marginColor(netAfterDelivery) }}>
+                    {netAfterDelivery.toFixed(1)}%
+                  </p>
+                ) : <p className="text-xl font-bold text-zinc-600">—</p>}
+              </div>
+            </div>
+          )}
           {referral && totalCommission > 0 && (
             <p className="mt-3 text-xs text-amber-400">
               Commission payable: {fmt(totalCommission)}
@@ -553,6 +652,12 @@ export function MarginCalculatorClient({
                 </tr>
               </tfoot>
             </table>
+            {deliveryOn && deliveryCost > 0 && (
+              <p className="px-4 py-2 text-xs text-zinc-700">
+                <span className="font-semibold">Delivery (est.):</span> {fmt(deliveryCost)}
+                {distanceKm != null && <span className="text-zinc-500"> &nbsp;(≈ {distanceKm.toFixed(1)} km)</span>}
+              </p>
+            )}
           </div>
         </div>
       )}
