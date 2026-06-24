@@ -44,56 +44,58 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   // Linked customers for this referrer
   const { data: links } = await supabase
     .from("lead_referrers")
-    .select("lead_id, default_commission_pct, first_commission_pct, traded_commission_pct, manufactured_commission_pct, first_invoice_used")
+    .select("lead_id, first_invoice_used")
     .eq("referrer_id", id)
     .eq("team_id", teamId);
 
   const linkedLeadIds = new Set((links ?? []).map((l) => l.lead_id));
+  const firstInvoiceUsedSet = new Set((links ?? []).filter((l) => l.first_invoice_used).map((l) => l.lead_id));
 
   // Leads for this referrer
+  const { data: referralLeads } = await supabase
+    .from("leads")
+    .select("id, name, company_name, phone")
+    .eq("team_id", teamId)
+    .in("id", [...linkedLeadIds]);
+
+  // All leads for commission records display
   const { data: allLeads } = await supabase
     .from("leads")
-    .select("id, name, phone")
-    .eq("team_id", teamId)
-    .order("name");
+    .select("id, name, company_name")
+    .eq("team_id", teamId);
 
-  const referralLeads = (allLeads ?? []).filter((l) => linkedLeadIds.has(l.id));
-
-  // Invoices for those leads not yet having a commission record
-  const { data: invoices } = await supabase
-    .from("opportunities")
-    .select("id, title, value, balance_due, close_date, zoho_salesperson_name, owner_id, lead_id")
-    .eq("team_id", teamId)
-    .eq("stage", "won")
-    .in("lead_id", referralLeads.map((l) => l.id));
+  // ALL won invoices for linked customers
+  const { data: invoices } = linkedLeadIds.size > 0
+    ? await supabase
+        .from("opportunities")
+        .select("id, title, value, close_date, zoho_salesperson_name, lead_id")
+        .eq("team_id", teamId)
+        .neq("stage", "lost")
+        .in("lead_id", [...linkedLeadIds])
+        .order("close_date", { ascending: false })
+    : { data: [] };
 
   const existingOppIds = new Set((commissions ?? []).map((c) => c.opportunity_id));
   const availableInvoices = (invoices ?? []).filter((inv) => !existingOppIds.has(inv.id));
-
-  // Auto-detect from Zoho: won invoices where salesperson name ends with "& <referrer name>"
-  const { data: zohoDetected } = await supabase
-    .from("opportunities")
-    .select("id, title, value, close_date, zoho_salesperson_name, lead_id")
-    .eq("team_id", teamId)
-    .eq("stage", "won")
-    .ilike("zoho_salesperson_name", `%& ${referrer.name}`);
-
-  // Exclude already-logged commissions
-  const detectedNew = (zohoDetected ?? []).filter((inv) => !existingOppIds.has(inv.id));
-
-  // Get lead names for detected invoices
-  const detectedLeadIds = [...new Set(detectedNew.map((i) => i.lead_id).filter(Boolean))];
-  const { data: detectedLeads } = detectedLeadIds.length > 0
-    ? await supabase.from("leads").select("id, name, company_name").in("id", detectedLeadIds)
-    : { data: [] };
-  const detectedLeadMap = new Map((detectedLeads ?? []).map((l) => [l.id, l.company_name || l.name]));
 
   const pendingTotal = (commissions ?? []).filter((c) => c.status === "pending").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
   const paidTotal = (commissions ?? []).filter((c) => c.status === "paid").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
   const pendingIds = (commissions ?? []).filter((c) => c.status === "pending").map((c) => c.id);
 
-  const leadMap = new Map((allLeads ?? []).map((l) => [l.id, l.name]));
+  const leadMap = new Map((allLeads ?? []).map((l) => [l.id, (l as { id: string; name: string; company_name: string | null }).company_name || l.name]));
+  const referralLeadMap = new Map((referralLeads ?? []).map((l) => [l.id, (l as { id: string; name: string; company_name: string | null }).company_name || l.name]));
   const linkMap = new Map((links ?? []).map((l) => [l.lead_id, l]));
+
+  // Per-invoice commission calculation using referrer defaults
+  const ref = referrer!;
+  function calcCommission(leadId: string, invValue: number): { pct: number; amount: number; reason: string } {
+    const firstUsed = firstInvoiceUsedSet.has(leadId);
+    if (!firstUsed && ref.first_invoice_pct != null) {
+      return { pct: ref.first_invoice_pct, amount: (invValue * ref.first_invoice_pct) / 100, reason: "1st invoice" };
+    }
+    const pct = ref.default_pct ?? 0;
+    return { pct, amount: (invValue * pct) / 100, reason: "default" };
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -152,7 +154,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-xs text-zinc-500">Referred Customers</p>
-          <p className="mt-1 text-xl font-bold text-zinc-100">{referralLeads.length}</p>
+          <p className="mt-1 text-xl font-bold text-zinc-100">{(referralLeads ?? []).length}</p>
         </div>
       </div>
 
@@ -161,68 +163,101 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
         <MarkPaidPanel pendingIds={pendingIds} pendingTotal={pendingTotal} />
       )}
 
-      {/* Auto-detected from Zoho salesperson name */}
-      {detectedNew.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400 font-medium">
-                {detectedNew.length} detected
+      {/* All invoices for referred customers */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <CardTitle>Referred Customer Invoices</CardTitle>
+            <div className="flex gap-2 text-xs">
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-400">
+                {availableInvoices.length} not logged
               </span>
-              Invoices Detected from Zoho
-            </CardTitle>
-            <p className="text-xs text-zinc-500 mt-1">
-              These won invoices have <span className="text-zinc-300">"&amp; {referrer.name}"</span> in the salesperson field — commission not yet logged.
-            </p>
-          </CardHeader>
-          <CardContent>
+              <span className="rounded-full bg-[#b5c76a]/10 px-2 py-0.5 text-[#b5c76a]">
+                {existingOppIds.size} logged
+              </span>
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-zinc-500">All won invoices for customers linked to {referrer.name}. Commission is estimated from referrer default rates.</p>
+        </CardHeader>
+        <CardContent>
+          {(invoices ?? []).length === 0 ? (
+            <EmptyState title="No invoices found" hint="Link customers to this referrer or sync Zoho to see invoices." />
+          ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase text-zinc-500">
                   <tr>
                     <th className="pb-2 pr-4">Customer</th>
                     <th className="pb-2 pr-4">Invoice</th>
-                    <th className="pb-2 pr-4">Salesperson</th>
-                    <th className="pb-2 pr-4">Close Date</th>
-                    <th className="pb-2 text-right">Invoice Amount</th>
+                    <th className="pb-2 pr-4">Date</th>
+                    <th className="pb-2 pr-4 text-right">Invoice Amt</th>
+                    <th className="pb-2 pr-3 text-center">Rate</th>
+                    <th className="pb-2 pr-4 text-right">Est. Commission</th>
+                    <th className="pb-2">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {detectedNew.map((inv) => (
-                    <tr key={inv.id} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
-                      <td className="py-2.5 pr-4 font-medium text-zinc-100">
-                        {detectedLeadMap.get(inv.lead_id ?? "") ?? "—"}
-                      </td>
-                      <td className="py-2.5 pr-4 text-zinc-400 text-xs">{inv.title ?? "—"}</td>
-                      <td className="py-2.5 pr-4 text-zinc-500 text-xs">{inv.zoho_salesperson_name ?? "—"}</td>
-                      <td className="py-2.5 pr-4 text-zinc-500 text-xs">
-                        {inv.close_date ? format(parseISO(inv.close_date), "dd MMM yyyy") : "—"}
-                      </td>
-                      <td className="py-2.5 text-right tabular-nums font-semibold text-zinc-100">
-                        {fmt(Number(inv.value ?? 0))}
-                      </td>
-                    </tr>
-                  ))}
+                  {(invoices ?? []).map((inv) => {
+                    const invAmt = Number(inv.value ?? 0);
+                    const comm = calcCommission(inv.lead_id ?? "", invAmt);
+                    const isLogged = existingOppIds.has(inv.id);
+                    const loggedRecord = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
+                    return (
+                      <tr key={inv.id} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
+                        <td className="py-2.5 pr-4 font-medium text-zinc-100">
+                          {referralLeadMap.get(inv.lead_id ?? "") ?? leadMap.get(inv.lead_id ?? "") ?? "—"}
+                        </td>
+                        <td className="py-2.5 pr-4 text-zinc-400 text-xs max-w-[200px] truncate">{inv.title ?? "—"}</td>
+                        <td className="py-2.5 pr-4 text-zinc-500 text-xs">
+                          {inv.close_date ? format(parseISO(inv.close_date), "dd MMM yyyy") : "—"}
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-200">{fmt(invAmt)}</td>
+                        <td className="py-2.5 pr-3 text-center">
+                          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+                            {isLogged && loggedRecord ? `${loggedRecord.commission_pct}%` : `${comm.pct}%`}
+                          </span>
+                        </td>
+                        <td className="py-2.5 pr-4 text-right tabular-nums font-semibold" style={{ color: "#b5c76a" }}>
+                          {isLogged && loggedRecord
+                            ? fmt(Number(loggedRecord.commission_amount ?? 0))
+                            : fmt(comm.amount)}
+                        </td>
+                        <td className="py-2.5">
+                          {isLogged ? (
+                            loggedRecord?.status === "paid"
+                              ? <span className="rounded-full bg-[#b5c76a]/10 px-2 py-0.5 text-xs text-[#b5c76a]">✅ Paid</span>
+                              : <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400">⬜ Pending</span>
+                          ) : (
+                            <span className="rounded-full bg-zinc-700/20 px-2 py-0.5 text-xs text-zinc-500">Not logged</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-zinc-700">
-                    <td colSpan={4} className="pt-3 text-xs text-zinc-500">Total detected</td>
-                    <td className="pt-3 text-right tabular-nums font-bold text-[#b5c76a]">
-                      {fmt(detectedNew.reduce((s, i) => s + Number(i.value ?? 0), 0))}
+                    <td colSpan={3} className="pt-3 text-xs text-zinc-500">Total</td>
+                    <td className="pt-3 text-right tabular-nums font-bold text-zinc-200">
+                      {fmt((invoices ?? []).reduce((s, i) => s + Number(i.value ?? 0), 0))}
                     </td>
+                    <td />
+                    <td className="pt-3 text-right tabular-nums font-bold" style={{ color: "#b5c76a" }}>
+                      {fmt((invoices ?? []).reduce((s, inv) => {
+                        const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
+                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", Number(inv.value ?? 0)).amount);
+                      }, 0))}
+                    </td>
+                    <td />
                   </tr>
                 </tfoot>
               </table>
             </div>
-            <p className="mt-4 text-xs text-zinc-500">
-              To log commission, use <span className="text-zinc-300">"Add Commission for Invoice"</span> below — or{" "}
-              <span className="text-zinc-300">link these customers</span> via Referral Customers first if not already linked.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Add commission for invoice */}
+      {/* Add commission for unlogged invoices */}
       {availableInvoices.length > 0 && (
         <AddCommissionForm
           teamId={teamId}
@@ -231,20 +266,20 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
             id: inv.id,
             title: inv.title ?? "—",
             value: Number(inv.value ?? 0),
-            leadName: leadMap.get(inv.lead_id ?? "") ?? "Unknown",
+            leadName: referralLeadMap.get(inv.lead_id ?? "") ?? leadMap.get(inv.lead_id ?? "") ?? "Unknown",
             closeDate: inv.close_date ?? null,
           }))}
           linkMap={Object.fromEntries([...linkMap.entries()].map(([k, v]) => [
             k,
             {
-              default_commission_pct: v.default_commission_pct,
-              first_commission_pct: v.first_commission_pct,
-              traded_commission_pct: v.traded_commission_pct,
-              manufactured_commission_pct: v.manufactured_commission_pct,
+              default_commission_pct: null,
+              first_commission_pct: null,
+              traded_commission_pct: null,
+              manufactured_commission_pct: null,
               first_invoice_used: v.first_invoice_used,
             }
           ]))}
-          leadIds={Object.fromEntries(referralLeads.map((l) => [l.id, l.name]))}
+          leadIds={Object.fromEntries((referralLeads ?? []).map((l) => [l.id, (l as { id: string; name: string; company_name: string | null }).company_name || l.name]))}
           invoiceLeadMap={Object.fromEntries((invoices ?? []).map((inv) => [inv.id, inv.lead_id ?? ""]))}
           referrerDefaults={{
             default_pct: referrer.default_pct ?? null,
