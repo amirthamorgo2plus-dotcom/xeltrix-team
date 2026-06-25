@@ -187,8 +187,9 @@ export function MarginCalculatorClient({
     return { ...line, t, stdSell, sell, cost, commPct, revenue, costTotal, commission, grossMargin, netMargin };
   });
 
-  // Commission payable = order revenue × the (editable) commission %
-  totalCommission = referral ? (totalRevenue * effectiveCommPct) / 100 : 0;
+  // Commission payable = order revenue × the (editable) commission %.
+  // Applies whenever a rate is set (referrer default or typed), not only when a referrer is linked.
+  totalCommission = effectiveCommPct > 0 ? (totalRevenue * effectiveCommPct) / 100 : 0;
 
   const totalGrossMargin = totalRevenue > 0 && totalCost > 0 ? ((totalRevenue - totalCost) / totalRevenue) * 100 : null;
   const totalNetMargin = totalGrossMargin != null ? ((totalRevenue - totalCost - totalCommission) / totalRevenue) * 100 : null;
@@ -295,10 +296,10 @@ export function MarginCalculatorClient({
           <td class="r">${reportTotalProfitPct.toFixed(1)}%</td>
         </tr></tfoot>
       </table>
-      ${referral && totalCommission > 0
+      ${totalCommission > 0
         ? `<p style="margin-top:10px;font-size:12px"><b>Referral commission (${effectiveCommPct}%${referrerName ? `, ${referrerName}` : ""}):</b> ${inr(totalCommission)}</p>`
         : ""}
-      ${deliveryOn && deliveryCost > 0
+      ${deliveryCost > 0
         ? `<p style="margin-top:4px;font-size:12px"><b>Delivery (est.):</b> ${inr(deliveryCost)}${distanceKm != null ? ` &nbsp;(≈ ${distanceKm.toFixed(1)} km)` : ""}</p>`
         : ""}
       <p class="ts">Generated from Xeltrix Team — Margin Calculator</p>
@@ -717,15 +718,15 @@ export function MarginCalculatorClient({
                 </tr>
               </tfoot>
             </table>
-            {(referral && totalCommission > 0) || (deliveryOn && deliveryCost > 0) ? (
+            {totalCommission > 0 || deliveryCost > 0 ? (
               <div className="px-4 py-2 text-xs text-zinc-700 space-y-0.5">
-                {referral && totalCommission > 0 && (
+                {totalCommission > 0 && (
                   <p>
                     <span className="font-semibold">Referral commission ({effectiveCommPct}%):</span> {fmt(totalCommission)}
                     {referrerName && <span className="text-zinc-500"> &nbsp;— {referrerName}</span>}
                   </p>
                 )}
-                {deliveryOn && deliveryCost > 0 && (
+                {deliveryCost > 0 && (
                   <p>
                     <span className="font-semibold">Delivery (est.):</span> {fmt(deliveryCost)}
                     {distanceKm != null && <span className="text-zinc-500"> &nbsp;(≈ {distanceKm.toFixed(1)} km)</span>}
