@@ -42,6 +42,17 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
     .eq("team_id", teamId)
     .order("created_at", { ascending: false });
 
+  // Deep cleaning referrals for this referrer (non-GST, manual)
+  const { data: deepJobs } = await supabase
+    .from("deep_cleaning_jobs")
+    .select("id, customer_name, service_date, amount, referral_pct, referral_amount, referral_status")
+    .eq("referrer_id", id)
+    .eq("team_id", teamId)
+    .order("service_date", { ascending: false });
+
+  const deepPending = (deepJobs ?? []).filter((j) => j.referral_status !== "paid").reduce((s, j) => s + Number(j.referral_amount ?? 0), 0);
+  const deepPaid = (deepJobs ?? []).filter((j) => j.referral_status === "paid").reduce((s, j) => s + Number(j.referral_amount ?? 0), 0);
+
   // Linked customers for this referrer
   const { data: links } = await supabase
     .from("lead_referrers")
@@ -167,15 +178,20 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
       </div>
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-xs text-zinc-500">Pending Commission</p>
+          <p className="text-xs text-zinc-500">Pending (Zoho)</p>
           <p className="mt-1 text-xl font-bold text-amber-400">{fmt(pendingTotal)}</p>
           <p className="text-xs text-zinc-600">{(commissions ?? []).filter(c => c.status === "pending").length} invoices</p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-xs text-zinc-500">Pending (Deep Clean)</p>
+          <p className="mt-1 text-xl font-bold text-amber-400">{fmt(deepPending)}</p>
+          <p className="text-xs text-zinc-600">{(deepJobs ?? []).filter(j => j.referral_status !== "paid").length} jobs</p>
+        </div>
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-xs text-zinc-500">Paid to Date</p>
-          <p className="mt-1 text-xl font-bold text-[#b5c76a]">{fmt(paidTotal)}</p>
+          <p className="mt-1 text-xl font-bold text-[#b5c76a]">{fmt(paidTotal + deepPaid)}</p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-xs text-zinc-500">Referred Customers</p>
@@ -289,6 +305,60 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
           )}
         </CardContent>
       </Card>
+
+      {/* Deep Cleaning referrals (non-GST) */}
+      {(deepJobs ?? []).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Deep Cleaning Referrals (non-GST)</CardTitle>
+            <p className="mt-1 text-xs text-zinc-500">Referrals from manual deep-cleaning jobs, paid outside Zoho.</p>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-zinc-500">
+                  <tr>
+                    <th className="pb-2 pr-4">Date</th>
+                    <th className="pb-2 pr-4">Customer</th>
+                    <th className="pb-2 pr-4 text-right">Job Amount</th>
+                    <th className="pb-2 pr-3 text-center">Rate</th>
+                    <th className="pb-2 pr-4 text-right">Referral</th>
+                    <th className="pb-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(deepJobs ?? []).map((j) => (
+                    <tr key={j.id} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
+                      <td className="py-2.5 pr-4 text-zinc-500 text-xs">{j.service_date ? format(parseISO(j.service_date), "dd MMM yyyy") : "—"}</td>
+                      <td className="py-2.5 pr-4 font-medium text-zinc-100">{j.customer_name}</td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-300">{fmt(Number(j.amount ?? 0))}</td>
+                      <td className="py-2.5 pr-3 text-center">
+                        <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">{j.referral_pct ?? 0}%</span>
+                      </td>
+                      <td className="py-2.5 pr-4 text-right tabular-nums font-semibold" style={{ color: "#b5c76a" }}>{fmt(Number(j.referral_amount ?? 0))}</td>
+                      <td className="py-2.5">
+                        {j.referral_status === "paid"
+                          ? <span className="rounded-full bg-[#b5c76a]/10 px-2 py-0.5 text-xs text-[#b5c76a]">✅ Paid</span>
+                          : <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400">⬜ Pending</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-zinc-700">
+                    <td colSpan={4} className="pt-3 text-xs text-zinc-500">Total referral</td>
+                    <td className="pt-3 text-right tabular-nums font-bold" style={{ color: "#b5c76a" }}>
+                      {fmt((deepJobs ?? []).reduce((s, j) => s + Number(j.referral_amount ?? 0), 0))}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-zinc-500">Mark referrals paid on the <a href="/deep-cleaning" className="text-[#b5c76a] hover:underline">Deep Cleaning</a> page.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Add commission for unlogged invoices */}
       {availableInvoices.length > 0 && (
