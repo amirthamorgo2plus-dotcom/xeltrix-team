@@ -360,29 +360,35 @@ export function MarginCalculatorClient({
           />
         </div>
       </div>
-      {referral && (
-        <div className="-mt-1 flex flex-wrap items-end gap-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
-          <div>
-            <label className="mb-1 block text-[11px] text-zinc-400">Commission %</label>
-            <input
-              type="number" min="0" step="0.1"
-              value={commPctInput}
-              onChange={(e) => setCommPctInput(e.target.value)}
-              placeholder={String(commissionDefault)}
-              className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-amber-300 focus:border-amber-400 focus:outline-none tabular-nums"
-            />
-          </div>
-          <p className="pb-1.5 text-xs text-zinc-500">
-            Default <span className="text-zinc-300">{commissionDefault}%</span>
-            {firstInvoicePct != null && <> · 1st invoice <span className="text-zinc-300">{firstInvoicePct}%</span></>}
-            {" "}— edit for first order
+      <div className="-mt-1 flex flex-wrap items-end gap-4 rounded-lg border border-amber-500/20 bg-amber-500/5 px-4 py-3">
+        {referral ? (
+          <>
+            <div>
+              <label className="mb-1 block text-[11px] text-zinc-400">Commission %</label>
+              <input
+                type="number" min="0" step="0.1"
+                value={commPctInput}
+                onChange={(e) => setCommPctInput(e.target.value)}
+                placeholder={String(commissionDefault)}
+                className="w-24 rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-right text-sm text-amber-300 focus:border-amber-400 focus:outline-none tabular-nums"
+              />
+            </div>
+            <p className="pb-1.5 text-xs text-zinc-500">
+              Default <span className="text-zinc-300">{commissionDefault}%</span>
+              {firstInvoicePct != null && <> · 1st invoice <span className="text-zinc-300">{firstInvoicePct}%</span></>}
+              {" "}— edit for first order
+            </p>
+            <p className="pb-1 ml-auto text-sm">
+              <span className="text-zinc-500 text-xs">Commission payable ({effectiveCommPct}%):</span>{" "}
+              <span className="font-semibold text-amber-300 tabular-nums">{fmt(totalCommission)}</span>
+            </p>
+          </>
+        ) : (
+          <p className="text-xs text-zinc-500">
+            💡 To add referral commission to the report, choose a referrer in <span className="text-amber-300">&quot;Referred by&quot;</span> above.
           </p>
-          <p className="pb-1 ml-auto text-sm">
-            <span className="text-zinc-500 text-xs">Commission payable ({effectiveCommPct}%):</span>{" "}
-            <span className="font-semibold text-amber-300 tabular-nums">{fmt(totalCommission)}</span>
-          </p>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* PDF upload — quote: rates fill Sell Rate */}
       <div className="flex flex-wrap items-center gap-3">
@@ -648,13 +654,31 @@ export function MarginCalculatorClient({
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-400">Report Preview</h3>
-            <button
-              onClick={printReport}
-              className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors"
-              style={{ background: "#b5c76a", color: "#1a1a1a" }}
-            >
-              🖨️ Print / Download PDF
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* What will be included in the PDF — so staff notice missing pieces */}
+              <div className="flex items-center gap-1.5 text-[11px]">
+                {([
+                  { on: !!referrerName, on_label: `Referrer: ${referrerName}`, off_label: "No referrer" },
+                  { on: totalCommission > 0, on_label: `Commission ${effectiveCommPct}%`, off_label: "No commission" },
+                  { on: deliveryCost > 0, on_label: "Delivery added", off_label: "No delivery" },
+                ] as const).map((c, i) => (
+                  <span
+                    key={i}
+                    className={`rounded-full px-2 py-0.5 ${c.on ? "bg-[#b5c76a]/15 text-[#b5c76a]" : "bg-zinc-800 text-zinc-500"}`}
+                    title={c.on ? c.on_label : `${c.off_label} — set it above to include in the PDF`}
+                  >
+                    {c.on ? `✓ ${c.on_label}` : `○ ${c.off_label}`}
+                  </span>
+                ))}
+              </div>
+              <button
+                onClick={printReport}
+                className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors"
+                style={{ background: "#b5c76a", color: "#1a1a1a" }}
+              >
+                🖨️ Print / Download PDF
+              </button>
+            </div>
           </div>
 
           {/* Light themed, screenshot-friendly */}
