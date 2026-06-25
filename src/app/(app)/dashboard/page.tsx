@@ -69,6 +69,7 @@ export default async function DashboardPage({
     { data: openTasks },
     { data: openComplaints },
     { data: pendingCollRows },
+    { data: deepJobs },
   ] = await Promise.all([
     supabase
       .from("v_target_vs_achieved")
@@ -114,6 +115,12 @@ export default async function DashboardPage({
       .eq("stage", "won")
       .gt("balance_due", 0)
       .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
+    supabase
+      .from("deep_cleaning_jobs")
+      .select("amount, cost, referral_amount, referral_status, service_date")
+      .eq("team_id", teamId)
+      .gte("service_date", monthFirst)
+      .lte("service_date", monthLast),
   ]);
 
   // KPIs
@@ -175,6 +182,13 @@ export default async function DashboardPage({
     0
   );
   const pendingCollCount = pendingCollRows?.length ?? 0;
+
+  // Deep cleaning (non-GST) for the range
+  const deepRevenue = (deepJobs ?? []).reduce((s, j) => s + Number(j.amount ?? 0), 0);
+  const deepCount = deepJobs?.length ?? 0;
+  const deepReferralPending = (deepJobs ?? [])
+    .filter((j) => j.referral_status !== "paid")
+    .reduce((s, j) => s + Number(j.referral_amount ?? 0), 0);
 
   // Collections chart: group by salesperson + aging bucket
   function agingKey(dueDateStr: string | null): "current" | "1-15" | "16-30" | "31-45" | "45+" {
@@ -303,6 +317,13 @@ export default async function DashboardPage({
           hint={`${pendingCollCount} invoice${pendingCollCount !== 1 ? "s" : ""} outstanding`}
           href="/collections"
           tone={pendingCollTotal > 0 ? "danger" : "success"}
+        />
+        <KpiCard
+          label="Deep Cleaning (non-GST)"
+          value={fmtMoney(deepRevenue, currency)}
+          secondary={deepReferralPending > 0 ? { label: "Referral pending", value: fmtMoney(deepReferralPending, currency) } : undefined}
+          hint={`${deepCount} job${deepCount !== 1 ? "s" : ""} this period`}
+          href="/deep-cleaning"
         />
       </div>
 
