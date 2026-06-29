@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createClient as createSbAdmin } from "@supabase/supabase-js";
+import { isReadOnly } from "@/lib/data";
 
 export const maxDuration = 60; // batch geocode is paced ~1 req/sec
 
@@ -115,6 +116,9 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!m || (m.role !== "admin" && m.role !== "manager")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (await isReadOnly()) {
+    return NextResponse.json({ error: "This is a read-only demo." }, { status: 403 });
   }
 
   // retry=1 re-attempts rows previously marked 'failed' (e.g. after the

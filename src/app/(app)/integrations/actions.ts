@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient as createSbAdmin } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, isAdminOrManager } from "@/lib/data";
+import { getMyMembership, isAdminOrManager, isReadOnly, assertWritable } from "@/lib/data";
 import { getIntegrationForTeam, zohoFetch } from "@/lib/zoho/client";
 import { syncFromZoho } from "@/lib/zoho/sync";
 
@@ -35,6 +35,7 @@ export async function listZohoOrgs(): Promise<{
 export async function setZohoOrg(orgId: string): Promise<{ error?: string }> {
   const m = await getMyMembership();
   if (!m || !isAdminOrManager(m.role)) return { error: "Admins only." };
+  if (await isReadOnly()) return { error: "This is a read-only demo. Sign up to make changes." };
   const sb = adminClient();
   const { data: row } = await sb
     .from("integrations")
@@ -60,6 +61,7 @@ export async function setZohoOrg(orgId: string): Promise<{ error?: string }> {
 export async function clearSyncedData(): Promise<{ ok?: boolean; error?: string }> {
   const m = await getMyMembership();
   if (!m || !isAdminOrManager(m.role)) return { error: "Admins only." };
+  if (await isReadOnly()) return { error: "This is a read-only demo. Sign up to make changes." };
   const sb = adminClient();
   for (const t of ["opportunities", "quotes", "leads", "zoho_expenses", "opportunity_templates"]) {
     const { error } = await sb.from(t).delete().eq("team_id", m.team_id);
@@ -92,6 +94,7 @@ export async function disconnectZoho() {
   if (!m || (m.role !== "admin" && m.role !== "manager")) {
     throw new Error("Only admin/manager can disconnect.");
   }
+  await assertWritable();
   const supabase = await createClient();
   await supabase
     .from("integrations")
@@ -106,6 +109,9 @@ export async function triggerSync(since?: string) {
     const m = await getMyMembership();
     if (!m || (m.role !== "admin" && m.role !== "manager")) {
       return { ok: false as const, error: "Only admin/manager can sync." };
+    }
+    if (await isReadOnly()) {
+      return { ok: false as const, error: "This is a read-only demo. Sign up to make changes." };
     }
 
     const integration = await getIntegrationForTeam(m.team_id, /* useAdmin */ true);

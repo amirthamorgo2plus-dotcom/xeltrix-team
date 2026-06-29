@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient as createSbAdmin, type SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, isAdminOrManager } from "@/lib/data";
+import { getMyMembership, isAdminOrManager, isReadOnly, assertWritable } from "@/lib/data";
 import { staffEmail } from "@/lib/staff";
 
 function adminClient() {
@@ -48,6 +48,7 @@ export async function inviteMember(
 ): Promise<{ error?: string; ok?: boolean }> {
   const m = await requireAdmin();
   if (!m) return { error: "Admins only." };
+  if (await isReadOnly()) return { error: "This is a read-only demo. Sign up to make changes." };
 
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const roleRaw = String(formData.get("role") ?? "member");
@@ -100,6 +101,7 @@ export async function inviteMember(
 export async function resendMemberInvite(memberId: string): Promise<{ error?: string; ok?: boolean }> {
   const m = await requireAdmin();
   if (!m) return { error: "Admins only." };
+  if (await isReadOnly()) return { error: "This is a read-only demo. Sign up to make changes." };
   const sb = adminClient();
   const { data: member } = await sb
     .from("team_members")
@@ -128,6 +130,7 @@ export async function resendMemberInvite(memberId: string): Promise<{ error?: st
 // Hide/show a member in the attendance grid (kept for sales either way).
 export async function setTrackAttendance(memberId: string, value: boolean) {
   if (!(await requireAdmin())) throw new Error("Admins only.");
+  await assertWritable();
   const supabase = await createClient();
   const { error } = await supabase
     .from("team_members")
@@ -140,6 +143,7 @@ export async function setTrackAttendance(memberId: string, value: boolean) {
 // Deactivate (remove from the whole app) or reactivate a member.
 export async function setMemberActive(memberId: string, value: boolean) {
   if (!(await requireAdmin())) throw new Error("Admins only.");
+  await assertWritable();
   const supabase = await createClient();
   const { error } = await supabase
     .from("team_members")
@@ -154,6 +158,7 @@ export async function setMemberActive(memberId: string, value: boolean) {
 // themselves out of management).
 export async function setAttendanceOnly(memberId: string, value: boolean) {
   if (!(await requireAdmin())) throw new Error("Admins only.");
+  await assertWritable();
   const supabase = await createClient();
   if (value) {
     const { data: target } = await supabase
@@ -180,6 +185,7 @@ export async function createStaff(
 ): Promise<{ error?: string; ok?: boolean }> {
   const m = await requireAdmin();
   if (!m) return { error: "Admins only." };
+  if (await isReadOnly()) return { error: "This is a read-only demo. Sign up to make changes." };
 
   const name = String(formData.get("name") ?? "").trim();
   const username = String(formData.get("username") ?? "").trim();

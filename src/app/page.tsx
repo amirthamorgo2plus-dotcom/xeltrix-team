@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/server";
+import { enterDemo } from "./demo/actions";
 
 export default async function Home() {
   const supabase = await createClient();
@@ -29,13 +30,24 @@ export default async function Home() {
             />
             <span className="text-lg font-semibold tracking-tight">Xeltrix Team</span>
           </Link>
-          <Link
-            href="/login"
-            className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
-            style={{ backgroundColor: "#b5c76a", color: "#111111" }}
-          >
-            Sign in
-          </Link>
+          <div className="flex items-center gap-2">
+            <form action={enterDemo}>
+              <button
+                type="submit"
+                className="rounded-lg border px-4 py-2 text-sm font-semibold transition-colors hover:border-neutral-500"
+                style={{ borderColor: "#333", color: "#ccc" }}
+              >
+                View Demo
+              </button>
+            </form>
+            <Link
+              href="/login"
+              className="rounded-lg px-4 py-2 text-sm font-semibold transition-colors"
+              style={{ backgroundColor: "#b5c76a", color: "#111111" }}
+            >
+              Sign in
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -67,10 +79,19 @@ export default async function Home() {
                 Zoho Books automatically.
               </p>
               <div className="flex flex-wrap gap-3">
+                <form action={enterDemo}>
+                  <button
+                    type="submit"
+                    className="rounded-lg px-6 py-3 text-sm font-semibold transition-colors"
+                    style={{ backgroundColor: "#b5c76a", color: "#111111" }}
+                  >
+                    🔍 View Live Demo
+                  </button>
+                </form>
                 <Link
                   href="/login"
-                  className="rounded-lg px-6 py-3 text-sm font-semibold transition-colors"
-                  style={{ backgroundColor: "#b5c76a", color: "#111111" }}
+                  className="rounded-lg border px-6 py-3 text-sm font-semibold transition-colors hover:border-neutral-500"
+                  style={{ borderColor: "#333", color: "#ccc" }}
                 >
                   Sign in
                 </Link>
@@ -84,6 +105,9 @@ export default async function Home() {
                   Request access →
                 </a>
               </div>
+              <p className="mt-3 text-xs" style={{ color: "#666" }}>
+                No sign-up needed — the demo opens a fully-loaded team in read-only mode.
+              </p>
             </div>
 
             {/* Dashboard mockup */}
@@ -352,18 +376,27 @@ export default async function Home() {
             Message us on WhatsApp — we'll have your team set up, usually the same day.
           </p>
           <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
+            <form action={enterDemo} className="w-full sm:w-auto">
+              <button
+                type="submit"
+                className="w-full rounded-lg px-8 py-3.5 text-sm font-semibold transition-colors sm:w-auto"
+                style={{ backgroundColor: "#b5c76a", color: "#111111" }}
+              >
+                🔍 View Live Demo
+              </button>
+            </form>
             <a
               href="https://wa.me/919731412112"
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full rounded-lg px-8 py-3.5 text-sm font-semibold transition-colors sm:w-auto"
-              style={{ backgroundColor: "#b5c76a", color: "#111111" }}
+              className="w-full rounded-lg border px-8 py-3.5 text-sm font-semibold transition-colors sm:w-auto hover:border-neutral-500"
+              style={{ borderColor: "#333", color: "#ccc" }}
             >
               Request access on WhatsApp
             </a>
             <Link
               href="/login"
-              className="w-full rounded-lg border px-8 py-3.5 text-sm font-semibold transition-colors sm:w-auto"
+              className="w-full rounded-lg border px-8 py-3.5 text-sm font-semibold transition-colors sm:w-auto hover:border-neutral-500"
               style={{ borderColor: "#333", color: "#ccc" }}
             >
               Sign in

@@ -29,6 +29,8 @@ export default async function AppLayout({
   const role = membership?.role ?? null;
   const attendanceOnly =
     (membership as { attendance_only?: boolean } | null)?.attendance_only === true;
+  const readOnly =
+    (membership as { read_only?: boolean } | null)?.read_only === true;
 
   // User belongs to no organization yet — they must be added/provisioned.
   if (!membership) {
@@ -96,6 +98,21 @@ export default async function AppLayout({
           </div>
         </header>
         <InstallHint />
+        {readOnly && (
+          <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-b border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+            <span>
+              👁️ You&apos;re viewing a <strong>read-only demo</strong> — changes won&apos;t be saved.
+            </span>
+            <a
+              href="https://wa.me/919731412112"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold underline underline-offset-2 hover:no-underline"
+            >
+              Request access for your own team →
+            </a>
+          </div>
+        )}
         <main className="flex-1 p-6">{children}</main>
       </div>
     </div>

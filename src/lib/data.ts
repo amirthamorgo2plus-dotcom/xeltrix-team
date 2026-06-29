@@ -32,7 +32,7 @@ export const getMyMemberships = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("team_members")
-    .select("id, team_id, role, active, track_attendance, attendance_only")
+    .select("id, team_id, role, active, track_attendance, attendance_only, read_only")
     .eq("user_id", user.id)
     .eq("active", true);
   return data ?? [];
@@ -46,6 +46,21 @@ export const getMyMembership = cache(async () => {
   const active = (await cookies()).get(ACTIVE_TEAM_COOKIE)?.value;
   return list.find((m) => m.team_id === active) ?? list[0];
 });
+
+// True when the signed-in user is browsing as the read-only demo account.
+export const isReadOnly = cache(async () => {
+  const m = await getMyMembership();
+  return (m as { read_only?: boolean } | null)?.read_only === true;
+});
+
+// Guard for mutating server actions. Blocks writes from the read-only demo
+// account — essential for actions that use the service-role client
+// (adminClient), which bypasses RLS and the database read-only triggers.
+export async function assertWritable() {
+  if (await isReadOnly()) {
+    throw new Error("This is a read-only demo. Sign up to make changes.");
+  }
+}
 
 // The user's orgs (id + name + role) for the org switcher.
 export const getMyTeams = cache(async () => {
