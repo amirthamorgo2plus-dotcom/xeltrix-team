@@ -11,6 +11,7 @@ import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
 import { DashboardFilters } from "./filters";
 import { RangeFilter } from "@/components/range-filter";
 import { resolveRange } from "@/lib/date-range";
+import { computeRepeatCustomers, summarize, type WonOppRow } from "@/lib/repeat-customers";
 
 function fmtMoney(v: number, currency: string) {
   return new Intl.NumberFormat("en-IN", {
@@ -70,6 +71,7 @@ export default async function DashboardPage({
     { data: openComplaints },
     { data: pendingCollRows },
     { data: deepJobs },
+    { data: wonOppsAll },
   ] = await Promise.all([
     supabase
       .from("v_target_vs_achieved")
@@ -121,7 +123,18 @@ export default async function DashboardPage({
       .eq("team_id", teamId)
       .gte("service_date", monthFirst)
       .lte("service_date", monthLast),
+    // All-time won opps (for reorder cadence) — scoped like the other queries.
+    supabase
+      .from("opportunities")
+      .select("id, title, value, close_date, lead_id, zoho_customer_id, owner_id, zoho_salesperson_name")
+      .eq("team_id", teamId)
+      .eq("stage", "won")
+      .not("close_date", "is", null)
+      .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
   ]);
+
+  // Repeat-customer reorder summary (all-time order history)
+  const reorderSummary = summarize(computeRepeatCustomers((wonOppsAll ?? []) as WonOppRow[]));
 
   // KPIs
   const target = (tvaRows ?? []).reduce((s, r) => s + Number(r.target ?? 0), 0);
@@ -317,6 +330,13 @@ export default async function DashboardPage({
           hint={`${pendingCollCount} invoice${pendingCollCount !== 1 ? "s" : ""} outstanding`}
           href="/collections"
           tone={pendingCollTotal > 0 ? "danger" : "success"}
+        />
+        <KpiCard
+          label="Due for reorder"
+          value={String(reorderSummary.dueCount)}
+          hint={`${reorderSummary.overdueCount} overdue · repeat customers`}
+          href="/repeat-customers"
+          tone={reorderSummary.overdueCount > 0 ? "danger" : reorderSummary.dueCount > 0 ? "warning" : "success"}
         />
         <KpiCard
           label="Deep Cleaning (non-GST)"

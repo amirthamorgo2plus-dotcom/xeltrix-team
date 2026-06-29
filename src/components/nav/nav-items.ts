@@ -55,6 +55,7 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/follow-ups",    label: "Follow-ups", icon: Bell },
       { href: "/complaints",    label: "Complaints", icon: AlertCircle },
       { href: "/collections",        label: "Collections",        icon: BadgeIndianRupee },
+      { href: "/repeat-customers",   label: "Repeat Customers",   icon: Repeat },
       { href: "/referrers",          label: "Referrers",          icon: HandCoins },
       { href: "/referral-customers", label: "Referral Customers", icon: UserPlus },
       { href: "/deep-cleaning",      label: "Deep Cleaning",      icon: Sparkles, adminOnly: true },
