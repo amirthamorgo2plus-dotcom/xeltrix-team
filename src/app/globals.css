@@ -2,12 +2,23 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* App is dark-only — tell the browser so native controls (the <select>
+     option popup, scrollbars, date pickers) render dark instead of white. */
+  color-scheme: dark;
   --background: #111111;
   --foreground: #f4f4f5;
   --accent: #b5c76a;
   --accent-dim: rgb(181 199 106 / 0.12);
   --sidebar-bg: #1a1a1a;
   --border-subtle: #2a2a2a;
+}
+
+/* Cross-browser guarantee for the native <select> dropdown list, which
+   otherwise inherits the light page text on a white popup (near-invisible). */
+select option,
+select optgroup {
+  background-color: #1a1a1a;
+  color: #f4f4f5;
 }
 
 @theme inline {
