@@ -34,6 +34,9 @@ export const ZOHO_SCOPES = [
   "ZohoBooks.contacts.CREATE",
   "ZohoBooks.items.READ",
   "ZohoBooks.expenses.READ",
+  // Customer payments power the portal Statement ledger + mirror. Adding this
+  // scope requires re-authorizing the Zoho connection (re-consent) to take effect.
+  "ZohoBooks.customerpayments.READ",
   "ZohoBooks.settings.READ",
 ].join(",");
 

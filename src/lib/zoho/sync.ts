@@ -7,7 +7,9 @@ import type {
   ZohoEstimate,
   ZohoExpense,
   ZohoInvoice,
+  ZohoInvoiceLineItem,
   ZohoItem,
+  ZohoPayment,
 } from "./types";
 
 function adminClient() {
@@ -101,12 +103,28 @@ async function fetchContactAddresses(
   opts: { concurrency?: number; deadlineMs?: number } = {}
 ): Promise<{
   map: Map<string, string>;
+  credit: Array<{
+    zoho_contact_id: string;
+    credit_limit: number | null;
+    payment_terms: number | null;
+    payment_terms_label: string | null;
+    gstin: string | null;
+    city: string | null;
+  }>;
   skipped: number;
   diag: { hadBilling: number; hadShipping: number; example: string };
 }> {
   const concurrency = opts.concurrency ?? 6;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
   const out = new Map<string, string>();
+  const credit: Array<{
+    zoho_contact_id: string;
+    credit_limit: number | null;
+    payment_terms: number | null;
+    payment_terms_label: string | null;
+    gstin: string | null;
+    city: string | null;
+  }> = [];
   let processed = 0;
   // Count how many contacts actually carry a usable address, and capture one
   // real found address so we can confirm parsing works on a filled contact.
@@ -134,19 +152,31 @@ async function fetchContactAddresses(
               formatZohoAddress(c.shipping_address)
             : null;
           if (address && !example) example = address.slice(0, 120);
-          return { id, address };
+          const cr = c
+            ? {
+                zoho_contact_id: id,
+                credit_limit: c.credit_limit ?? null,
+                payment_terms: c.payment_terms ?? null,
+                payment_terms_label: c.payment_terms_label ?? null,
+                gstin: c.gst_no ?? null,
+                city: c.billing_address?.city ?? c.shipping_address?.city ?? null,
+              }
+            : null;
+          return { id, address, credit: cr };
         } catch {
-          return { id, address: null as string | null };
+          return { id, address: null as string | null, credit: null };
         }
       })
     );
     results.forEach((r) => {
       if (r.address) out.set(r.id, r.address);
+      if (r.credit) credit.push(r.credit);
     });
     processed = Math.min(i + concurrency, contactIds.length);
   }
   return {
     map: out,
+    credit,
     skipped: contactIds.length - processed,
     diag: { hadBilling, hadShipping, example },
   };
@@ -161,7 +191,7 @@ async function fetchTaxBreakdowns(
   ids: string[],
   opts: { concurrency?: number; deadlineMs?: number } = {}
 ): Promise<{
-  map: Map<string, { sub_total: number; tax_total: number; balance?: number; due_date?: string | null; invoice_status?: string }>;
+  map: Map<string, { sub_total: number; tax_total: number; balance?: number; due_date?: string | null; invoice_status?: string; line_items?: ZohoInvoiceLineItem[] }>;
   attempted: number;
   succeeded: number;
   failed: number;
@@ -170,7 +200,7 @@ async function fetchTaxBreakdowns(
 }> {
   const concurrency = opts.concurrency ?? 3;
   const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
-  const out = new Map<string, { sub_total: number; tax_total: number; balance?: number; due_date?: string | null; invoice_status?: string }>();
+  const out = new Map<string, { sub_total: number; tax_total: number; balance?: number; due_date?: string | null; invoice_status?: string; line_items?: ZohoInvoiceLineItem[] }>();
   const key = resource === "invoices" ? "invoice" : "estimate";
   let succeeded = 0;
   let failed = 0;
@@ -184,7 +214,7 @@ async function fetchTaxBreakdowns(
     const results = await Promise.all(
       batch.map(async (id) => {
         try {
-          const res = await zohoFetch<Record<string, { sub_total?: number; tax_total?: number; balance?: number; due_date?: string; status?: string }>>(
+          const res = await zohoFetch<Record<string, { sub_total?: number; tax_total?: number; balance?: number; due_date?: string; status?: string; line_items?: ZohoInvoiceLineItem[] }>>(
             integration,
             `/${resource}/${id}`
           );
@@ -203,6 +233,7 @@ async function fetchTaxBreakdowns(
             balance: data.balance !== undefined ? Number(data.balance) : undefined,
             due_date: data.due_date ?? null,
             invoice_status: data.status ?? undefined,
+            line_items: data.line_items,
           };
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
@@ -218,6 +249,7 @@ async function fetchTaxBreakdowns(
           balance: r.balance,
           due_date: r.due_date,
           invoice_status: r.invoice_status,
+          line_items: r.line_items,
         });
         succeeded++;
       } else {
@@ -307,6 +339,27 @@ export async function syncFromZoho(
   }
   counts.customers = leadRows.length;
 
+  // ---- Mirror: zoho_contacts (Customer Portal read source) ----
+  // List-level fields only; credit_limit/payment_terms/gstin/city come from the
+  // contact-detail pass below (they're detail-endpoint only). Non-fatal.
+  try {
+    const contactMirror = contacts.map((c) => ({
+      team_id: integration.team_id,
+      zoho_contact_id: c.contact_id,
+      name: c.contact_name || c.company_name || null,
+      company_name: c.company_name ?? null,
+      email: c.email ?? null,
+      phone: c.phone ?? c.mobile ?? null,
+      status: c.status ?? null,
+      synced_at: new Date().toISOString(),
+    }));
+    if (contactMirror.length > 0) {
+      await sb.from("zoho_contacts").upsert(contactMirror, { onConflict: "team_id,zoho_contact_id" });
+    }
+  } catch (e) {
+    counts.warnings.push(`Mirror contacts skipped: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   // Addresses for geocoding: only on the /contacts/{id} detail endpoint, not
   // the list. Fetch detail ONLY for leads that don't have an address yet, so
   // this is incremental (cheap after the first couple of syncs). Give it a
@@ -355,6 +408,17 @@ export async function syncFromZoho(
       counts.warnings.push(
         `Addresses: ${addr.skipped} remaining (time budget) — click Sync again.`
       );
+    }
+    // Mirror detail-only contact fields (credit_limit/payment_terms/gstin/city)
+    if (addr.credit.length > 0) {
+      try {
+        await sb.from("zoho_contacts").upsert(
+          addr.credit.map((c) => ({ team_id: integration.team_id, ...c })),
+          { onConflict: "team_id,zoho_contact_id" }
+        );
+      } catch (e) {
+        counts.warnings.push(`Mirror credit skipped: ${e instanceof Error ? e.message : String(e)}`);
+      }
     }
   }
 
@@ -749,6 +813,68 @@ export async function syncFromZoho(
   }
   counts.invoices = invoices.length;
 
+  // ---- Mirror: zoho_invoices + zoho_invoice_items (line-item cache for the portal) ----
+  try {
+    const nowIso = new Date().toISOString();
+    const invoiceMirror = invoices.map((inv) => {
+      const d = invDetail.map.get(inv.invoice_id);
+      return {
+        team_id: integration.team_id,
+        zoho_invoice_id: inv.invoice_id,
+        invoice_number: inv.invoice_number ?? null,
+        zoho_contact_id: inv.customer_id ?? null,
+        date: toDateOrNull(inv.date),
+        due_date: d?.due_date ?? toDateOrNull(inv.due_date),
+        status: d?.invoice_status ?? inv.status ?? null,
+        sub_total: d?.sub_total ?? inv.sub_total ?? null,
+        tax_total: d?.tax_total ?? inv.tax_total ?? null,
+        total: inv.total ?? null,
+        balance: d?.balance ?? inv.balance ?? null,
+        synced_at: nowIso,
+      };
+    });
+    if (invoiceMirror.length > 0) {
+      await sb.from("zoho_invoices").upsert(invoiceMirror, { onConflict: "team_id,zoho_invoice_id" });
+    }
+
+    // Line items: only for invoices detail-fetched THIS run (others keep their
+    // rows). Replace each such invoice's items wholesale to handle line edits.
+    const detailedIds = invoices
+      .map((inv) => inv.invoice_id)
+      .filter((id) => invDetail.map.get(id)?.line_items);
+    if (detailedIds.length > 0) {
+      const itemRows: Record<string, unknown>[] = [];
+      for (const invId of detailedIds) {
+        for (const li of invDetail.map.get(invId)?.line_items ?? []) {
+          itemRows.push({
+            team_id: integration.team_id,
+            zoho_invoice_id: invId,
+            line_item_id: li.line_item_id,
+            zoho_item_id: li.item_id ?? null,
+            sku: li.sku ?? null,
+            name: li.name ?? null,
+            description: li.description ?? null,
+            quantity: li.quantity ?? null,
+            unit: li.unit ?? null,
+            rate: li.rate ?? null,
+            amount: li.item_total ?? null,
+            tax_percentage: li.tax_percentage ?? null,
+          });
+        }
+      }
+      await sb
+        .from("zoho_invoice_items")
+        .delete()
+        .eq("team_id", integration.team_id)
+        .in("zoho_invoice_id", detailedIds);
+      if (itemRows.length > 0) {
+        await sb.from("zoho_invoice_items").insert(itemRows);
+      }
+    }
+  } catch (e) {
+    counts.warnings.push(`Mirror invoices skipped: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   // ---- Expenses (Zoho Books → zoho_expenses) ----
   try {
     const expenses = await fetchAll<ZohoExpense>(integration, "/expenses", "expenses", {
@@ -785,6 +911,59 @@ export async function syncFromZoho(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     counts.warnings.push(`Expenses skipped: ${msg}`);
+  }
+
+  // ---- Customer payments (Zoho Books → zoho_payments + allocations) ----
+  // Requires the ZohoBooks.customerpayments.READ scope. If it isn't granted yet
+  // Zoho returns an auth error → we catch and skip (reconnect Zoho to enable).
+  try {
+    const payments = await fetchAll<ZohoPayment>(integration, "/customerpayments", "customerpayments", {
+      sort_column: "date",
+      sort_order: "D",
+      ...sinceFilter,
+    });
+    if (payments.length > 0) {
+      const paymentRows = payments.map((p) => ({
+        team_id: integration.team_id,
+        zoho_payment_id: p.payment_id,
+        zoho_contact_id: p.customer_id ?? null,
+        date: toDateOrNull(p.date),
+        amount: p.amount ?? null,
+        payment_mode: p.payment_mode ?? null,
+        reference_number: p.reference_number ?? null,
+        synced_at: new Date().toISOString(),
+      }));
+      await sb.from("zoho_payments").upsert(paymentRows, { onConflict: "team_id,zoho_payment_id" });
+
+      // Per-invoice allocations (payment.invoices[]). Replace wholesale per payment.
+      // NOTE: the list endpoint may omit invoices[]; if allocations come back empty
+      // we'll need a budgeted detail pass (/customerpayments/{id}) as a follow-up.
+      const paymentIds = payments.map((p) => p.payment_id);
+      const allocRows: Record<string, unknown>[] = [];
+      for (const p of payments) {
+        for (const inv of p.invoices ?? []) {
+          allocRows.push({
+            team_id: integration.team_id,
+            zoho_payment_id: p.payment_id,
+            zoho_invoice_id: inv.invoice_id,
+            invoice_number: inv.invoice_number ?? null,
+            amount_applied: inv.amount_applied ?? null,
+          });
+        }
+      }
+      await sb
+        .from("zoho_payment_allocations")
+        .delete()
+        .eq("team_id", integration.team_id)
+        .in("zoho_payment_id", paymentIds);
+      if (allocRows.length > 0) {
+        await sb.from("zoho_payment_allocations").insert(allocRows);
+      }
+      counts.warnings.push(`Payments: ${paymentRows.length} synced (${allocRows.length} allocations)`);
+    }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    counts.warnings.push(`Payments skipped (grant ZohoBooks.customerpayments.READ + reconnect Zoho): ${msg}`);
   }
 
   await sb

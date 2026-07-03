@@ -33,6 +33,41 @@ export type ZohoContact = {
   last_modified_time?: string;
   billing_address?: ZohoAddress;
   shipping_address?: ZohoAddress;
+  // Detail-endpoint only (/contacts/{id}):
+  gst_no?: string;
+  credit_limit?: number;
+  payment_terms?: number;        // days
+  payment_terms_label?: string;
+};
+
+// Invoice line item — present only on the invoice DETAIL response
+// (/invoices/{id}), not the list endpoint.
+export type ZohoInvoiceLineItem = {
+  line_item_id: string;
+  item_id?: string;
+  sku?: string;
+  name?: string;
+  description?: string;
+  quantity?: number;
+  unit?: string;
+  rate?: number;
+  item_total?: number;   // line amount (excl tax)
+  tax_percentage?: number;
+};
+
+// Customer payment (/customerpayments). Requires ZohoBooks.customerpayments.READ.
+export type ZohoPayment = {
+  payment_id: string;
+  customer_id?: string;
+  date?: string;
+  amount?: number;
+  payment_mode?: string;
+  reference_number?: string;
+  invoices?: {
+    invoice_id: string;
+    invoice_number?: string;
+    amount_applied?: number;
+  }[];
 };
 
 export type ZohoInvoice = {
@@ -52,6 +87,7 @@ export type ZohoInvoice = {
   estimate_id?: string;  // if invoice was created from an estimate
   created_time: string;
   last_modified_time: string;
+  line_items?: ZohoInvoiceLineItem[];  // detail endpoint only
 };
 
 export type ZohoItem = {
