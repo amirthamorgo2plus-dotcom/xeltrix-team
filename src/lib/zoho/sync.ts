@@ -373,9 +373,20 @@ export async function syncFromZoho(
   const needAddr = new Set(
     (leadsNoAddress ?? []).map((l) => l.zoho_customer_id as string)
   );
+  // Also detail-fetch contacts missing credit_limit in the mirror, so
+  // credit_limit/payment_terms/gstin populate even for contacts that already
+  // have an address (the address pass alone would skip them). Bounded + budgeted.
+  const { data: contactsNoCredit } = await sb
+    .from("zoho_contacts")
+    .select("zoho_contact_id")
+    .eq("team_id", integration.team_id)
+    .is("credit_limit", null);
+  const needCredit = new Set(
+    (contactsNoCredit ?? []).map((c) => c.zoho_contact_id as string)
+  );
   const contactIdsForAddr = contacts
     .map((c) => c.contact_id)
-    .filter((id) => needAddr.has(id));
+    .filter((id) => needAddr.has(id) || needCredit.has(id));
 
   if (contactIdsForAddr.length > 0) {
     const ADDRESS_DEADLINE = Math.min(DETAIL_DEADLINE, Date.now() + 30_000);
