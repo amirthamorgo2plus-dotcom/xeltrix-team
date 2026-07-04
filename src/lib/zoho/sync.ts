@@ -842,9 +842,14 @@ export async function syncFromZoho(
   // ---- Mirror: zoho_invoices + zoho_invoice_items (line-item cache for the portal) ----
   try {
     const nowIso = new Date().toISOString();
-    const invoiceMirror = invoices.map((inv) => {
+    // Split like the opportunities upsert: rows WITHOUT fresh sub_total/tax_total
+    // omit those columns so ON CONFLICT leaves the previously-stored values intact
+    // (the list endpoint never returns them, so including them would null-overwrite).
+    const invWithTax: Record<string, unknown>[] = [];
+    const invWithoutTax: Record<string, unknown>[] = [];
+    for (const inv of invoices) {
       const d = invDetail.map.get(inv.invoice_id);
-      return {
+      const base = {
         team_id: integration.team_id,
         zoho_invoice_id: inv.invoice_id,
         invoice_number: inv.invoice_number ?? null,
@@ -852,15 +857,23 @@ export async function syncFromZoho(
         date: toDateOrNull(inv.date),
         due_date: d?.due_date ?? toDateOrNull(inv.due_date),
         status: d?.invoice_status ?? inv.status ?? null,
-        sub_total: d?.sub_total ?? inv.sub_total ?? null,
-        tax_total: d?.tax_total ?? inv.tax_total ?? null,
         total: inv.total ?? null,
         balance: d?.balance ?? inv.balance ?? null,
         synced_at: nowIso,
       };
-    });
-    if (invoiceMirror.length > 0) {
-      await sb.from("zoho_invoices").upsert(invoiceMirror, { onConflict: "team_id,zoho_invoice_id" });
+      const sub = d?.sub_total ?? inv.sub_total;
+      const tax = d?.tax_total ?? inv.tax_total;
+      if (sub != null || tax != null) {
+        invWithTax.push({ ...base, sub_total: sub ?? null, tax_total: tax ?? null });
+      } else {
+        invWithoutTax.push(base);
+      }
+    }
+    if (invWithoutTax.length > 0) {
+      await sb.from("zoho_invoices").upsert(invWithoutTax, { onConflict: "team_id,zoho_invoice_id" });
+    }
+    if (invWithTax.length > 0) {
+      await sb.from("zoho_invoices").upsert(invWithTax, { onConflict: "team_id,zoho_invoice_id" });
     }
 
     // Line items: only for invoices detail-fetched THIS run (others keep their
