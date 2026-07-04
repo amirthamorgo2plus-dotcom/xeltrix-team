@@ -686,13 +686,28 @@ export async function syncFromZoho(
       .map((o) => o.zoho_invoice_id as string)
   );
 
+  // Invoices that already have line items mirrored (so we don't re-detail them).
+  // Without this, invoices that got tax before line-items existed would be
+  // skipped forever and never backfill their items. Scoped to this window's ids.
+  const windowInvoiceIds = invoices.map((inv) => inv.invoice_id);
+  const { data: itemedRows } = await sb
+    .from("zoho_invoice_items")
+    .select("zoho_invoice_id")
+    .eq("team_id", integration.team_id)
+    .in("zoho_invoice_id", windowInvoiceIds.length ? windowInvoiceIds : ["_none_"]);
+  const invoicesWithItems = new Set((itemedRows ?? []).map((r) => r.zoho_invoice_id as string));
+
   // Needs detail if: missing tax yet, OR it's in the current month
   // (always re-fetched fresh to correct any stale value). Current-month
   // invoices are sorted first so they always complete within the budget.
   const invIdsNeedingDetail = invoices
     .filter((inv) => {
       const isCurrentMonth = (toDateOrNull(inv.date) ?? "") >= CURRENT_MONTH_START;
-      return !invoicesWithTax.has(inv.invoice_id) || isCurrentMonth;
+      return (
+        !invoicesWithTax.has(inv.invoice_id) ||
+        !invoicesWithItems.has(inv.invoice_id) ||
+        isCurrentMonth
+      );
     })
     .sort((a, b) => {
       const aCM = (toDateOrNull(a.date) ?? "") >= CURRENT_MONTH_START ? 0 : 1;
