@@ -961,31 +961,79 @@ export async function syncFromZoho(
       }));
       await sb.from("zoho_payments").upsert(paymentRows, { onConflict: "team_id,zoho_payment_id" });
 
-      // Per-invoice allocations (payment.invoices[]). Replace wholesale per payment.
-      // NOTE: the list endpoint may omit invoices[]; if allocations come back empty
-      // we'll need a budgeted detail pass (/customerpayments/{id}) as a follow-up.
+      // Per-invoice allocations. The LIST endpoint omits invoices[], so
+      // detail-fetch /customerpayments/{id} for payments missing allocations
+      // (budgeted/resumable — shares the 45s detail deadline; runs after the
+      // invoice backfill has consumed its budget, i.e. over a few Sync clicks).
       const paymentIds = payments.map((p) => p.payment_id);
-      const allocRows: Record<string, unknown>[] = [];
-      for (const p of payments) {
-        for (const inv of p.invoices ?? []) {
-          allocRows.push({
-            team_id: integration.team_id,
-            zoho_payment_id: p.payment_id,
-            zoho_invoice_id: inv.invoice_id,
-            invoice_number: inv.invoice_number ?? null,
-            amount_applied: inv.amount_applied ?? null,
-          });
-        }
-      }
-      await sb
+      const { data: haveAllocRows } = await sb
         .from("zoho_payment_allocations")
-        .delete()
+        .select("zoho_payment_id")
         .eq("team_id", integration.team_id)
         .in("zoho_payment_id", paymentIds);
-      if (allocRows.length > 0) {
-        await sb.from("zoho_payment_allocations").insert(allocRows);
+      const haveAlloc = new Set((haveAllocRows ?? []).map((r) => r.zoho_payment_id as string));
+
+      let allocCount = 0;
+      const listAlloc: Record<string, unknown>[] = [];
+      const needDetail: string[] = [];
+      for (const p of payments) {
+        if (p.invoices && p.invoices.length > 0) {
+          for (const inv of p.invoices) {
+            listAlloc.push({
+              team_id: integration.team_id,
+              zoho_payment_id: p.payment_id,
+              zoho_invoice_id: inv.invoice_id,
+              invoice_number: inv.invoice_number ?? null,
+              amount_applied: inv.amount_applied ?? null,
+            });
+          }
+        } else if (!haveAlloc.has(p.payment_id)) {
+          needDetail.push(p.payment_id);
+        }
       }
-      counts.warnings.push(`Payments: ${paymentRows.length} synced (${allocRows.length} allocations)`);
+      if (listAlloc.length > 0) {
+        const ids = [...new Set(listAlloc.map((r) => r.zoho_payment_id as string))];
+        await sb.from("zoho_payment_allocations").delete().eq("team_id", integration.team_id).in("zoho_payment_id", ids);
+        await sb.from("zoho_payment_allocations").insert(listAlloc);
+        allocCount += listAlloc.length;
+      }
+
+      let payProcessed = 0;
+      for (let i = 0; i < needDetail.length; i += 3) {
+        if (Date.now() > DETAIL_DEADLINE) break;
+        const batch = needDetail.slice(i, i + 3);
+        const results = await Promise.all(
+          batch.map(async (pid) => {
+            try {
+              const res = await zohoFetch<{
+                payment?: { invoices?: { invoice_id: string; invoice_number?: string; amount_applied?: number }[] };
+              }>(integration, `/customerpayments/${pid}`);
+              return { pid, invoices: res.payment?.invoices ?? [] };
+            } catch {
+              return { pid, invoices: [] as { invoice_id: string; invoice_number?: string; amount_applied?: number }[] };
+            }
+          })
+        );
+        const rows: Record<string, unknown>[] = [];
+        for (const r of results) {
+          for (const inv of r.invoices) {
+            rows.push({
+              team_id: integration.team_id,
+              zoho_payment_id: r.pid,
+              zoho_invoice_id: inv.invoice_id,
+              invoice_number: inv.invoice_number ?? null,
+              amount_applied: inv.amount_applied ?? null,
+            });
+          }
+        }
+        if (rows.length > 0) await sb.from("zoho_payment_allocations").insert(rows);
+        allocCount += rows.length;
+        payProcessed = i + batch.length;
+      }
+      const payRemaining = needDetail.length - payProcessed;
+      counts.warnings.push(
+        `Payments: ${paymentRows.length} synced (${allocCount} allocations${payRemaining > 0 ? `, ${payRemaining} remaining — click Sync again` : ""})`
+      );
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
