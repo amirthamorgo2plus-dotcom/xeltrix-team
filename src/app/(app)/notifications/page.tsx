@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 import { getUser } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +46,7 @@ export default async function NotificationsPage() {
                       {n.body && <p className="text-sm text-zinc-500">{n.body}</p>}
                     </div>
                     <span className="text-xs text-zinc-400">
-                      {format(new Date(n.created_at), "dd MMM, HH:mm")}
+                      {format(ist(n.created_at), "dd MMM, HH:mm")}
                     </span>
                   </div>
                 </li>

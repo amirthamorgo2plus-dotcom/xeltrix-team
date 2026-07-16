@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { format, addMonths } from "date-fns";
+import { ist } from "@/lib/ist";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers } from "@/lib/data";
@@ -435,7 +436,7 @@ export default async function VisitsSummaryPage({
                     <span className="font-medium">{l.name}</span>
                     <span className="flex items-center gap-2 text-xs text-zinc-500">
                       added by {adder?.name ?? "—"} ·{" "}
-                      {format(new Date(l.created_at), "dd MMM")}
+                      {format(ist(l.created_at), "dd MMM")}
                     </span>
                   </li>
                 );

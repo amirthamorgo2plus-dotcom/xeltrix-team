@@ -2,6 +2,7 @@ import {
   addDays, addMonths, endOfMonth, format, getDate, getDay,
   isSameMonth, isToday, parseISO, startOfMonth, startOfWeek, subMonths,
 } from "date-fns";
+import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -92,13 +93,13 @@ export default async function CalendarPage({
   );
   (taskRes.data ?? []).forEach((t) => {
     if (!t.due_at) return;
-    pushEvent(format(new Date(t.due_at), "yyyy-MM-dd"), { kind: "task", label: t.title });
+    pushEvent(format(ist(t.due_at), "yyyy-MM-dd"), { kind: "task", label: t.title });
   });
   (fuRes.data ?? []).forEach((f) => {
     const lead = Array.isArray(f.lead)
       ? (f.lead as { name?: string }[])[0]
       : (f.lead as { name?: string } | null);
-    pushEvent(format(new Date(f.due_at), "yyyy-MM-dd"), {
+    pushEvent(format(ist(f.due_at), "yyyy-MM-dd"), {
       kind: "followup",
       label: lead?.name ?? "follow-up",
     });

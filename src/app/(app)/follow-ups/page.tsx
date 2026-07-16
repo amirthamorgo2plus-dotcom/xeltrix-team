@@ -1,4 +1,5 @@
 import { format, isPast } from "date-fns";
+import { ist } from "@/lib/ist";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
@@ -228,7 +229,7 @@ export default async function FollowUpsPage({
                         )}
                         {f.done_at && (
                           <span className="text-xs text-zinc-500">
-                            done {format(new Date(f.done_at), "dd MMM")}
+                            done {format(ist(f.done_at), "dd MMM")}
                           </span>
                         )}
                         {source && (

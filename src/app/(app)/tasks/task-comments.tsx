@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState, useTransition } from "react";
 import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { MessageSquare, Trash2, AtSign, ImagePlus, X } from "lucide-react";
 import imageCompression from "browser-image-compression";
 import { createClient } from "@/lib/supabase/client";
@@ -79,7 +80,7 @@ export function TaskComments({
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-medium">{author?.name ?? "Unknown"}</span>
                     <span className="text-[10px] text-zinc-500">
-                      {format(new Date(c.created_at), "dd MMM, HH:mm")}
+                      {format(ist(c.created_at), "dd MMM, HH:mm")}
                     </span>
                   </div>
                   {c.body && c.body !== "(image)" && (

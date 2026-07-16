@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
+import { ist } from "@/lib/ist";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { isSuperAdmin } from "@/lib/super-admin";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -156,7 +157,7 @@ export default async function OrgsAdminPage() {
                         {storageByUser ? fmtBytes(storage.get(t.id) ?? 0) : "—"}
                       </TD>
                       <TD right className="text-zinc-500">
-                        {t.created_at ? format(new Date(t.created_at), "dd MMM yyyy") : "—"}
+                        {t.created_at ? format(ist(t.created_at), "dd MMM yyyy") : "—"}
                       </TD>
                       <TD>
                         <OrgRowActions teamId={t.id} name={t.name} adminEmails={emails} />

@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 
 // Server Actions in this route inherit this — gives the sync time to paginate Zoho
@@ -77,7 +78,7 @@ export default async function IntegrationsPage({
               <dt className="text-zinc-500">Last sync</dt>
               <dd>
                 {integration.last_synced_at
-                  ? format(new Date(integration.last_synced_at), "dd MMM, HH:mm")
+                  ? format(ist(integration.last_synced_at), "dd MMM, HH:mm")
                   : "Never"}
               </dd>
               {integration.last_sync_error && (

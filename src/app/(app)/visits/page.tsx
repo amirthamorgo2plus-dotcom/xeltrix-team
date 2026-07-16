@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { format, differenceInMinutes } from "date-fns";
+import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -165,7 +166,7 @@ export default async function VisitsPage({
         lat,
         lng,
         label: leadName || "Check-in",
-        subtitle: `${memberName} · ${format(new Date(v.check_in_at), "HH:mm")}`,
+        subtitle: `${memberName} · ${format(ist(v.check_in_at), "HH:mm")}`,
         paired:
           outLat != null && outLng != null ? { lat: outLat, lng: outLng } : null,
         order: routeMode ? i + 1 : undefined,
@@ -357,7 +358,7 @@ export default async function VisitsPage({
               ) : (
                 <span>(no customer linked) </span>
               )}
-              since {format(new Date(myActiveVisit.check_in_at), "dd MMM, HH:mm")}{" "}
+              since {format(ist(myActiveVisit.check_in_at), "dd MMM, HH:mm")}{" "}
               ({differenceInMinutes(new Date(), new Date(myActiveVisit.check_in_at))} min ago)
             </div>
             {myActiveVisit.notes && (
@@ -515,11 +516,11 @@ export default async function VisitsPage({
                         )}
                       </div>
                       <div className="text-xs text-zinc-500">
-                        Check-in {format(new Date(v.check_in_at), "HH:mm")}
+                        Check-in {format(ist(v.check_in_at), "HH:mm")}
                         {v.check_out_at && (
                           <>
                             {" → "}check-out{" "}
-                            {format(new Date(v.check_out_at), "HH:mm")}
+                            {format(ist(v.check_out_at), "HH:mm")}
                           </>
                         )}
                       </div>

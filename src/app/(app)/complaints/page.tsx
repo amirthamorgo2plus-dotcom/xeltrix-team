@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -109,7 +110,7 @@ export default async function ComplaintsPage({
                       <ComplaintStatusSelect id={c.id} value={c.status} />
                     </td>
                     <td className="py-2 text-zinc-500">
-                      {format(new Date(c.opened_at), "dd MMM")}
+                      {format(ist(c.opened_at), "dd MMM")}
                     </td>
                   </tr>
                 ))}

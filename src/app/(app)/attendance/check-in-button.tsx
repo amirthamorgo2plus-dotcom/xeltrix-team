@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { Button } from "@/components/ui/button";
 import { checkIn, checkOut } from "./actions";
 
@@ -27,8 +28,8 @@ export function CheckInButton({
           today.
         </div>
         <div className="text-xs text-zinc-500">
-          {format(new Date(todayRow.check_in_at), "HH:mm")} →{" "}
-          {format(new Date(todayRow.check_out_at), "HH:mm")}
+          {format(ist(todayRow.check_in_at), "HH:mm")} →{" "}
+          {format(ist(todayRow.check_out_at), "HH:mm")}
         </div>
       </div>
     );
@@ -40,7 +41,7 @@ export function CheckInButton({
         <div className="text-sm">
           Checked in at{" "}
           <span className="font-semibold">
-            {format(new Date(todayRow.check_in_at), "HH:mm")}
+            {format(ist(todayRow.check_in_at), "HH:mm")}
           </span>
         </div>
         <Button disabled={pending} onClick={() => start(() => checkOut())}>

@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -103,7 +104,7 @@ export default async function LeadsPage({
                       />
                     </td>
                     <td className="py-2 text-zinc-500">
-                      {format(new Date(l.created_at), "dd MMM")}
+                      {format(ist(l.created_at), "dd MMM")}
                     </td>
                   </tr>
                 ))}

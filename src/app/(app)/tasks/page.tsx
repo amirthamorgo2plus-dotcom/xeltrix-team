@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { format, isPast, isToday } from "date-fns";
+import { ist } from "@/lib/ist";
 import { Repeat } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
@@ -250,7 +251,7 @@ export default async function TasksPage({
                         <div className="mt-1 flex items-center gap-2 flex-wrap">
                           {t.due_at && (
                             <span className="text-xs text-zinc-500">
-                              Due {format(new Date(t.due_at), "dd MMM, HH:mm")}
+                              Due {format(ist(t.due_at), "dd MMM, HH:mm")}
                             </span>
                           )}
                           <Badge tone={priorityTone[t.priority] ?? "muted"}>{t.priority}</Badge>
