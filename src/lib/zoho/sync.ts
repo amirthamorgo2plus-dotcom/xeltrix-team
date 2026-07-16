@@ -269,6 +269,25 @@ export async function syncFromZoho(
 ): Promise<SyncCounts> {
   const sb = adminClient();
   const counts: SyncCounts = { customers: 0, invoices: 0, items: 0, quotes: 0, expenses: 0, warnings: [] };
+
+  // Zoho enforces a per-ORG daily cap (1,000 calls) shared by every app on the
+  // same org. A full-history backfill burns a lot of it, so a 429 mid-sync is
+  // normal. Never let one failed step abort the run: note it, and once the
+  // quota is gone stop making doomed calls — everything written so far persists
+  // and the next run resumes (the sync only re-fetches what's still missing).
+  let quotaHit = false;
+  const RATE_LIMIT_RE = /\b429\b|exceeded the maximum call rate limit|"code"\s*:\s*45/i;
+  const noteFetchFailure = (label: string, e: unknown) => {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (RATE_LIMIT_RE.test(msg)) {
+      quotaHit = true;
+      counts.warnings.push(
+        `Zoho daily API quota (1,000 calls/org) exhausted at "${label}" — remaining steps skipped. Progress is saved; click Sync again after the quota resets.`
+      );
+    } else {
+      counts.warnings.push(`${label} skipped: ${msg}`);
+    }
+  };
   // Wall-clock budget for detail-fetches so we never blow the 60s function limit.
   const DETAIL_DEADLINE = Date.now() + 45_000;
   // First day of the current month — current-month docs are ALWAYS re-fetched
@@ -306,10 +325,15 @@ export async function syncFromZoho(
     (salespersonName ? salespersonToMember.get(salespersonName) ?? null : null) ?? fallback;
 
   // ---- Contacts -> leads ----
-  const contacts = await fetchAll<ZohoContact>(integration, "/contacts", "contacts", {
-    contact_type: "customer",
-    ...sinceFilter,
-  });
+  let contacts: ZohoContact[] = [];
+  try {
+    contacts = await fetchAll<ZohoContact>(integration, "/contacts", "contacts", {
+      contact_type: "customer",
+      ...sinceFilter,
+    });
+  } catch (e) {
+    noteFetchFailure("Contacts", e);
+  }
 
   const { data: existingLeads } = await sb
     .from("leads")
@@ -443,7 +467,14 @@ export async function syncFromZoho(
   );
 
   // ---- Items -> opportunity_templates ----
-  const items = await fetchAll<ZohoItem>(integration, "/items", "items", sinceFilter);
+  let items: ZohoItem[] = [];
+  if (!quotaHit) {
+    try {
+      items = await fetchAll<ZohoItem>(integration, "/items", "items", sinceFilter);
+    } catch (e) {
+      noteFetchFailure("Items", e);
+    }
+  }
   const itemRows = items.map((it) => ({
     team_id: integration.team_id,
     zoho_item_id: it.item_id,
@@ -465,7 +496,7 @@ export async function syncFromZoho(
 
   // ---- Estimates -> quotes + proposal-stage opportunities ----
   let estimates: ZohoEstimate[] = [];
-  try {
+  if (!quotaHit) try {
     estimates = await fetchAll<ZohoEstimate>(integration, "/estimates", "estimates", {
       sort_column: "created_time",
       sort_order: "D",
@@ -654,11 +685,18 @@ export async function syncFromZoho(
   }
 
   // ---- Invoices -> won opportunities (linked to proposal opp if estimate matches) ----
-  const invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
-    sort_column: "created_time",
-    sort_order: "D",
-    ...sinceFilter,
-  });
+  let invoices: ZohoInvoice[] = [];
+  if (!quotaHit) {
+    try {
+      invoices = await fetchAll<ZohoInvoice>(integration, "/invoices", "invoices", {
+        sort_column: "created_time",
+        sort_order: "D",
+        ...sinceFilter,
+      });
+    } catch (e) {
+      noteFetchFailure("Invoices", e);
+    }
+  }
   const { data: existingOpps } = await sb
     .from("opportunities")
     .select("id, zoho_invoice_id, zoho_estimate_id, owner_id, value_excl_tax")
@@ -915,7 +953,7 @@ export async function syncFromZoho(
   }
 
   // ---- Expenses (Zoho Books → zoho_expenses) ----
-  try {
+  if (!quotaHit) try {
     const expenses = await fetchAll<ZohoExpense>(integration, "/expenses", "expenses", {
       sort_column: "date",
       sort_order: "D",
@@ -955,7 +993,7 @@ export async function syncFromZoho(
   // ---- Customer payments (Zoho Books → zoho_payments + allocations) ----
   // Requires the ZohoBooks.customerpayments.READ scope. If it isn't granted yet
   // Zoho returns an auth error → we catch and skip (reconnect Zoho to enable).
-  try {
+  if (!quotaHit) try {
     const payments = await fetchAll<ZohoPayment>(integration, "/customerpayments", "customerpayments", {
       sort_column: "date",
       sort_order: "D",
