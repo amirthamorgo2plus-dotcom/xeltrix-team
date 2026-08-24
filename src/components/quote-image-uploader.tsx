@@ -7,6 +7,21 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { addQuoteImage, removeQuoteImage } from "@/app/(app)/dashboard/actions";
 
+// Compress on the main thread, but never let it wedge the upload: if it throws
+// or takes longer than 15s, fall back to the original file. Guarantees the
+// returned promise always settles so the button can't stick on "Uploading...".
+async function compressWithFallback(file: File): Promise<File> {
+  const timeout = new Promise<File>((resolve) =>
+    setTimeout(() => resolve(file), 15_000),
+  );
+  const compress = imageCompression(file, {
+    maxWidthOrHeight: 1280,
+    maxSizeMB: 0.5,
+    useWebWorker: false,
+  }).catch(() => file);
+  return Promise.race([compress, timeout]);
+}
+
 // Admin-only control rendered under the quote card. Uploads an image to the
 // `quote-images` bucket, then records it as the latest quote of the day.
 export function QuoteImageUploader({ currentId }: { currentId: string | null }) {
@@ -18,11 +33,13 @@ export function QuoteImageUploader({ currentId }: { currentId: string | null }) 
     setError(null);
     setUploading(true);
     try {
-      const compressed = await imageCompression(file, {
-        maxWidthOrHeight: 1280,
-        maxSizeMB: 0.5,
-        useWebWorker: true,
-      });
+      // Compress on the main thread. With useWebWorker:true the library loads
+      // its own code from a CDN via importScripts() inside the worker, which can
+      // hang forever behind a CSP/proxy — leaving this await unsettled and the
+      // button stuck on "Uploading...". Main-thread compression has no such
+      // dependency; if it still fails or is slow, fall back to the original file
+      // so the upload always proceeds.
+      const compressed = await compressWithFallback(file);
 
       const supabase = createClient();
       const {
@@ -30,7 +47,10 @@ export function QuoteImageUploader({ currentId }: { currentId: string | null }) 
       } = await supabase.auth.getUser();
       if (!user) throw new Error("Not signed in");
 
-      const ext = compressed.type === "image/png" ? "png" : "jpg";
+      const ext = (compressed.type.split("/")[1] || "jpg").replace(
+        "jpeg",
+        "jpg",
+      );
       const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
       const { error: upErr } = await supabase.storage
