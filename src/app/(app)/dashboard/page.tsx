@@ -6,6 +6,8 @@ import { KpiCard } from "@/components/kpi-card";
 import { TargetChart } from "@/components/target-chart";
 import { CollectionsChart } from "@/components/collections-chart";
 import { SalesHistoryChart } from "@/components/sales-history-chart";
+import { SalesMixBreakdown } from "@/components/sales-mix-breakdown";
+import { itemCategory, type ItemCategory } from "@/lib/item-category";
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
@@ -156,10 +158,15 @@ export default async function DashboardPage({
   // language and the v_target_vs_achieved view).
   const pct = target > 0 ? Math.round((achievedExcl / target) * 100) : null;
 
-  // Monthly sales history (trailing 12 months, excl. tax). Built from the same
-  // won-opportunity data as the "Sales (excl. tax)" KPI, so the latest month on
-  // the line equals that card. Independent of the selected month range; still
-  // honours the member filter (via pipelineRows' owner scope).
+  // Monthly sales history (trailing 12 months, excl. tax), split by product type.
+  // The monthly TOTAL comes from the same won-opportunity data as the "Sales
+  // (excl. tax)" KPI (so the latest month equals that card, and it honours the
+  // member filter). The traded/manufactured/services SPLIT comes from invoice
+  // line items — the only place item-level detail exists — categorised by name
+  // prefix. Line items aren't salesperson-attributed, so the split is team-wide
+  // and scaled onto each month's (possibly member-scoped) total; any part that
+  // can't be reconciled to a line item (e.g. invoices missing mirrored items)
+  // lands in "Other" so the stack always sums to the total.
   const historyStart = format(startOfMonth(subMonths(new Date(), 11)), "yyyy-MM-dd");
   const salesByMonth = new Map<string, number>();
   for (const o of pipelineRows ?? []) {
@@ -168,12 +175,75 @@ export default async function DashboardPage({
     const ym = String(o.close_date).slice(0, 7); // YYYY-MM
     salesByMonth.set(ym, (salesByMonth.get(ym) ?? 0) + Number(o.value_excl_tax ?? o.value ?? 0));
   }
+
+  // Invoice dates (excl. draft/void) covering both the 12-month history and the
+  // selected range, then their line items (paginated), categorised.
+  const metaStart = monthFirst < historyStart ? monthFirst : historyStart;
+  const { data: invMeta } = await supabase
+    .from("zoho_invoices")
+    .select("zoho_invoice_id, date, status")
+    .eq("team_id", teamId)
+    .gte("date", metaStart);
+  const invDateById = new Map<string, string>();
+  for (const iv of invMeta ?? []) {
+    const st = String(iv.status ?? "").toLowerCase();
+    if (st === "draft" || st === "void" || !iv.date) continue;
+    invDateById.set(iv.zoho_invoice_id as string, String(iv.date));
+  }
+  type ItemRow = { zoho_invoice_id: string; name: string | null; amount: number | null };
+  const lineItems: ItemRow[] = [];
+  for (let fromIdx = 0; ; fromIdx += 1000) {
+    const { data: page } = await supabase
+      .from("zoho_invoice_items")
+      .select("zoho_invoice_id, name, amount")
+      .eq("team_id", teamId)
+      .range(fromIdx, fromIdx + 999);
+    if (!page || page.length === 0) break;
+    lineItems.push(...(page as ItemRow[]));
+    if (page.length < 1000) break;
+  }
+
+  const emptyMix = (): Record<ItemCategory, number> => ({ manufactured: 0, traded: 0, services: 0, other: 0 });
+  const rawByMonth = new Map<string, Record<ItemCategory, number>>();
+  const rangeRaw = emptyMix();
+  for (const li of lineItems) {
+    const date = invDateById.get(li.zoho_invoice_id);
+    if (!date) continue;
+    const cat = itemCategory(li.name);
+    const amt = Number(li.amount ?? 0);
+    if (date >= historyStart) {
+      const ym = date.slice(0, 7);
+      const bucket = rawByMonth.get(ym) ?? emptyMix();
+      bucket[cat] += amt;
+      rawByMonth.set(ym, bucket);
+    }
+    if (date >= monthFirst && date <= monthLast) rangeRaw[cat] += amt;
+  }
+
+  // Scale a raw line-item mix onto an authoritative total; unreconciled remainder
+  // (or a total with no line items) falls into "Other".
+  function fitMix(total: number, raw: Record<ItemCategory, number>) {
+    const t = Math.round(total);
+    const catSum = raw.manufactured + raw.traded + raw.services + raw.other;
+    if (catSum <= 0) return { manufactured: 0, traded: 0, services: 0, other: t, total: t };
+    const scale = catSum > total ? total / catSum : 1;
+    const manufactured = Math.round(raw.manufactured * scale);
+    const traded = Math.round(raw.traded * scale);
+    const services = Math.round(raw.services * scale);
+    const other = Math.max(0, t - manufactured - traded - services);
+    return { manufactured, traded, services, other, total: t };
+  }
+
   const salesHistory = Array.from({ length: 12 }, (_, i) => {
     const d = startOfMonth(subMonths(new Date(), 11 - i));
     const ym = format(d, "yyyy-MM");
-    return { month: ym, label: format(d, "MMM"), sales: Math.round(salesByMonth.get(ym) ?? 0) };
+    const fit = fitMix(salesByMonth.get(ym) ?? 0, rawByMonth.get(ym) ?? emptyMix());
+    return { month: ym, label: format(d, "MMM"), ...fit };
   });
-  const hasSalesHistory = salesHistory.some((m) => m.sales > 0);
+  const hasSalesHistory = salesHistory.some((m) => m.total > 0);
+
+  // Current-period mix for the breakdown card — scaled onto the KPI's sales total.
+  const salesMix = fitMix(achievedExcl, rangeRaw);
 
   // Attendance %: (worked_days) / (working_days)
   const holidayClosed = new Set(
@@ -367,19 +437,35 @@ export default async function DashboardPage({
         />
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Sales History (last 12 months)</CardTitle>
-          <span className="text-xs text-zinc-500">Invoiced sales, excl. tax</span>
-        </CardHeader>
-        <CardContent>
-          {hasSalesHistory ? (
-            <SalesHistoryChart data={salesHistory} currency={currency} />
-          ) : (
-            <EmptyState title="No sales history yet" hint="Won invoices will appear here as they sync from Zoho." />
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Sales History (last 12 months)</CardTitle>
+            <span className="text-xs text-zinc-500">Invoiced sales, excl. tax</span>
+          </CardHeader>
+          <CardContent>
+            {hasSalesHistory ? (
+              <SalesHistoryChart data={salesHistory} currency={currency} />
+            ) : (
+              <EmptyState title="No sales history yet" hint="Won invoices will appear here as they sync from Zoho." />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Sales Mix</CardTitle>
+            <span className="text-xs text-zinc-500">{format(monthStart, "MMM yyyy")}</span>
+          </CardHeader>
+          <CardContent>
+            {salesMix.total > 0 ? (
+              <SalesMixBreakdown mix={salesMix} currency={currency} />
+            ) : (
+              <EmptyState title="No sales this period" hint="Traded vs manufactured split shows here." />
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <QuoteOfTheDay />
