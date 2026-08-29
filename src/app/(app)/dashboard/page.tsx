@@ -7,7 +7,7 @@ import { TargetChart } from "@/components/target-chart";
 import { CollectionsChart } from "@/components/collections-chart";
 import { SalesHistoryChart } from "@/components/sales-history-chart";
 import { SalesMixBreakdown } from "@/components/sales-mix-breakdown";
-import { itemCategory, type ItemCategory } from "@/lib/item-category";
+import { itemCategory, emptyMix, fitMix, type CategoryMix } from "@/lib/item-category";
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
@@ -203,8 +203,7 @@ export default async function DashboardPage({
     if (page.length < 1000) break;
   }
 
-  const emptyMix = (): Record<ItemCategory, number> => ({ manufactured: 0, traded: 0, services: 0, other: 0 });
-  const rawByMonth = new Map<string, Record<ItemCategory, number>>();
+  const rawByMonth = new Map<string, CategoryMix>();
   const rangeRaw = emptyMix();
   for (const li of lineItems) {
     const date = invDateById.get(li.zoho_invoice_id);
@@ -218,20 +217,6 @@ export default async function DashboardPage({
       rawByMonth.set(ym, bucket);
     }
     if (date >= monthFirst && date <= monthLast) rangeRaw[cat] += amt;
-  }
-
-  // Scale a raw line-item mix onto an authoritative total; unreconciled remainder
-  // (or a total with no line items) falls into "Other".
-  function fitMix(total: number, raw: Record<ItemCategory, number>) {
-    const t = Math.round(total);
-    const catSum = raw.manufactured + raw.traded + raw.services + raw.other;
-    if (catSum <= 0) return { manufactured: 0, traded: 0, services: 0, other: t, total: t };
-    const scale = catSum > total ? total / catSum : 1;
-    const manufactured = Math.round(raw.manufactured * scale);
-    const traded = Math.round(raw.traded * scale);
-    const services = Math.round(raw.services * scale);
-    const other = Math.max(0, t - manufactured - traded - services);
-    return { manufactured, traded, services, other, total: t };
   }
 
   const salesHistory = Array.from({ length: 12 }, (_, i) => {

@@ -1,15 +1,11 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CATEGORY_META, CATEGORY_ORDER } from "@/lib/item-category";
+import { CATEGORY_META, CATEGORY_ORDER, type CategoryMix } from "@/lib/item-category";
 
-type Row = {
+type Row = CategoryMix & {
   month: string;
   label: string;
-  manufactured: number;
-  traded: number;
-  services: number;
-  other: number;
   total: number;
 };
 
@@ -26,11 +22,15 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
   const fmtFull = (v: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(v);
 
+  // Only categories that actually appear in the window (keeps empty ones like
+  // Packing Material out of the legend/stack).
+  const activeCats = CATEGORY_ORDER.filter((k) => data.some((row) => row[k] > 0));
+
   return (
     <div className="flex flex-col gap-3">
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
-        {CATEGORY_ORDER.map((k) => (
+        {activeCats.map((k) => (
           <span key={k} className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORY_META[k].color }} />
             {CATEGORY_META[k].label}
@@ -58,7 +58,7 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
                 return (
                   <div className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-xs shadow-lg">
                     <div className="mb-1 font-medium text-zinc-300">{label}</div>
-                    {CATEGORY_ORDER.map((k) =>
+                    {activeCats.map((k) =>
                       row[k] > 0 ? (
                         <div key={k} className="flex items-center justify-between gap-4">
                           <span className="inline-flex items-center gap-1.5 text-zinc-400">
@@ -77,7 +77,7 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
                 );
               }}
             />
-            {CATEGORY_ORDER.map((k) => (
+            {activeCats.map((k) => (
               <Area
                 key={k}
                 type="monotone"
