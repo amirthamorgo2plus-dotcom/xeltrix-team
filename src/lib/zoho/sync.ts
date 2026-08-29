@@ -914,6 +914,52 @@ export async function syncFromZoho(
       await sb.from("zoho_invoices").upsert(invWithTax, { onConflict: "team_id,zoho_invoice_id" });
     }
 
+    // Prune ghost duplicates. When Zoho re-issues an invoice (e.g. an edit that
+    // replaces it) it keeps the same invoice_number but gets a NEW invoice_id.
+    // We upsert the new row, but the old one would linger forever — upsert never
+    // deletes — silently double-counting sales on the dashboard and portal.
+    // Invoice numbers are unique per Zoho org, so any mirror row that shares a
+    // number we just synced yet carries an id Zoho no longer returns is stale.
+    // Delete it along with its derived won-opportunity and line items.
+    const syncedNumbers = [
+      ...new Set(
+        invoices
+          .map((inv) => inv.invoice_number)
+          .filter((n): n is string => !!n),
+      ),
+    ];
+    const syncedIds = new Set(invoices.map((inv) => inv.invoice_id));
+    if (syncedNumbers.length > 0) {
+      const { data: existingForNumbers } = await sb
+        .from("zoho_invoices")
+        .select("zoho_invoice_id, invoice_number")
+        .eq("team_id", integration.team_id)
+        .in("invoice_number", syncedNumbers);
+      const ghostIds = (existingForNumbers ?? [])
+        .filter((r) => !syncedIds.has(r.zoho_invoice_id as string))
+        .map((r) => r.zoho_invoice_id as string);
+      if (ghostIds.length > 0) {
+        await sb
+          .from("zoho_invoice_items")
+          .delete()
+          .eq("team_id", integration.team_id)
+          .in("zoho_invoice_id", ghostIds);
+        await sb
+          .from("opportunities")
+          .delete()
+          .eq("team_id", integration.team_id)
+          .in("zoho_invoice_id", ghostIds);
+        await sb
+          .from("zoho_invoices")
+          .delete()
+          .eq("team_id", integration.team_id)
+          .in("zoho_invoice_id", ghostIds);
+        counts.warnings.push(
+          `Pruned ${ghostIds.length} stale re-issued invoice ${ghostIds.length === 1 ? "row" : "rows"}`,
+        );
+      }
+    }
+
     // Line items: only for invoices detail-fetched THIS run (others keep their
     // rows). Replace each such invoice's items wholesale to handle line edits.
     const detailedIds = invoices
