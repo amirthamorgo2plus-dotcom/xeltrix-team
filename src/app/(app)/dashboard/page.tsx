@@ -1,10 +1,11 @@
-import { addDays, differenceInDays, endOfMonth, format, getDay, getDate, parseISO, startOfMonth } from "date-fns";
+import { addDays, differenceInDays, endOfMonth, format, getDay, getDate, parseISO, startOfMonth, subMonths } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, firstDayOfMonth } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KpiCard } from "@/components/kpi-card";
 import { TargetChart } from "@/components/target-chart";
 import { CollectionsChart } from "@/components/collections-chart";
+import { SalesHistoryChart } from "@/components/sales-history-chart";
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
@@ -154,6 +155,25 @@ export default async function DashboardPage({
   // Achievement % is measured on sales EXCLUDING tax (matches the team's
   // language and the v_target_vs_achieved view).
   const pct = target > 0 ? Math.round((achievedExcl / target) * 100) : null;
+
+  // Monthly sales history (trailing 12 months, excl. tax). Built from the same
+  // won-opportunity data as the "Sales (excl. tax)" KPI, so the latest month on
+  // the line equals that card. Independent of the selected month range; still
+  // honours the member filter (via pipelineRows' owner scope).
+  const historyStart = format(startOfMonth(subMonths(new Date(), 11)), "yyyy-MM-dd");
+  const salesByMonth = new Map<string, number>();
+  for (const o of pipelineRows ?? []) {
+    if (o.stage !== "won" || !o.close_date) continue;
+    if (String(o.close_date) < historyStart) continue;
+    const ym = String(o.close_date).slice(0, 7); // YYYY-MM
+    salesByMonth.set(ym, (salesByMonth.get(ym) ?? 0) + Number(o.value_excl_tax ?? o.value ?? 0));
+  }
+  const salesHistory = Array.from({ length: 12 }, (_, i) => {
+    const d = startOfMonth(subMonths(new Date(), 11 - i));
+    const ym = format(d, "yyyy-MM");
+    return { month: ym, label: format(d, "MMM"), sales: Math.round(salesByMonth.get(ym) ?? 0) };
+  });
+  const hasSalesHistory = salesHistory.some((m) => m.sales > 0);
 
   // Attendance %: (worked_days) / (working_days)
   const holidayClosed = new Set(
@@ -346,6 +366,20 @@ export default async function DashboardPage({
           href="/deep-cleaning"
         />
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Sales History (last 12 months)</CardTitle>
+          <span className="text-xs text-zinc-500">Invoiced sales, excl. tax</span>
+        </CardHeader>
+        <CardContent>
+          {hasSalesHistory ? (
+            <SalesHistoryChart data={salesHistory} currency={currency} />
+          ) : (
+            <EmptyState title="No sales history yet" hint="Won invoices will appear here as they sync from Zoho." />
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <QuoteOfTheDay />
