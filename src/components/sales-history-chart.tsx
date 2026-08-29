@@ -1,6 +1,6 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CATEGORY_META, CATEGORY_ORDER, type CategoryMix } from "@/lib/item-category";
 
 type Row = CategoryMix & {
@@ -40,7 +40,7 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
 
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
+          <AreaChart data={data} margin={{ top: 24, right: 12, bottom: 0, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#a1a1aa" }} tickLine={false} axisLine={{ stroke: "#3f3f46" }} />
             <YAxis
@@ -77,7 +77,7 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
                 );
               }}
             />
-            {activeCats.map((k) => (
+            {activeCats.map((k, idx) => (
               <Area
                 key={k}
                 type="monotone"
@@ -87,7 +87,21 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
                 fill={CATEGORY_META[k].color}
                 fillOpacity={0.85}
                 strokeWidth={0}
-              />
+                isAnimationActive={false}
+              >
+                {/* Total sales amount printed on top of each month's stack */}
+                {idx === activeCats.length - 1 && (
+                  <LabelList
+                    dataKey="total"
+                    position="top"
+                    offset={8}
+                    fontSize={10}
+                    fontWeight={600}
+                    fill="#e4e4e7"
+                    formatter={(v) => (Number(v) > 0 ? compactINR(Number(v), currency) : "")}
+                  />
+                )}
+              </Area>
             ))}
           </AreaChart>
         </ResponsiveContainer>

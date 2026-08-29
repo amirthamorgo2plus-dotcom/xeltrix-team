@@ -32,6 +32,7 @@ export function SalesMixBreakdown({ mix, currency }: { mix: Mix; currency: strin
               outerRadius={62}
               paddingAngle={2}
               stroke="none"
+              isAnimationActive={false}
             >
               {slices.map((s) => (
                 <Cell key={s.key} fill={s.color} />
