@@ -139,6 +139,11 @@ export function MarginCalculatorClient({
     const result = await parsePdfInvoice(fd);
     setPdfParsing(false);
     if (result.error) { setPdfError(result.error); return; }
+    if (result.rows.length === 0) {
+      setPdfError("Couldn't read any items from this PDF. Make sure it's a Zoho quote/invoice with a line-item table, or add the items manually below.");
+      e.target.value = "";
+      return;
+    }
 
     const newLines: LineItem[] = result.rows.map((row) => ({
       id: uid(),
