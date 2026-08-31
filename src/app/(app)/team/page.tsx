@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { adminClient } from "@/lib/supabase/admin";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -23,6 +24,24 @@ export default async function TeamPage() {
     : { data: [] };
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name as string | null]));
 
+  // Last sign-in per member lives in the auth system, not our tables — read it
+  // with the service-role admin client (this page is already admin/manager-only).
+  const lastSignInById = new Map<string, string | null>();
+  try {
+    const admin = adminClient();
+    const idSet = new Set(ids);
+    for (let page = 1; page <= 20; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+      if (error || !data?.users?.length) break;
+      for (const u of data.users) {
+        if (idSet.has(u.id)) lastSignInById.set(u.id, u.last_sign_in_at ?? null);
+      }
+      if (data.users.length < 200) break;
+    }
+  } catch {
+    /* if the auth listing fails, the column simply shows "—" */
+  }
+
   const rows: TeamMemberRow[] = (members ?? []).map((m) => ({
     id: m.id,
     name: nameById.get(m.user_id) || "(unnamed)",
@@ -30,6 +49,7 @@ export default async function TeamPage() {
     active: m.active,
     track_attendance: m.track_attendance !== false,
     attendance_only: m.attendance_only === true,
+    last_sign_in_at: lastSignInById.get(m.user_id) ?? null,
   }));
 
   return (

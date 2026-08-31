@@ -1,6 +1,8 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { format } from "date-fns";
+import { ist } from "@/lib/ist";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,6 +107,7 @@ export type TeamMemberRow = {
   active: boolean;
   track_attendance: boolean;
   attendance_only: boolean;
+  last_sign_in_at: string | null;
 };
 
 function Toggle({
@@ -159,6 +162,7 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
           <TR hover={false}>
             <TH>Member</TH>
             <TH>Role</TH>
+            <TH>Last sign-in</TH>
             <TH>In attendance</TH>
             <TH>Access</TH>
             <TH>Status</TH>
@@ -174,6 +178,13 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
                 </span>
               </TD>
               <TD className="capitalize text-zinc-500">{m.role}</TD>
+              <TD className="whitespace-nowrap text-zinc-400">
+                {m.last_sign_in_at ? (
+                  format(ist(m.last_sign_in_at), "d MMM yyyy, h:mm a")
+                ) : (
+                  <span className="text-zinc-600">Never</span>
+                )}
+              </TD>
               <TD>
                 <Toggle
                   on={m.track_attendance}
