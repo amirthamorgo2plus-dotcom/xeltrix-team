@@ -42,7 +42,7 @@ export async function verifyCode(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const token = String(formData.get("token") ?? "").replace(/\s/g, "");
   if (!email) return { error: "Enter your email first." };
-  if (!token) return { error: "Enter the 6-digit code from the email." };
+  if (!token) return { error: "Enter the code from the email." };
 
   const supabase = await createClient();
   const { error } = await supabase.auth.verifyOtp({

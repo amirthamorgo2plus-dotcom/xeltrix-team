@@ -17,7 +17,10 @@ function friendlyError(raw: string): string {
     s.includes("pkce") ||
     s.includes("flow state")
   ) {
-    return "The sign-in link didn't work in this browser (it often opens in a different app). Enter your email below, then use the 6-digit code from the email instead of tapping the link.";
+    return "The sign-in link didn't work in this browser (it often opens in a different app). Enter your email below, then use the code from the email instead of tapping the link.";
+  }
+  if (s.includes("expired") || s.includes("invalid") || s.includes("otp")) {
+    return "That code didn't work — it may have expired, already been used, or a newer one was sent (email apps like Gmail can also open the link and use up the code). Tap \"Email me a sign-in link & code\" again, then type the newest code from that email — don't tap the link.";
   }
   return raw;
 }
@@ -112,7 +115,7 @@ export function LoginForm({
     fd.set("email", email);
     const res = await sendMagicLink(fd);
     setSending(false);
-    if (res.error) setError(res.error);
+    if (res.error) setError(friendlyError(res.error));
     else setSent(true);
   }
 
@@ -125,7 +128,7 @@ export function LoginForm({
     fd.set("token", code);
     const res = await verifyCode(fd);
     setVerifying(false);
-    if (res.error) setError(res.error);
+    if (res.error) setError(friendlyError(res.error));
     else if (res.verified) router.push("/dashboard");
   }
 
@@ -154,11 +157,12 @@ export function LoginForm({
       {sent && (
         <div className="flex flex-col gap-3 rounded-md border p-3" style={{ borderColor: "rgb(181 199 106 / 0.3)", background: "rgb(181 199 106 / 0.07)" }}>
           <p className="text-sm" style={{ color: "#b5c76a" }}>
-            Check your email and <strong>enter the 6-digit code below</strong>. The code is the
-            most reliable — the link can fail if your email opens it in a different app.
+            Check your email and <strong>enter the code below</strong> — don&apos;t tap the link.
+            The code is the most reliable; the link can be used up by your email app (Gmail, iPhone
+            Mail) before you get to it. If a code fails, request a new one and use the newest email.
           </p>
           <form onSubmit={handleVerify} className="flex flex-col gap-2">
-            <Label htmlFor="token">6-digit code from email</Label>
+            <Label htmlFor="token">Code from email</Label>
             <div className="flex gap-2">
               <Input
                 id="token"
