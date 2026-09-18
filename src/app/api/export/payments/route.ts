@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { toCsv, csvResponse, todayStamp } from "@/lib/csv";
-import { requireUser } from "@/lib/export-helpers";
+import { requireAdminOrManager } from "@/lib/export-helpers";
 
 export async function GET(req: Request) {
-  const user = await requireUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  // Payments are admin/manager-only — members must not download them.
+  const m = await requireAdminOrManager();
+  if (!m) return new Response("Forbidden", { status: 403 });
 
   const url = new URL(req.url);
   const year = Number(url.searchParams.get("year")) || new Date().getFullYear();

@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { toCsv, csvResponse, todayStamp } from "@/lib/csv";
-import { requireUser } from "@/lib/export-helpers";
+import { requireAdminOrManager } from "@/lib/export-helpers";
 
 export async function GET() {
-  const user = await requireUser();
-  if (!user) return new Response("Unauthorized", { status: 401 });
+  // Expenses are admin/manager-only — members must not download them.
+  const m = await requireAdminOrManager();
+  if (!m) return new Response("Forbidden", { status: 403 });
 
   const supabase = await createClient();
   const { data, error } = await supabase

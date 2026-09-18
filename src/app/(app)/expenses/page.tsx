@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { format, endOfMonth, startOfMonth, addMonths } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -70,6 +71,8 @@ export default async function ExpensesPage({
     : null;
 
   const me = await getMyMembership();
+  // Expenses are admin/manager-only — members can't view them (nav hides it too).
+  if (!isAdminOrManager(me?.role)) redirect("/dashboard");
   const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canManage = isAdminOrManager(me?.role);
   const members = await getTeamMembers();

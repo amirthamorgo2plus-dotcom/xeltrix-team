@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { getMyMembership, isAdminOrManager } from "@/lib/data";
 
 export async function memberNameLookup() {
   const supabase = await createClient();
@@ -23,4 +24,11 @@ export async function requireUser() {
     data: { user },
   } = await supabase.auth.getUser();
   return user;
+}
+
+// For admin/manager-only exports (e.g. expenses, payments) — returns the
+// membership when the caller may manage, otherwise null so the route can 403.
+export async function requireAdminOrManager() {
+  const m = await getMyMembership();
+  return m && isAdminOrManager(m.role) ? m : null;
 }

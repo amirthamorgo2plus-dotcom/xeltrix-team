@@ -94,6 +94,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/expenses",
     label: "Expenses",
     icon: Receipt,
+    adminOnly: true,
     children: [
       { href: "/payments", label: "Payments", icon: Wallet, adminOnly: true },
     ],
