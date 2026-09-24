@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { format, differenceInMinutes } from "date-fns";
+import { ta as taLocale } from "date-fns/locale";
 import { ist } from "@/lib/ist";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
@@ -13,6 +15,8 @@ import { LocationTest } from "./location-test";
 import { VisitMap } from "./visit-map";
 import { VisitRowActions } from "./visit-row-actions";
 import { GeocodeCustomersButton } from "./geocode-customers-button";
+import { LangToggle } from "./lang-toggle";
+import { VISITS_LANG_COOKIE, getDict, isLang, fill } from "./i18n";
 import type { MapPin } from "./visit-map-impl";
 
 const WORK_HOURS = { start: 9, end: 20 };
@@ -70,6 +74,11 @@ export default async function VisitsPage({
   searchParams: Promise<{ date?: string; member?: string; customers?: string }>;
 }) {
   const sp = await searchParams;
+  const langCookie = (await cookies()).get(VISITS_LANG_COOKIE)?.value;
+  const lang = isLang(langCookie) ? langCookie : "en";
+  const t = getDict(lang);
+  // date-fns needs the locale object; `undefined` means its English default.
+  const dateLocale = lang === "ta" ? taLocale : undefined;
   const me = await getMyMembership();
   const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
   const canManage = isAdminOrManager(me?.role);
@@ -270,16 +279,26 @@ export default async function VisitsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Visits</h1>
-        <p className="text-sm text-zinc-500">
-          {isToday ? "Today" : format(new Date(`${dateFilter}T00:00:00`), "EEE, dd MMM yyyy")}
-          {memberFilter
-            ? ` · ${memberInfo.get(memberFilter)?.name ?? "member"}`
-            : " · whole team"}
-          {" · "}
-          {(visits ?? []).length} visit{(visits ?? []).length === 1 ? "" : "s"}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">{t.title}</h1>
+          <p className="text-sm text-zinc-500">
+            {isToday
+              ? t.today
+              : format(new Date(`${dateFilter}T00:00:00`), "EEE, dd MMM yyyy", {
+                  locale: dateLocale,
+                })}
+            {memberFilter
+              ? ` · ${memberInfo.get(memberFilter)?.name ?? t.member}`
+              : ` · ${t.wholeTeam}`}
+            {" · "}
+            {fill(
+              (visits ?? []).length === 1 ? t.visitCountOne : t.visitCountMany,
+              { n: (visits ?? []).length }
+            )}
+          </p>
+        </div>
+        <LangToggle current={lang} />
       </div>
 
       {/* Tabs */}
@@ -288,13 +307,13 @@ export default async function VisitsPage({
           href="/visits"
           className="rounded bg-emerald-500/15 px-3 py-1 text-sm font-medium text-emerald-700 dark:text-emerald-300"
         >
-          Daily
+          {t.tabDaily}
         </Link>
         <Link
           href="/visits/summary"
           className="rounded px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
-          Monthly summary
+          {t.tabMonthly}
         </Link>
       </div>
 
@@ -304,7 +323,7 @@ export default async function VisitsPage({
         className="flex flex-wrap items-end gap-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40"
       >
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-500">Date</label>
+          <label className="text-xs text-zinc-500">{t.date}</label>
           <input
             type="date"
             name="date"
@@ -313,14 +332,14 @@ export default async function VisitsPage({
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-500">Employee</label>
+          <label className="text-xs text-zinc-500">{t.employee}</label>
           <select
             name="member"
             defaultValue={memberFilter ?? "all"}
             suppressHydrationWarning
             className="h-9 rounded-md border border-zinc-300 bg-transparent px-2 text-sm dark:border-zinc-700"
           >
-            <option value="all">All employees</option>
+            <option value="all">{t.allEmployees}</option>
             {memberOptions.map((mo) => (
               <option key={mo.id} value={mo.id}>
                 {mo.name}
@@ -329,14 +348,14 @@ export default async function VisitsPage({
           </select>
         </div>
         <button className="h-9 rounded-md bg-zinc-900 px-3 text-sm text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900">
-          Apply
+          {t.apply}
         </button>
         {(memberFilter || !isToday) && (
           <Link
             href={buildUrl({ date: null, member: null })}
             className="h-9 inline-flex items-center rounded-md border border-zinc-300 px-3 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
-            Clear · today &amp; everyone
+            {t.clearFilters}
           </Link>
         )}
       </form>
@@ -345,42 +364,55 @@ export default async function VisitsPage({
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>You are checked in</span>
-              <Badge tone="success">on site</Badge>
+              <span>{t.youAreCheckedIn}</span>
+              <Badge tone="success">{t.onSite}</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="text-sm">
               {myActiveVisit.lead_id ? (
                 <span>
-                  At <strong>{leadInfo.get(myActiveVisit.lead_id) ?? "customer"}</strong>{" "}
+                  <strong>
+                    {fill(t.atCustomer, {
+                      name: leadInfo.get(myActiveVisit.lead_id) ?? t.noCustomerItalic,
+                    })}
+                  </strong>{" "}
                 </span>
               ) : (
-                <span>(no customer linked) </span>
+                <span>{t.noCustomerLinked} </span>
               )}
-              since {format(ist(myActiveVisit.check_in_at), "dd MMM, HH:mm")}{" "}
-              ({differenceInMinutes(new Date(), new Date(myActiveVisit.check_in_at))} min ago)
+              {fill(t.sinceTime, {
+                time: format(ist(myActiveVisit.check_in_at), "dd MMM, HH:mm", {
+                  locale: dateLocale,
+                }),
+              })}{" "}
+              {fill(t.minutesAgo, {
+                n: differenceInMinutes(
+                  new Date(),
+                  new Date(myActiveVisit.check_in_at)
+                ),
+              })}
             </div>
             {myActiveVisit.notes && (
               <div className="text-xs text-zinc-500">{myActiveVisit.notes}</div>
             )}
-            <CheckOutButton visitId={myActiveVisit.id} />
+            <CheckOutButton visitId={myActiveVisit.id} t={t} />
           </CardContent>
         </Card>
       ) : (
-        isToday && <CheckInButton leads={leadOptions} workHours={WORK_HOURS} />
+        isToday && (
+          <CheckInButton leads={leadOptions} workHours={WORK_HOURS} t={t} />
+        )
       )}
 
       {isToday && (
         <Card>
           <CardHeader>
-            <CardTitle>Trouble checking in?</CardTitle>
-            <p className="text-xs text-zinc-500">
-              Verify your phone shares location (handy on iPhone) without doing a real check-in.
-            </p>
+            <CardTitle>{t.troubleTitle}</CardTitle>
+            <p className="text-xs text-zinc-500">{t.troubleHint}</p>
           </CardHeader>
           <CardContent>
-            <LocationTest />
+            <LocationTest t={t} />
           </CardContent>
         </Card>
       )}
@@ -389,41 +421,37 @@ export default async function VisitsPage({
         <Card>
           <CardHeader>
             <CardTitle>
-              Route · {memberInfo.get(memberFilter!)?.name ?? "member"}
+              {fill(t.routeFor, {
+                name: memberInfo.get(memberFilter!)?.name ?? t.member,
+              })}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
                 <div className="text-2xl font-semibold">{pins.length}</div>
-                <div className="text-xs text-zinc-500">Stops</div>
+                <div className="text-xs text-zinc-500">{t.stops}</div>
               </div>
               <div>
                 <div className="text-2xl font-semibold">
                   {routeKm.toFixed(1)} km
                 </div>
-                <div className="text-xs text-zinc-500">
-                  Route distance (approx)
-                </div>
+                <div className="text-xs text-zinc-500">{t.routeDistance}</div>
               </div>
               <div>
                 <div className="text-2xl font-semibold">
                   {fmtDuration(onSiteMins)}
                 </div>
-                <div className="text-xs text-zinc-500">Time on site</div>
+                <div className="text-xs text-zinc-500">{t.timeOnSite}</div>
               </div>
               <div>
                 <div className="text-2xl font-semibold">
                   {fmtDuration(offSiteMins)}
                 </div>
-                <div className="text-xs text-zinc-500">Travel + idle</div>
+                <div className="text-xs text-zinc-500">{t.travelIdle}</div>
               </div>
             </div>
-            <p className="mt-3 text-xs text-zinc-400">
-              Distance is straight-line between consecutive check-ins (not road
-              distance). Numbered pins show the visit order, so a zig-zag route
-              or long travel/idle time stands out.
-            </p>
+            <p className="mt-3 text-xs text-zinc-400">{t.routeNote}</p>
           </CardContent>
         </Card>
       )}
@@ -431,10 +459,12 @@ export default async function VisitsPage({
       <Card>
         <CardHeader>
           <CardTitle>
-            {routeMode ? "Route map" : "Map"} ·{" "}
+            {routeMode ? t.routeMap : t.map} ·{" "}
             {isToday
-              ? "today"
-              : format(new Date(`${dateFilter}T00:00:00`), "dd MMM")}
+              ? t.today
+              : format(new Date(`${dateFilter}T00:00:00`), "dd MMM", {
+                  locale: dateLocale,
+                })}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -443,7 +473,7 @@ export default async function VisitsPage({
               href={buildUrl({ customers: showCustomers ? null : "1" })}
               className="inline-flex h-8 items-center rounded-md border border-zinc-300 px-3 text-xs hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
             >
-              {showCustomers ? "Hide customers" : "Show all customers"}
+              {showCustomers ? t.hideCustomers : t.showAllCustomers}
             </Link>
             {canManage && (
               <GeocodeCustomersButton
@@ -454,12 +484,8 @@ export default async function VisitsPage({
           </div>
           {allPins.length === 0 ? (
             <EmptyState
-              title="Nothing to show for this filter"
-              hint={
-                isToday
-                  ? "Pins appear here once team members check in."
-                  : "Try a different date, or toggle customers on."
-              }
+              title={t.nothingForFilter}
+              hint={isToday ? t.pinsAppearHint : t.tryDifferentDate}
             />
           ) : (
             <VisitMap
@@ -468,21 +494,18 @@ export default async function VisitsPage({
             />
           )}
           {!routeMode && (
-            <p className="text-xs text-zinc-400">
-              Tip: pick one employee above to see their numbered route and
-              travel stats. Amber shop pins are customer locations.
-            </p>
+            <p className="text-xs text-zinc-400">{t.mapTip}</p>
           )}
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Visit list</CardTitle>
+          <CardTitle>{t.visitList}</CardTitle>
         </CardHeader>
         <CardContent>
           {(visits ?? []).length === 0 ? (
-            <EmptyState title="No visits logged for this filter" />
+            <EmptyState title={t.noVisitsLogged} />
           ) : (
             <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {(visits ?? []).map((v: Visit) => {
@@ -507,20 +530,30 @@ export default async function VisitsPage({
                         <span className="font-medium">{member?.name}</span>
                         <span className="text-zinc-500">·</span>
                         <span>
-                          {leadName ? leadName : <em className="text-zinc-500">no customer</em>}
+                          {leadName ? (
+                            leadName
+                          ) : (
+                            <em className="text-zinc-500">{t.noCustomerItalic}</em>
+                          )}
                         </span>
                         {open ? (
-                          <Badge tone="success">on site</Badge>
+                          <Badge tone="success">{t.onSite}</Badge>
                         ) : (
-                          <Badge tone="muted">{mins} min</Badge>
+                          <Badge tone="muted">
+                            {fill(t.minutesShort, { n: mins })}
+                          </Badge>
                         )}
                       </div>
                       <div className="text-xs text-zinc-500">
-                        Check-in {format(ist(v.check_in_at), "HH:mm")}
+                        {fill(t.checkInAt, {
+                          time: format(ist(v.check_in_at), "HH:mm"),
+                        })}
                         {v.check_out_at && (
                           <>
-                            {" → "}check-out{" "}
-                            {format(ist(v.check_out_at), "HH:mm")}
+                            {" → "}
+                            {fill(t.checkOutAt, {
+                              time: format(ist(v.check_out_at), "HH:mm"),
+                            })}
                           </>
                         )}
                       </div>

@@ -1,8 +1,10 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
+import { VISITS_LANG_COOKIE, isLang } from "./i18n";
 
 const WORK_HOURS_START = 9;  // 9 AM IST
 const WORK_HOURS_END = 20;   // 8 PM IST
@@ -19,6 +21,18 @@ function istHourNow(): number {
 function isWithinWorkHours(): boolean {
   const h = istHourNow();
   return h >= WORK_HOURS_START && h < WORK_HOURS_END;
+}
+
+// Language preference for the Visits page. Scoped to this route, so switching
+// here doesn't change the rest of the app.
+export async function setVisitsLang(lang: string) {
+  if (!isLang(lang)) throw new Error("Unsupported language.");
+  (await cookies()).set(VISITS_LANG_COOKIE, lang, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365,
+    sameSite: "lax",
+  });
+  revalidatePath("/visits");
 }
 
 export async function checkIn(formData: FormData) {

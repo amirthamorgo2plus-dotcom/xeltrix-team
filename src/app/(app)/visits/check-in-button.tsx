@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { checkIn, quickAddLead } from "./actions";
+import { fill, type Dict } from "./i18n";
 
 type Lead = {
   id: string;
@@ -37,9 +38,11 @@ function distanceKm(
 export function CheckInButton({
   leads,
   workHours,
+  t,
 }: {
   leads: Lead[];
   workHours: { start: number; end: number };
+  t: Dict;
 }) {
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
   const [posError, setPosError] = useState<string | null>(null);
@@ -65,7 +68,7 @@ export function CheckInButton({
     setDenied(false);
     setGettingPos(true);
     if (!navigator.geolocation) {
-      setPosError("Geolocation not supported in this browser.");
+      setPosError(t.geolocationUnsupported);
       setGettingPos(false);
       return;
     }
@@ -81,11 +84,9 @@ export function CheckInButton({
           setDenied(true);
           setPosError(null);
         } else if (e.code === 3) {
-          setPosError("Timed out getting location. Move to open sky and retry.");
+          setPosError(t.locationTimedOut);
         } else {
-          setPosError(
-            "Couldn't get location. Check that GPS/Location is on, then retry."
-          );
+          setPosError(t.locationFailed);
         }
         setGettingPos(false);
       },
@@ -120,7 +121,7 @@ export function CheckInButton({
 
   async function handleAddNewCustomer() {
     if (!newName.trim()) {
-      setActionError("Customer name is required.");
+      setActionError(t.customerNameIsRequired);
       return;
     }
     setAdding(true);
@@ -177,7 +178,7 @@ export function CheckInButton({
         setSearch("");
         setPos(null);
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : "Check-in failed.");
+        setActionError(e instanceof Error ? e.message : t.checkInFailed);
       }
     });
   }
@@ -185,9 +186,12 @@ export function CheckInButton({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Check in to a visit</CardTitle>
+        <CardTitle>{t.checkInTitle}</CardTitle>
         <div className="mt-1 text-xs text-zinc-500">
-          Work-hours window: {workHours.start} AM – {workHours.end - 12} PM IST
+          {fill(t.workWindow, {
+            start: workHours.start,
+            end: workHours.end - 12,
+          })}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -195,55 +199,44 @@ export function CheckInButton({
           <Button onClick={requestLocation} disabled={gettingPos}>
             {gettingPos ? (
               <>
-                <Loader2 className="h-4 w-4 animate-spin" /> Getting location…
+                <Loader2 className="h-4 w-4 animate-spin" /> {t.gettingLocation}
               </>
             ) : (
               <>
-                <MapPin className="h-4 w-4" /> Check in (get location)
+                <MapPin className="h-4 w-4" /> {t.checkInGetLocation}
               </>
             )}
           </Button>
         )}
         {posError && (
-          <div className="text-xs text-red-600">Location: {posError}</div>
+          <div className="text-xs text-red-600">
+            {fill(t.locationPrefix, { message: posError })}
+          </div>
         )}
 
         {denied && (
           <div className="flex flex-col gap-2 rounded-md border border-amber-300/60 bg-amber-50/60 p-3 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
             <p className="font-medium text-amber-800 dark:text-amber-300">
-              Location permission is off — check-in needs it.
+              {t.permissionOff}
             </p>
             {isApple ? (
               <ol className="list-decimal pl-4 text-zinc-600 dark:text-zinc-400">
-                <li>
-                  iPhone <strong>Settings → Privacy &amp; Security → Location
-                  Services</strong> → turn ON.
-                </li>
-                <li>
-                  Scroll to your browser (<strong>Safari Websites</strong> or
-                  Chrome) → set to <strong>While Using</strong>.
-                </li>
-                <li>
-                  In Safari on this page, tap <strong>aA</strong> in the address
-                  bar → <strong>Website Settings → Location → Allow</strong>.
-                </li>
-                <li>Come back here and tap Retry.</li>
+                <li>{t.iosStep1}</li>
+                <li>{t.iosStep2}</li>
+                <li>{t.iosStep3}</li>
+                <li>{t.iosStep4}</li>
               </ol>
             ) : (
               <ol className="list-decimal pl-4 text-zinc-600 dark:text-zinc-400">
-                <li>
-                  Tap the <strong>lock/ⓘ icon</strong> in the address bar.
-                </li>
-                <li>
-                  Set <strong>Location</strong> to <strong>Allow</strong>.
-                </li>
-                <li>Make sure the phone&apos;s GPS/Location is on.</li>
-                <li>Tap Retry below.</li>
+                <li>{t.androidStep1}</li>
+                <li>{t.androidStep2}</li>
+                <li>{t.androidStep3}</li>
+                <li>{t.androidStep4}</li>
               </ol>
             )}
             <div>
               <Button size="sm" onClick={requestLocation} disabled={gettingPos}>
-                {gettingPos ? "Retrying…" : "Retry location"}
+                {gettingPos ? t.retrying : t.retryLocation}
               </Button>
             </div>
           </div>
@@ -252,17 +245,20 @@ export function CheckInButton({
         {showForm && pos && (
           <div className="flex flex-col gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3">
             <div className="text-xs text-zinc-500">
-              📍 Location locked: {pos.lat.toFixed(5)}, {pos.lng.toFixed(5)}
+              {fill(t.locationLocked, {
+                lat: pos.lat.toFixed(5),
+                lng: pos.lng.toFixed(5),
+              })}
             </div>
 
             <div>
-              <Label>Customer (optional, closest first)</Label>
+              <Label>{t.customerLabel}</Label>
               <div className="mt-1 flex items-center gap-2">
                 <Search className="h-4 w-4 text-zinc-400" />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search customer…"
+                  placeholder={t.searchCustomer}
                 />
               </div>
               <div className="mt-2 max-h-44 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
@@ -272,25 +268,24 @@ export function CheckInButton({
                   className="flex w-full items-center gap-2 border-b border-zinc-200 bg-emerald-50/50 px-3 py-2 text-left text-sm text-emerald-700 hover:bg-emerald-100/50 dark:border-zinc-800 dark:bg-emerald-950/20 dark:text-emerald-300"
                 >
                   <UserPlus className="h-4 w-4" />
-                  Add new customer
+                  {t.addNewCustomer}
                 </button>
                 {showNewForm && (
                   <div className="flex flex-col gap-2 border-b border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
                     <Input
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      placeholder="Customer name *"
+                      placeholder={t.customerNameRequired}
                       autoFocus
                     />
                     <Input
                       value={newPhone}
                       onChange={(e) => setNewPhone(e.target.value)}
-                      placeholder="Phone (optional)"
+                      placeholder={t.phoneOptional}
                       type="tel"
                     />
                     <div className="text-[10px] text-zinc-500">
-                      Will save with your current GPS as the customer&apos;s
-                      location (used for distance sorting next time).
+                      {t.quickAddHint}
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -298,7 +293,7 @@ export function CheckInButton({
                         disabled={adding || !newName.trim()}
                         onClick={handleAddNewCustomer}
                       >
-                        {adding ? "Saving…" : "Save customer"}
+                        {adding ? t.saving : t.saveCustomer}
                       </Button>
                       <Button
                         size="sm"
@@ -310,7 +305,7 @@ export function CheckInButton({
                           setNewPhone("");
                         }}
                       >
-                        Cancel
+                        {t.cancel}
                       </Button>
                     </div>
                   </div>
@@ -323,7 +318,7 @@ export function CheckInButton({
                     checked={leadId === ""}
                     onChange={() => setLeadId("")}
                   />
-                  <span className="text-zinc-500">(no customer)</span>
+                  <span className="text-zinc-500">{t.noCustomer}</span>
                 </label>
                 {sortedLeads.slice(0, 50).map((l) => (
                   <label
@@ -347,18 +342,18 @@ export function CheckInButton({
                 ))}
                 {sortedLeads.length === 0 && (
                   <div className="px-3 py-2 text-sm text-zinc-500">
-                    No matching customer
+                    {t.noMatchingCustomer}
                   </div>
                 )}
               </div>
             </div>
 
             <div>
-              <Label>Notes (optional)</Label>
+              <Label>{t.notesOptional}</Label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Purpose of visit…"
+                placeholder={t.purposeOfVisit}
                 rows={2}
               />
             </div>
@@ -369,7 +364,7 @@ export function CheckInButton({
 
             <div className="flex gap-2">
               <Button disabled={pending} onClick={handleSubmit}>
-                {pending ? "Saving…" : "Confirm check-in"}
+                {pending ? t.saving : t.confirmCheckIn}
               </Button>
               <Button
                 variant="outline"
@@ -379,7 +374,7 @@ export function CheckInButton({
                   setPos(null);
                 }}
               >
-                Cancel
+                {t.cancel}
               </Button>
             </div>
           </div>

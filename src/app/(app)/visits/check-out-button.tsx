@@ -5,8 +5,15 @@ import { MapPin, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { checkOut } from "./actions";
+import type { Dict } from "./i18n";
 
-export function CheckOutButton({ visitId }: { visitId: string }) {
+export function CheckOutButton({
+  visitId,
+  t,
+}: {
+  visitId: string;
+  t: Dict;
+}) {
   const [showForm, setShowForm] = useState(false);
   const [gettingPos, setGettingPos] = useState(false);
   const [pos, setPos] = useState<{ lat: number; lng: number } | null>(null);
@@ -19,7 +26,7 @@ export function CheckOutButton({ visitId }: { visitId: string }) {
     setPosError(null);
     setGettingPos(true);
     if (!navigator.geolocation) {
-      setPosError("Geolocation not supported.");
+      setPosError(t.geolocationUnsupported);
       setGettingPos(false);
       return;
     }
@@ -51,7 +58,7 @@ export function CheckOutButton({ visitId }: { visitId: string }) {
         setNotes("");
         setPos(null);
       } catch (e) {
-        setActionError(e instanceof Error ? e.message : "Check-out failed.");
+        setActionError(e instanceof Error ? e.message : t.checkOutFailed);
       }
     });
   }
@@ -62,11 +69,11 @@ export function CheckOutButton({ visitId }: { visitId: string }) {
         <Button size="sm" onClick={requestLocation} disabled={gettingPos}>
           {gettingPos ? (
             <>
-              <Loader2 className="h-3 w-3 animate-spin" /> Getting location…
+              <Loader2 className="h-3 w-3 animate-spin" /> {t.gettingLocation}
             </>
           ) : (
             <>
-              <MapPin className="h-3 w-3" /> Check out
+              <MapPin className="h-3 w-3" /> {t.checkOut}
             </>
           )}
         </Button>
@@ -80,14 +87,14 @@ export function CheckOutButton({ visitId }: { visitId: string }) {
       <Textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
-        placeholder="Visit notes (optional)…"
+        placeholder={t.visitNotesOptional}
         rows={2}
         className="text-xs"
       />
       {actionError && <span className="text-xs text-red-600">{actionError}</span>}
       <div className="flex gap-2">
         <Button size="sm" disabled={pending} onClick={handleSubmit}>
-          {pending ? "Saving…" : "Confirm check-out"}
+          {pending ? t.saving : t.confirmCheckOut}
         </Button>
         <Button
           size="sm"
@@ -98,7 +105,7 @@ export function CheckOutButton({ visitId }: { visitId: string }) {
             setPos(null);
           }}
         >
-          Cancel
+          {t.cancel}
         </Button>
       </div>
     </div>
