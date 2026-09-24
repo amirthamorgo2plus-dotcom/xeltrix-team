@@ -1,7 +1,12 @@
 "use client";
 
 import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CATEGORY_META, CATEGORY_ORDER, type CategoryMix } from "@/lib/item-category";
+import {
+  CATEGORY_META,
+  CATEGORY_ORDER,
+  type CategoryMix,
+  type ItemCategory,
+} from "@/lib/item-category";
 
 type Row = CategoryMix & {
   month: string;
@@ -18,25 +23,41 @@ function compactINR(v: number, currency: string): string {
   return `${sym}${v}`;
 }
 
-export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: string }) {
+export function SalesHistoryChart({
+  data,
+  currency,
+  // Which categories to stack. Defaults to the full mix; pass a subset for a
+  // single-product-type view (e.g. ["manufactured"]). Colours stay tied to the
+  // category, so a series keeps its hue whichever chart it appears in.
+  categories = CATEGORY_ORDER,
+}: {
+  data: Row[];
+  currency: string;
+  categories?: ItemCategory[];
+}) {
   const fmtFull = (v: number) =>
     new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(v);
 
   // Only categories that actually appear in the window (keeps empty ones like
   // Packing Material out of the legend/stack).
-  const activeCats = CATEGORY_ORDER.filter((k) => data.some((row) => row[k] > 0));
+  const activeCats = categories.filter((k) => data.some((row) => row[k] > 0));
+  // One series is named by the card title, so a legend and a "Total" row that
+  // just repeats it are noise.
+  const showLegend = activeCats.length > 1;
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
-        {activeCats.map((k) => (
-          <span key={k} className="inline-flex items-center gap-1.5">
-            <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORY_META[k].color }} />
-            {CATEGORY_META[k].label}
-          </span>
-        ))}
-      </div>
+      {/* Legend — omitted for a single series, which the card title already names */}
+      {showLegend && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-zinc-400">
+          {activeCats.map((k) => (
+            <span key={k} className="inline-flex items-center gap-1.5">
+              <span className="inline-block h-2.5 w-2.5 rounded-sm" style={{ background: CATEGORY_META[k].color }} />
+              {CATEGORY_META[k].label}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
@@ -69,10 +90,12 @@ export function SalesHistoryChart({ data, currency }: { data: Row[]; currency: s
                         </div>
                       ) : null,
                     )}
-                    <div className="mt-1 flex items-center justify-between gap-4 border-t border-zinc-700 pt-1 font-semibold">
-                      <span className="text-zinc-300">Total</span>
-                      <span className="tabular-nums text-zinc-100">{fmtFull(row.total)}</span>
-                    </div>
+                    {showLegend && (
+                      <div className="mt-1 flex items-center justify-between gap-4 border-t border-zinc-700 pt-1 font-semibold">
+                        <span className="text-zinc-300">Total</span>
+                        <span className="tabular-nums text-zinc-100">{fmtFull(row.total)}</span>
+                      </div>
+                    )}
                   </div>
                 );
               }}

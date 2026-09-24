@@ -7,7 +7,13 @@ import { TargetChart } from "@/components/target-chart";
 import { CollectionsChart } from "@/components/collections-chart";
 import { SalesHistoryChart } from "@/components/sales-history-chart";
 import { SalesMixBreakdown } from "@/components/sales-mix-breakdown";
-import { itemCategory, emptyMix, fitMix, type CategoryMix } from "@/lib/item-category";
+import {
+  itemCategory,
+  emptyMix,
+  fitMix,
+  type CategoryMix,
+  type ItemCategory,
+} from "@/lib/item-category";
 import { ManufacturingLitreCard } from "@/components/manufacturing-litre-card";
 import { emptyLitreCost, addLine as addLitreLine } from "@/lib/manufacturing-cost";
 import { EmptyState } from "@/components/empty-state";
@@ -17,6 +23,9 @@ import { DashboardFilters } from "./filters";
 import { RangeFilter } from "@/components/range-filter";
 import { resolveRange } from "@/lib/date-range";
 import { computeRepeatCustomers, summarize, type WonOppRow } from "@/lib/repeat-customers";
+
+// Module-level so the chart sees the same array reference on every render.
+const MANUFACTURED_ONLY: ItemCategory[] = ["manufactured"];
 
 function fmtMoney(v: number, currency: string) {
   return new Intl.NumberFormat("en-IN", {
@@ -241,6 +250,12 @@ export default async function DashboardPage({
   });
   const hasSalesHistory = salesHistory.some((m) => m.total > 0);
 
+  // Same 12-month window, manufactured (X- prefix) only. `total` is restated as
+  // the manufactured figure so the on-chart labels and tooltip report that
+  // rather than the all-category total.
+  const mfgHistory = salesHistory.map((m) => ({ ...m, total: m.manufactured }));
+  const hasMfgHistory = mfgHistory.some((m) => m.total > 0);
+
   // Current-period mix for the breakdown card — scaled onto the KPI's sales total.
   const salesMix = fitMix(achievedExcl, rangeRaw);
 
@@ -447,6 +462,29 @@ export default async function DashboardPage({
               <SalesHistoryChart data={salesHistory} currency={currency} />
             ) : (
               <EmptyState title="No sales history yet" hint="Won invoices will appear here as they sync from Zoho." />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Same window, Xeltrix's own products only — sits directly under the
+            all-sales chart so the two read as a pair. */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Manufacturing Sales (last 12 months)</CardTitle>
+            <span className="text-xs text-zinc-500">Manufactured items only, excl. tax</span>
+          </CardHeader>
+          <CardContent>
+            {hasMfgHistory ? (
+              <SalesHistoryChart
+                data={mfgHistory}
+                currency={currency}
+                categories={MANUFACTURED_ONLY}
+              />
+            ) : (
+              <EmptyState
+                title="No manufacturing sales yet"
+                hint="Invoiced X- items will appear here as they sync from Zoho."
+              />
             )}
           </CardContent>
         </Card>
