@@ -67,12 +67,41 @@ export default async function DashboardPage({
   const currency = settings?.currency || "INR";
 
   const memberFilter = sp.member && sp.member !== "all" ? sp.member : null;
+  // Targets and attendance describe the people currently on the team, so they
+  // stay scoped to active members (getTeamMembers filters on active).
   const memberIdsScope = memberFilter
     ? [memberFilter]
     : members.map((m) => m.id);
 
   const supabase = await createClient();
   const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
+
+  // Revenue and receivables belong to the business, not to whoever still has a
+  // login. Scoping them by active member silently dropped a departed
+  // salesperson's won invoices and outstanding balances from every sales
+  // figure on this page, so they are scoped by TEAM and only narrowed by owner
+  // when the user explicitly filters to one member.
+  let pipelineQuery = supabase
+    .from("opportunities")
+    .select("stage, value, value_excl_tax, owner_id, close_date")
+    .eq("team_id", teamId);
+  if (memberFilter) pipelineQuery = pipelineQuery.eq("owner_id", memberFilter);
+
+  let pendingCollQuery = supabase
+    .from("opportunities")
+    .select("balance_due, due_date, owner_id, zoho_salesperson_name")
+    .eq("team_id", teamId)
+    .eq("stage", "won")
+    .gt("balance_due", 0);
+  if (memberFilter) pendingCollQuery = pendingCollQuery.eq("owner_id", memberFilter);
+
+  let wonOppsAllQuery = supabase
+    .from("opportunities")
+    .select("id, title, value, close_date, lead_id, zoho_customer_id, owner_id, zoho_salesperson_name")
+    .eq("team_id", teamId)
+    .eq("stage", "won")
+    .not("close_date", "is", null);
+  if (memberFilter) wonOppsAllQuery = wonOppsAllQuery.eq("owner_id", memberFilter);
 
   const [
     { data: tvaRows },
@@ -92,10 +121,7 @@ export default async function DashboardPage({
       .select("member_id, target, achieved, pct")
       .eq("month", monthFirst)
       .in("member_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
-    supabase
-      .from("opportunities")
-      .select("stage, value, value_excl_tax, owner_id, close_date")
-      .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
+    pipelineQuery,
     supabase
       .from("holidays")
       .select("date, working_allowed")
@@ -124,27 +150,15 @@ export default async function DashboardPage({
       .select("id")
       .eq("team_id", teamId)
       .in("status", ["open", "in_progress"]),
-    supabase
-      .from("opportunities")
-      .select("balance_due, due_date, owner_id, zoho_salesperson_name")
-      .eq("team_id", teamId)
-      .eq("stage", "won")
-      .gt("balance_due", 0)
-      .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
+    pendingCollQuery,
     supabase
       .from("deep_cleaning_jobs")
       .select("amount, cost, referral_amount, referral_status, service_date")
       .eq("team_id", teamId)
       .gte("service_date", monthFirst)
       .lte("service_date", monthLast),
-    // All-time won opps (for reorder cadence) — scoped like the other queries.
-    supabase
-      .from("opportunities")
-      .select("id, title, value, close_date, lead_id, zoho_customer_id, owner_id, zoho_salesperson_name")
-      .eq("team_id", teamId)
-      .eq("stage", "won")
-      .not("close_date", "is", null)
-      .in("owner_id", memberIdsScope.length ? memberIdsScope : ["00000000-0000-0000-0000-000000000000"]),
+    // All-time won opps (for reorder cadence) — team-scoped, see above.
+    wonOppsAllQuery,
   ]);
 
   // Repeat-customer reorder summary (all-time order history)
