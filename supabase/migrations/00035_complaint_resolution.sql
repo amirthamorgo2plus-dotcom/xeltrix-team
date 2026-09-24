@@ -10,12 +10,18 @@
 
 alter table complaints
   add column if not exists resolution_note text,
-  add column if not exists updated_at timestamptz default now();
+  -- No DEFAULT yet: adding one fills every existing row with now(), which would
+  -- make the backfill below a no-op and leave old complaints claiming they were
+  -- touched at migration time.
+  add column if not exists updated_at timestamptz;
 
 -- Backfill so existing rows sort sensibly by last activity.
 update complaints
 set updated_at = coalesce(resolved_at, opened_at, now())
 where updated_at is null;
+
+alter table complaints
+  alter column updated_at set default now();
 
 -- Reuse the shared touch trigger used elsewhere in the schema.
 drop trigger if exists trg_complaints_updated_at on complaints;
