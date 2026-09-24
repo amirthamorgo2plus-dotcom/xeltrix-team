@@ -3,6 +3,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
+// An UPDATE or DELETE blocked by RLS is not an error in PostgREST — it simply
+// matches zero rows and reports success. Selecting the affected rows back lets
+// us tell "blocked" apart from "done", so the UI can say so instead of
+// silently refreshing with the old value still in place.
+const NO_PERMISSION =
+  "You don't have permission to change this. Ask an admin or manager.";
+
 function num(fd: FormData, key: string): number | null {
   const v = (fd.get(key) as string | null)?.trim();
   if (!v) return null;
@@ -38,38 +45,51 @@ export async function saveJob(fd: FormData) {
     updated_at: new Date().toISOString(),
   };
 
-  const { error } = id
-    ? await supabase.from("deep_cleaning_jobs").update(row).eq("id", id)
-    : await supabase.from("deep_cleaning_jobs").insert(row);
+  const { data, error } = id
+    ? await supabase.from("deep_cleaning_jobs").update(row).eq("id", id).select("id")
+    : await supabase.from("deep_cleaning_jobs").insert(row).select("id");
 
   if (error) return { error: error.message };
+  if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
   return { error: null };
 }
 
 export async function deleteJob(id: string) {
   const supabase = await createClient();
-  const { error } = await supabase.from("deep_cleaning_jobs").delete().eq("id", id);
+  const { data, error } = await supabase
+    .from("deep_cleaning_jobs")
+    .delete()
+    .eq("id", id)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
   return { error: null };
 }
 
 export async function setPaymentStatus(id: string, status: "pending" | "paid") {
   const supabase = await createClient();
-  const { error } = await supabase.from("deep_cleaning_jobs").update({ payment_status: status }).eq("id", id);
+  const { data, error } = await supabase
+    .from("deep_cleaning_jobs")
+    .update({ payment_status: status })
+    .eq("id", id)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
   return { error: null };
 }
 
 export async function setReferralStatus(id: string, status: "pending" | "paid") {
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("deep_cleaning_jobs")
     .update({ referral_status: status, referral_paid_at: status === "paid" ? new Date().toISOString() : null })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
   if (error) return { error: error.message };
+  if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
   revalidatePath("/referrers");
   return { error: null };

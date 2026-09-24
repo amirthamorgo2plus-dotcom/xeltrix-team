@@ -1,6 +1,6 @@
 import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers } from "@/lib/data";
+import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { JobForm } from "./job-form";
@@ -12,6 +12,10 @@ const fmt = (v: number) =>
 export default async function DeepCleaningPage() {
   const m = await getMyMembership();
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
+  // Writes are admin/manager-only in RLS (dcj_insert/update/delete use
+  // auth_is_team_admin), so members see read-only status instead of controls
+  // the database would refuse.
+  const canManage = isAdminOrManager(m?.role);
   const supabase = await createClient();
 
   const [{ data: jobs }, { data: referrers }, members] = await Promise.all([
@@ -45,7 +49,9 @@ export default async function DeepCleaningPage() {
           <h1 className="text-2xl font-semibold">Deep Cleaning</h1>
           <p className="text-sm text-zinc-500">Non-GST service jobs recorded manually (not in Zoho). Referral paid outside Zoho.</p>
         </div>
-        <JobForm teamId={teamId} referrers={referrers ?? []} members={memberList} />
+        {canManage && (
+          <JobForm teamId={teamId} referrers={referrers ?? []} members={memberList} />
+        )}
       </div>
 
       {/* KPI strip */}
@@ -108,7 +114,7 @@ export default async function DeepCleaningPage() {
                         </td>
                         <td className="py-2.5 pr-3 text-right tabular-nums text-zinc-200">{fmt(amount)}</td>
                         <td className="py-2.5 pr-3 text-right tabular-nums text-[#b5c76a]">{margin != null ? fmt(margin) : "—"}</td>
-                        <td className="py-2.5 pr-3 text-center"><PaymentToggle id={j.id} status={j.payment_status} /></td>
+                        <td className="py-2.5 pr-3 text-center"><PaymentToggle id={j.id} status={j.payment_status} canManage={canManage} /></td>
                         <td className="py-2.5 pr-3 text-[#b5c76a]">{j.referrer_id ? (referrerMap.get(j.referrer_id) ?? "—") : <span className="text-zinc-600">—</span>}</td>
                         <td className="py-2.5 pr-3 text-right tabular-nums">
                           {j.referrer_id && j.referral_amount != null
@@ -116,22 +122,24 @@ export default async function DeepCleaningPage() {
                             : <span className="text-zinc-600 text-xs">—</span>}
                         </td>
                         <td className="py-2.5 pr-3 text-center">
-                          {j.referrer_id && j.referral_amount ? <ReferralToggle id={j.id} status={j.referral_status} /> : <span className="text-zinc-700 text-xs">—</span>}
+                          {j.referrer_id && j.referral_amount ? <ReferralToggle id={j.id} status={j.referral_status} canManage={canManage} /> : <span className="text-zinc-700 text-xs">—</span>}
                         </td>
                         <td className="py-2.5 flex items-center gap-2">
-                          <JobForm
-                            teamId={teamId}
-                            referrers={referrers ?? []}
-                            members={memberList}
-                            trigger="edit"
-                            edit={{
-                              id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                              service_date: j.service_date, description: j.description, amount, cost,
-                              payment_status: j.payment_status, payment_mode: j.payment_mode,
-                              referrer_id: j.referrer_id, referral_pct: j.referral_pct, assigned_to: j.assigned_to, notes: j.notes,
-                            }}
-                          />
-                          <DeleteJob id={j.id} />
+                          {canManage && (
+                            <JobForm
+                              teamId={teamId}
+                              referrers={referrers ?? []}
+                              members={memberList}
+                              trigger="edit"
+                              edit={{
+                                id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
+                                service_date: j.service_date, description: j.description, amount, cost,
+                                payment_status: j.payment_status, payment_mode: j.payment_mode,
+                                referrer_id: j.referrer_id, referral_pct: j.referral_pct, assigned_to: j.assigned_to, notes: j.notes,
+                              }}
+                            />
+                          )}
+                          <DeleteJob id={j.id} canManage={canManage} />
                         </td>
                       </tr>
                     );
