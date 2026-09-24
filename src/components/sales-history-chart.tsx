@@ -8,7 +8,7 @@ import {
   type ItemCategory,
 } from "@/lib/item-category";
 
-type Row = CategoryMix & {
+export type Row = CategoryMix & {
   month: string;
   label: string;
   total: number;
