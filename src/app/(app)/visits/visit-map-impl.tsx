@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  Polyline,
+  useMap,
+} from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -53,6 +60,28 @@ const customerIcon = () =>
     popupAnchor: [0, -34],
   });
 
+// Pans/zooms so every pin is on screen. Centring on the average coordinate at
+// a fixed zoom breaks as soon as pins are spread out — customers run from
+// Coimbatore to Chennai, so the average lands in open country with nothing
+// visible. Fitting the bounds keeps the pins on screen at any spread.
+function FitToPins({ pins }: { pins: MapPin[] }) {
+  const map = useMap();
+  // Re-fit only when the set of coordinates actually changes.
+  const key = pins.map((p) => `${p.lat},${p.lng}`).join("|");
+
+  useEffect(() => {
+    if (pins.length === 0) return;
+    const bounds = L.latLngBounds(pins.map((p) => [p.lat, p.lng] as [number, number]));
+    // A single pin produces a zero-area bounds; maxZoom stops Leaflet from
+    // slamming to street level.
+    map.fitBounds(bounds, { padding: [32, 32], maxZoom: 15 });
+    // `key` captures the coordinates; `pins`/`map` are stable per render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, map]);
+
+  return null;
+}
+
 export type MapPin = {
   id: string;
   lat: number;
@@ -80,14 +109,9 @@ export default function VisitMapImpl({
 
   const hasRoute = !!routePath && routePath.length >= 2;
 
-  // Center: average of pin coords, or a sensible India fallback (Coimbatore)
-  const center: [number, number] =
-    pins.length > 0
-      ? [
-          pins.reduce((s, p) => s + p.lat, 0) / pins.length,
-          pins.reduce((s, p) => s + p.lng, 0) / pins.length,
-        ]
-      : [11.0168, 76.9558];
+  // Initial view only — FitToPins takes over as soon as there are pins.
+  // Falls back to Coimbatore when the map is empty.
+  const center: [number, number] = [11.0168, 76.9558];
 
   function iconFor(p: MapPin) {
     if (p.order != null) return numberedIcon(p.order);
@@ -102,10 +126,11 @@ export default function VisitMapImpl({
     >
       <MapContainer
         center={center}
-        zoom={pins.length > 0 ? 12 : 10}
+        zoom={10}
         scrollWheelZoom
         style={{ height: "100%", width: "100%" }}
       >
+        <FitToPins pins={pins} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
