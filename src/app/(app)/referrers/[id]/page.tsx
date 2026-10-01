@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { AddCommissionForm } from "./add-commission-form";
 import { MarkPaidPanel } from "./mark-paid-panel";
+import { BulkCommissionPanel } from "./bulk-commission-panel";
 import { EditReferrerForm } from "./edit-referrer-form";
 import { CommissionReportButton, type ReportRow } from "./commission-report-button";
 
@@ -115,6 +116,13 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
     return { pct, amount: (invValue * pct) / 100, reason: "default" };
   }
 
+  // What the not-yet-logged invoices are worth at the displayed rates — the
+  // figure the one-click panel commits.
+  const eligibleEstimate = availableInvoices.reduce((sum, inv) => {
+    const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
+    return sum + calcCommission(inv.lead_id ?? "", base, inv.id).amount;
+  }, 0);
+
   // Rows for the downloadable PDF report
   const reportRows: ReportRow[] = (invoices ?? []).map((inv) => {
     const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
@@ -200,6 +208,14 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
       </div>
 
       {/* Mark paid */}
+      {availableInvoices.length > 0 && (
+        <BulkCommissionPanel
+          referrerId={id}
+          eligibleCount={availableInvoices.length}
+          estimatedTotal={eligibleEstimate}
+        />
+      )}
+
       {pendingIds.length > 0 && (
         <MarkPaidPanel pendingIds={pendingIds} pendingTotal={pendingTotal} />
       )}
