@@ -3,6 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { getMyMembership } from "@/lib/data";
+import {
+  calcCommission,
+  groupItemsByInvoice,
+  isCategoryRated,
+} from "@/lib/referrer-commission";
 
 export async function updateReferrer(fd: FormData) {
   const supabase = await createClient();
@@ -81,7 +86,7 @@ export async function logAllCommissions(
 
   const { data: ref } = await supabase
     .from("referrers")
-    .select("id, default_pct, first_invoice_pct")
+    .select("id, default_pct, first_invoice_pct, traded_pct, manufactured_pct")
     .eq("id", referrerId)
     .eq("team_id", teamId)
     .single();
@@ -105,10 +110,26 @@ export async function logAllCommissions(
 
   const { data: invoices } = await supabase
     .from("opportunities")
-    .select("id, value, value_excl_tax, close_date, lead_id")
+    .select("id, value, value_excl_tax, close_date, lead_id, zoho_invoice_id")
     .eq("team_id", teamId)
     .not("zoho_invoice_id", "is", null)
     .in("lead_id", leadIds);
+
+  // Line items only matter when the referrer is paid per item category.
+  const categoryRated = isCategoryRated(ref);
+  const zohoInvoiceIds = [
+    ...new Set((invoices ?? []).map((i) => i.zoho_invoice_id as string).filter(Boolean)),
+  ];
+  const { data: lineItems } = categoryRated && zohoInvoiceIds.length > 0
+    ? await supabase
+        .from("zoho_invoice_items")
+        .select("zoho_invoice_id, name, amount")
+        .eq("team_id", teamId)
+        .in("zoho_invoice_id", zohoInvoiceIds)
+    : { data: [] };
+  const itemsByInvoice = groupItemsByInvoice(
+    lineItems as Array<{ zoho_invoice_id: string; name: string | null; amount: number | null }> | null
+  );
 
   const alreadyLogged = new Set((existing ?? []).map((c) => c.opportunity_id as string));
   const available = (invoices ?? []).filter((inv) => !alreadyLogged.has(inv.id as string));
@@ -129,30 +150,47 @@ export async function logAllCommissions(
   const rows = available.flatMap((inv) => {
     const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
     const leadId = inv.lead_id as string;
+    const zid = inv.zoho_invoice_id as string | null;
     const isFirst = earliest.get(leadId)?.id === inv.id;
-    const pct = isFirst && ref.first_invoice_pct != null
-      ? Number(ref.first_invoice_pct)
-      : Number(ref.default_pct ?? 0);
-    const amount = (base * pct) / 100;
+
+    const calc = calcCommission({
+      rates: ref,
+      base,
+      isFirstInvoice: isFirst,
+      items: zid ? itemsByInvoice.get(zid) : null,
+    });
+
     // A zero-rate invoice would only create a junk ₹0 record.
-    if (!(amount > 0)) return [];
-    if (isFirst) firstInvoiceOppIds.push({ leadId, oppId: inv.id as string });
+    if (!(calc.amount > 0)) return [];
+    if (calc.reason === "first_invoice") firstInvoiceOppIds.push({ leadId, oppId: inv.id as string });
+
     return [{
       team_id: teamId,
       referrer_id: referrerId,
       lead_id: leadId,
       opportunity_id: inv.id as string,
       invoice_amount: base,
-      invoice_category: "default",
-      commission_pct: pct,
-      commission_amount: amount,
-      rate_reason: isFirst ? "first_invoice" : "default",
+      // Record which rate actually applied, so the history is auditable.
+      invoice_category: calc.reason === "category_split" ? "mixed" : "default",
+      commission_pct: Math.round(calc.pct * 100) / 100,
+      commission_amount: calc.amount,
+      rate_reason: calc.reason,
+      override_note:
+        calc.reason === "category_split" && calc.breakdown
+          ? calc.breakdown
+              .map((b) => `${b.category} ₹${Math.round(b.base)} @ ${b.pct}%`)
+              .join(", ")
+          : null,
       status: "pending",
     }];
   });
 
   if (rows.length === 0) {
-    return { error: "Nothing to log — the referrer's commission rate is 0%." };
+    return {
+      error: categoryRated
+        ? "Nothing to log — none of these invoices carry items at a rate this referrer earns on."
+        : "Nothing to log — the referrer's commission rate is 0%.",
+    };
   }
 
   const { data: inserted, error } = await supabase

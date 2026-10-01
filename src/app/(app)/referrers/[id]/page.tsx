@@ -7,6 +7,11 @@ import { EmptyState } from "@/components/empty-state";
 import { AddCommissionForm } from "./add-commission-form";
 import { MarkPaidPanel } from "./mark-paid-panel";
 import { BulkCommissionPanel } from "./bulk-commission-panel";
+import {
+  calcCommission as calcReferrerCommission,
+  groupItemsByInvoice,
+  isCategoryRated,
+} from "@/lib/referrer-commission";
 import { EditReferrerForm } from "./edit-referrer-form";
 import { CommissionReportButton, type ReportRow } from "./commission-report-button";
 
@@ -67,12 +72,27 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
   const { data: invoices } = linkedLeadIds.size > 0
     ? await supabase
         .from("opportunities")
-        .select("id, title, value, value_excl_tax, close_date, zoho_salesperson_name, lead_id")
+        .select("id, title, value, value_excl_tax, close_date, zoho_salesperson_name, lead_id, zoho_invoice_id")
         .eq("team_id", teamId)
         .not("zoho_invoice_id", "is", null)
         .in("lead_id", [...linkedLeadIds])
         .order("close_date", { ascending: false })
     : { data: [] };
+
+  // Line items for these invoices — only needed when the referrer is paid per
+  // item category (e.g. 5% traded / 10% manufactured).
+  const categoryRated = isCategoryRated(referrer);
+  const zohoInvoiceIds = [
+    ...new Set((invoices ?? []).map((i) => i.zoho_invoice_id as string).filter(Boolean)),
+  ];
+  const { data: lineItems } = categoryRated && zohoInvoiceIds.length > 0
+    ? await supabase
+        .from("zoho_invoice_items")
+        .select("zoho_invoice_id, name, amount")
+        .eq("team_id", teamId)
+        .in("zoho_invoice_id", zohoInvoiceIds)
+    : { data: [] };
+  const itemsByInvoice = groupItemsByInvoice(lineItems as Array<{ zoho_invoice_id: string; name: string | null; amount: number | null }> | null);
 
   const existingOppIds = new Set((commissions ?? []).map((c) => c.opportunity_id));
   const availableInvoices = (invoices ?? []).filter((inv) => !existingOppIds.has(inv.id));
@@ -105,29 +125,35 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
     for (const [lead, v] of earliest) firstInvoiceIdByLead.set(lead, v.id);
   }
 
-  // Per-invoice commission: 1st invoice per customer → first_invoice_pct, else default_pct
+  // Per-invoice commission — shared with the bulk log action so the figure on
+  // screen is exactly the one that gets written.
   const ref = referrer!;
-  function calcCommission(leadId: string, invValue: number, invId: string): { pct: number; amount: number; reason: string } {
-    const isFirst = firstInvoiceIdByLead.get(leadId) === invId;
-    if (isFirst && ref.first_invoice_pct != null) {
-      return { pct: ref.first_invoice_pct, amount: (invValue * ref.first_invoice_pct) / 100, reason: "1st invoice" };
-    }
-    const pct = ref.default_pct ?? 0;
-    return { pct, amount: (invValue * pct) / 100, reason: "default" };
+  function calcCommission(
+    leadId: string,
+    invValue: number,
+    invId: string,
+    zohoInvoiceId?: string | null
+  ) {
+    return calcReferrerCommission({
+      rates: ref,
+      base: invValue,
+      isFirstInvoice: firstInvoiceIdByLead.get(leadId) === invId,
+      items: zohoInvoiceId ? itemsByInvoice.get(zohoInvoiceId) : null,
+    });
   }
 
   // What the not-yet-logged invoices are worth at the displayed rates — the
   // figure the one-click panel commits.
   const eligibleEstimate = availableInvoices.reduce((sum, inv) => {
     const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
-    return sum + calcCommission(inv.lead_id ?? "", base, inv.id).amount;
+    return sum + calcCommission(inv.lead_id ?? "", base, inv.id, inv.zoho_invoice_id).amount;
   }, 0);
 
   // Rows for the downloadable PDF report
   const reportRows: ReportRow[] = (invoices ?? []).map((inv) => {
     const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
     const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
-    const comm = calcCommission(inv.lead_id ?? "", base, inv.id);
+    const comm = calcCommission(inv.lead_id ?? "", base, inv.id, inv.zoho_invoice_id);
     return {
       customer: referralLeadMap.get(inv.lead_id ?? "") ?? leadMap.get(inv.lead_id ?? "") ?? "—",
       invoice: inv.title ?? "—",
@@ -135,7 +161,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
       taxable: base,
       pct: logged ? Number(logged.commission_pct ?? 0) : comm.pct,
       commission: logged ? Number(logged.commission_amount ?? 0) : comm.amount,
-      isFirst: !logged && comm.reason === "1st invoice",
+      isFirst: !logged && comm.reason === "first_invoice",
       status: logged ? (logged.status === "paid" ? "Paid" : "Pending") : "Not logged",
     };
   });
@@ -260,7 +286,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                   {(invoices ?? []).map((inv) => {
                     // Commission is on the pre-GST taxable value (value_excl_tax), not the GST-inclusive total
                     const invAmt = Number(inv.value_excl_tax ?? inv.value ?? 0);
-                    const comm = calcCommission(inv.lead_id ?? "", invAmt, inv.id);
+                    const comm = calcCommission(inv.lead_id ?? "", invAmt, inv.id, inv.zoho_invoice_id);
                     const isLogged = existingOppIds.has(inv.id);
                     const loggedRecord = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
                     return (
@@ -275,9 +301,11 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                         <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-200">{fmt(invAmt)}</td>
                         <td className="py-2.5 pr-3 text-center">
                           <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                            {isLogged && loggedRecord ? `${loggedRecord.commission_pct}%` : `${comm.pct}%`}
+                            {isLogged && loggedRecord
+                              ? `${loggedRecord.commission_pct}%`
+                              : `${Math.round(comm.pct * 10) / 10}%`}
                           </span>
-                          {!isLogged && comm.reason === "1st invoice" && (
+                          {!isLogged && comm.reason === "first_invoice" && (
                             <span className="ml-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">1st</span>
                           )}
                         </td>
@@ -310,7 +338,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
                       {fmt((invoices ?? []).reduce((s, inv) => {
                         const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
                         const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
-                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", base, inv.id).amount);
+                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", base, inv.id, inv.zoho_invoice_id).amount);
                       }, 0))}
                     </td>
                     <td />
