@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { RangeFilter } from "@/components/range-filter";
+import { ProfitTable, type ProfitLine } from "./profit-table";
 import { resolveRange } from "@/lib/date-range";
 import {
   buildCostLookup,
@@ -107,7 +107,7 @@ export default async function ProfitabilityPage({
     ? await fetchAll<ProfitLineItem>((from, to) =>
         supabase
           .from("zoho_invoice_items")
-          .select("zoho_invoice_id, zoho_item_id, sku, quantity, amount, unit_cost")
+          .select("zoho_invoice_id, zoho_item_id, sku, name, unit, rate, quantity, amount, unit_cost")
           .eq("team_id", teamId)
           .in("zoho_invoice_id", invoiceIds)
           .range(from, to)
@@ -119,11 +119,11 @@ export default async function ProfitabilityPage({
     opps.map((o) => [o.zoho_invoice_id, customerFromTitle(o.title)])
   );
 
-  const linesByInvoice = new Map<string, ProfitLineItem[]>();
+  const linesByInvoice2 = new Map<string, ProfitLineItem[]>();
   for (const it of items) {
-    const arr = linesByInvoice.get(it.zoho_invoice_id) ?? [];
+    const arr = linesByInvoice2.get(it.zoho_invoice_id) ?? [];
     arr.push(it);
-    linesByInvoice.set(it.zoho_invoice_id, arr);
+    linesByInvoice2.set(it.zoho_invoice_id, arr);
   }
 
   type Row = InvoiceProfit & {
@@ -135,7 +135,7 @@ export default async function ProfitabilityPage({
 
   const rows: Row[] = live.map((inv) => {
     const id = inv.zoho_invoice_id as string;
-    const lines = linesByInvoice.get(id);
+    const lines = linesByInvoice2.get(id);
     const p = lines?.length ? profitForLines(lines, lookup) : emptyProfit();
     return {
       ...p,
@@ -161,6 +161,19 @@ export default async function ProfitabilityPage({
     totals.revenue > 0 ? ((totals.revenue - totals.uncosted) / totals.revenue) * 100 : 0;
   const lossMakers = rows.filter((r) => r.revenue > 0 && r.profit < 0);
   const lossValue = lossMakers.reduce((s, r) => s + r.profit, 0);
+
+  // Line detail for the drill-down, keyed by invoice.
+  const linesByInvoice: Record<string, ProfitLine[]> = {};
+  for (const [id, ls] of linesByInvoice2) {
+    linesByInvoice[id] = ls.map((l) => ({
+      name: (l.name as string) ?? null,
+      quantity: l.quantity == null ? null : Number(l.quantity),
+      unit: (l.unit as string) ?? null,
+      rate: l.rate == null ? null : Number(l.rate),
+      amount: l.amount == null ? null : Number(l.amount),
+      unitCost: l.unit_cost == null ? null : Number(l.unit_cost),
+    }));
+  }
 
   type CustomerRow = {
     customer: string;
@@ -400,70 +413,7 @@ export default async function ProfitabilityPage({
               </table>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-zinc-500">
-                  <tr>
-                    <th className="pb-2 pr-3">Invoice</th>
-                    <th className="pb-2 pr-3">Customer</th>
-                    <th className="pb-2 pr-3">Date</th>
-                    <th className="pb-2 pr-3 text-right">Revenue</th>
-                    <th className="pb-2 pr-3 text-right">Cost</th>
-                    <th className="pb-2 pr-3 text-right">Gross profit</th>
-                    <th className="pb-2 text-right">Margin</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sorted.map((r) => {
-                    const loss = r.revenue > 0 && r.profit < 0;
-                    return (
-                      <tr
-                        key={r.id}
-                        className="border-t border-zinc-200 dark:border-zinc-800"
-                      >
-                        <td className="py-2 pr-3 font-medium">{r.number}</td>
-                        <td className="py-2 pr-3 max-w-[260px] truncate text-zinc-300">
-                          {r.customer ?? "—"}
-                        </td>
-                        <td className="py-2 pr-3 text-zinc-500">
-                          {r.date ? format(parseISO(r.date), "dd MMM yyyy") : "—"}
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums">
-                          {fmt(r.revenue)}
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">
-                          {fmt(r.cost)}
-                          {r.uncosted > 0 && r.revenue > 0 && (
-                            <span
-                              className="ml-1 text-[10px] text-amber-500"
-                              title={`${fmt(r.uncosted)} of this invoice has no cost price`}
-                            >
-                              partial
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className={`py-2 pr-3 text-right tabular-nums font-medium ${
-                            loss ? "text-red-400" : "text-[#b5c76a]"
-                          }`}
-                        >
-                          {fmt(r.profit)}
-                        </td>
-                        <td className="py-2 text-right">
-                          {r.marginPct == null ? (
-                            <span className="text-zinc-600">—</span>
-                          ) : (
-                            <Badge tone={loss ? "danger" : r.marginPct < 10 ? "warning" : "success"}>
-                              {Math.round(r.marginPct)}%
-                            </Badge>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <ProfitTable rows={sorted} linesByInvoice={linesByInvoice} />
           )}
         </CardContent>
       </Card>

@@ -23,6 +23,10 @@ export type ProfitLineItem = {
   amount: number | string | null;
   /** Cost per unit frozen when the line was first mirrored (00037). */
   unit_cost?: number | string | null;
+  // Present when the caller needs the line-level breakdown.
+  name?: string | null;
+  unit?: string | null;
+  rate?: number | string | null;
 };
 
 export type CostLookup = {
