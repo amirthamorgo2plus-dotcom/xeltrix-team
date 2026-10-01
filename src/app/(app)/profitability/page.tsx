@@ -3,11 +3,15 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { RangeFilter } from "@/components/range-filter";
 import { ProfitTable, type ProfitLine } from "./profit-table";
-import { TierScatter } from "./tier-scatter";
+import { TierBars } from "./tier-bars";
+import {
+  CustomerTable,
+  type CustomerInvoice,
+  type CustomerSummaryRow,
+} from "./customer-table";
 import {
   assignTiers,
   summariseTiers,
@@ -233,6 +237,23 @@ export default async function ProfitabilityPage({
     tiered.customers.map((c) => [c.customer, c.tier])
   );
 
+  const invoicesByCustomer: Record<string, CustomerInvoice[]> = {};
+  for (const r of rows) {
+    const key = r.customer ?? "(unknown customer)";
+    (invoicesByCustomer[key] ??= []).push({
+      id: r.id,
+      number: r.number,
+      date: r.date,
+      revenue: r.revenue,
+      cost: r.cost,
+      profit: r.profit,
+      marginPct: r.marginPct,
+    });
+  }
+  for (const list of Object.values(invoicesByCustomer)) {
+    list.sort((a, b) => a.profit - b.profit); // worst first — that is what is being looked for
+  }
+
   const sortedCustomers = [...customerRows].sort((a, b) => {
     if (sort === "worst") {
       const am = a.marginPct ?? Number.POSITIVE_INFINITY;
@@ -371,19 +392,10 @@ export default async function ProfitabilityPage({
 
           <Card>
             <CardHeader>
-              <CardTitle>Where each customer sits</CardTitle>
-              <p className="mt-1 text-xs text-zinc-500">
-                Margin against profit. The quadrants are the tiers — top-right earns well
-                and matters; bottom-right earns well but is small; top-left matters but is
-                underpriced.
-              </p>
+              <CardTitle>Profit by group</CardTitle>
             </CardHeader>
             <CardContent>
-              <TierScatter
-                customers={tiered.customers}
-                benchmarkPct={tiered.benchmarkPct}
-                majorCutoff={tiered.majorCutoff}
-              />
+              <TierBars summary={tierSummary} />
             </CardContent>
           </Card>
         </>
@@ -438,78 +450,18 @@ export default async function ProfitabilityPage({
               hint="Invoices appear here as they sync from Zoho."
             />
           ) : view === "customer" ? (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-zinc-500">
-                  <tr>
-                    <th className="pb-2 pr-3">Customer</th>
-                    <th className="pb-2 pr-3">Tier</th>
-                    <th className="pb-2 pr-3 text-right">Invoices</th>
-                    <th className="pb-2 pr-3 text-right">Revenue</th>
-                    <th className="pb-2 pr-3 text-right">Cost</th>
-                    <th className="pb-2 pr-3 text-right">Gross profit</th>
-                    <th className="pb-2 text-right">Margin</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedCustomers.map((c) => {
-                    const loss = c.revenue > 0 && c.profit < 0;
-                    return (
-                      <tr
-                        key={c.customer}
-                        className="border-t border-zinc-200 dark:border-zinc-800"
-                      >
-                        <td className="max-w-[280px] truncate py-2 pr-3 font-medium">
-                          {c.customer}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {(() => {
-                            const t = tierOfCustomer.get(c.customer);
-                            if (!t) return <span className="text-zinc-600">—</span>;
-                            return (
-                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-zinc-400">
-                                <span
-                                  className="inline-block h-2 w-2 rounded-full"
-                                  style={{ background: TIER_META[t].color }}
-                                />
-                                {TIER_META[t].label}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">
-                          {c.invoices}
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums">
-                          {fmt(c.revenue)}
-                        </td>
-                        <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">
-                          {fmt(c.cost)}
-                        </td>
-                        <td
-                          className={`py-2 pr-3 text-right font-medium tabular-nums ${
-                            loss ? "text-red-400" : "text-[#b5c76a]"
-                          }`}
-                        >
-                          {fmt(c.profit)}
-                        </td>
-                        <td className="py-2 text-right">
-                          {c.marginPct == null ? (
-                            <span className="text-zinc-600">—</span>
-                          ) : (
-                            <Badge
-                              tone={loss ? "danger" : c.marginPct < 10 ? "warning" : "success"}
-                            >
-                              {Math.round(c.marginPct)}%
-                            </Badge>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <CustomerTable
+              rows={sortedCustomers.map((c): CustomerSummaryRow => ({
+                customer: c.customer,
+                tier: tierOfCustomer.get(c.customer) ?? null,
+                invoices: c.invoices,
+                revenue: c.revenue,
+                cost: c.cost,
+                profit: c.profit,
+                marginPct: c.marginPct,
+              }))}
+              invoicesByCustomer={invoicesByCustomer}
+            />
           ) : (
             <ProfitTable rows={sorted} linesByInvoice={linesByInvoice} />
           )}

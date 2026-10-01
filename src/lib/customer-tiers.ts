@@ -30,7 +30,12 @@ export const MIN_COST_COVERAGE_PCT = 80;
 export type TierMeta = {
   label: string;
   action: string;
-  /** Validated against the dark chart surface — see dataviz palette checks. */
+  /**
+   * Validated for a bar chart against the dark surface: the five ranked tiers
+   * pass all palette checks as an adjacent-pair set (worst normal-vision ΔE
+   * 20.9). "Not measurable" uses de-emphasis grey — it is the unranked bucket,
+   * not a sixth category competing for attention.
+   */
   color: string;
   blurb: string;
 };
@@ -60,13 +65,13 @@ export const TIER_META: Record<TierKey, TierMeta> = {
   premium_small: {
     label: "Premium small",
     action: "Grow volume",
-    color: "#3987e5",
+    color: "#c98500",
     blurb: "Healthy margin but little volume. Worth selling more to, not worth discounting.",
   },
   low_value: {
     label: "Low value",
     action: "Serve cheaply",
-    color: "#3987e5",
+    color: "#9085e9",
     blurb: "Small and below average margin. Keep the cost of serving them down.",
   },
   losing: {
