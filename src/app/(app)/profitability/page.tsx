@@ -7,6 +7,13 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { RangeFilter } from "@/components/range-filter";
 import { ProfitTable, type ProfitLine } from "./profit-table";
+import { TierScatter } from "./tier-scatter";
+import {
+  assignTiers,
+  summariseTiers,
+  TIER_META,
+  type TierKey,
+} from "@/lib/customer-tiers";
 import { resolveRange } from "@/lib/date-range";
 import {
   buildCostLookup,
@@ -209,6 +216,23 @@ export default async function ProfitabilityPage({
     marginPct: c.revenue > 0 ? ((c.revenue - c.cost) / c.revenue) * 100 : null,
   }));
 
+  // Two-axis segmentation: profit contribution against the book's own margin.
+  const tiered = assignTiers(
+    customerRows.map((c) => ({
+      customer: c.customer,
+      revenue: c.revenue,
+      cost: c.cost,
+      profit: c.profit,
+      marginPct: c.marginPct,
+      coveragePct:
+        c.revenue > 0 ? ((c.revenue - c.uncosted) / c.revenue) * 100 : 0,
+    }))
+  );
+  const tierSummary = summariseTiers(tiered.customers);
+  const tierOfCustomer = new Map<string, TierKey>(
+    tiered.customers.map((c) => [c.customer, c.tier])
+  );
+
   const sortedCustomers = [...customerRows].sort((a, b) => {
     if (sort === "worst") {
       const am = a.marginPct ?? Number.POSITIVE_INFINITY;
@@ -307,6 +331,64 @@ export default async function ProfitabilityPage({
         </div>
       </div>
 
+      {view === "customer" && customerRows.length > 0 && (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            {tierSummary.map((t) => {
+              const meta = TIER_META[t.tier];
+              return (
+                <div
+                  key={t.tier}
+                  className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ background: meta.color }}
+                    />
+                    <p className="text-xs font-medium text-zinc-300">{meta.label}</p>
+                  </div>
+                  <p className="mt-1 text-lg font-bold text-zinc-100">
+                    {t.customers}
+                    <span className="ml-1 text-xs font-normal text-zinc-500">
+                      customer{t.customers === 1 ? "" : "s"}
+                    </span>
+                  </p>
+                  <p className="text-xs tabular-nums text-zinc-400">
+                    {fmt(t.profit)}
+                    {t.profitSharePct != null && (
+                      <span className="text-zinc-600">
+                        {" "}
+                        ({Math.round(t.profitSharePct)}%)
+                      </span>
+                    )}
+                  </p>
+                  <p className="mt-1 text-[11px] text-zinc-500">{meta.action}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Where each customer sits</CardTitle>
+              <p className="mt-1 text-xs text-zinc-500">
+                Margin against profit. The quadrants are the tiers — top-right earns well
+                and matters; bottom-right earns well but is small; top-left matters but is
+                underpriced.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <TierScatter
+                customers={tiered.customers}
+                benchmarkPct={tiered.benchmarkPct}
+                majorCutoff={tiered.majorCutoff}
+              />
+            </CardContent>
+          </Card>
+        </>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -361,6 +443,7 @@ export default async function ProfitabilityPage({
                 <thead className="text-left text-xs uppercase text-zinc-500">
                   <tr>
                     <th className="pb-2 pr-3">Customer</th>
+                    <th className="pb-2 pr-3">Tier</th>
                     <th className="pb-2 pr-3 text-right">Invoices</th>
                     <th className="pb-2 pr-3 text-right">Revenue</th>
                     <th className="pb-2 pr-3 text-right">Cost</th>
@@ -376,8 +459,23 @@ export default async function ProfitabilityPage({
                         key={c.customer}
                         className="border-t border-zinc-200 dark:border-zinc-800"
                       >
-                        <td className="max-w-[320px] truncate py-2 pr-3 font-medium">
+                        <td className="max-w-[280px] truncate py-2 pr-3 font-medium">
                           {c.customer}
+                        </td>
+                        <td className="py-2 pr-3">
+                          {(() => {
+                            const t = tierOfCustomer.get(c.customer);
+                            if (!t) return <span className="text-zinc-600">—</span>;
+                            return (
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-zinc-400">
+                                <span
+                                  className="inline-block h-2 w-2 rounded-full"
+                                  style={{ background: TIER_META[t].color }}
+                                />
+                                {TIER_META[t].label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">
                           {c.invoices}
