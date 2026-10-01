@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 export async function saveReferrer(fd: FormData) {
@@ -23,14 +24,29 @@ export async function saveReferrer(fd: FormData) {
   return { error: null };
 }
 
-export async function markCommissionsPaid(ids: string[], paidNote: string) {
+// Set the status of whichever commissions were ticked. Marking back to pending
+// clears the payment stamp, so a mistake can be undone rather than lived with.
+export async function setCommissionStatus(
+  ids: string[],
+  status: "paid" | "pending",
+  paidNote?: string
+) {
+  if (ids.length === 0) return { error: "Nothing selected." };
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("referrer_commissions")
-    .update({ status: "paid", paid_at: new Date().toISOString(), paid_note: paidNote || null })
-    .in("id", ids);
+    .update(
+      status === "paid"
+        ? { status, paid_at: new Date().toISOString(), paid_note: paidNote?.trim() || null }
+        : { status, paid_at: null, paid_note: null }
+    )
+    .in("id", ids)
+    .select("id");
   if (error) return { error: error.message };
-  return { error: null };
+  // An RLS-blocked update reports success with zero rows, so check.
+  if (!data?.length) return { error: "You don't have permission to change these." };
+  revalidatePath("/referrers");
+  return { error: null, updated: data.length };
 }
 
 export async function overrideCommission(id: string, pct: number, note: string) {

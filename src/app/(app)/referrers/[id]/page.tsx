@@ -5,8 +5,8 @@ import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { AddCommissionForm } from "./add-commission-form";
-import { MarkPaidPanel } from "./mark-paid-panel";
 import { BulkCommissionPanel } from "./bulk-commission-panel";
+import { CommissionTable, type CommissionRow } from "./commission-table";
 import {
   calcCommission as calcReferrerCommission,
   groupItemsByInvoice,
@@ -99,7 +99,6 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
 
   const pendingTotal = (commissions ?? []).filter((c) => c.status === "pending").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
   const paidTotal = (commissions ?? []).filter((c) => c.status === "paid").reduce((s, c) => s + Number(c.commission_amount ?? 0), 0);
-  const pendingIds = (commissions ?? []).filter((c) => c.status === "pending").map((c) => c.id);
 
   // Resolve customer names from invoice titles (leads table is RLS-restricted)
   const leadMap = new Map<string, string>();
@@ -148,6 +147,26 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
     const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
     return sum + calcCommission(inv.lead_id ?? "", base, inv.id, inv.zoho_invoice_id).amount;
   }, 0);
+
+  // Rows for the interactive table — one per invoice, carrying the logged
+  // commission id so each line can be ticked and settled on its own.
+  const commissionRows: CommissionRow[] = (invoices ?? []).map((inv) => {
+    const taxable = Number(inv.value_excl_tax ?? inv.value ?? 0);
+    const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
+    const comm = calcCommission(inv.lead_id ?? "", taxable, inv.id, inv.zoho_invoice_id);
+    return {
+      oppId: inv.id as string,
+      commissionId: (logged?.id as string) ?? null,
+      customer: referralLeadMap.get(inv.lead_id ?? "") ?? leadMap.get(inv.lead_id ?? "") ?? "—",
+      invoice: inv.title ?? "—",
+      date: (inv.close_date as string) ?? null,
+      taxable,
+      pct: logged ? Number(logged.commission_pct ?? 0) : comm.pct,
+      amount: logged ? Number(logged.commission_amount ?? 0) : comm.amount,
+      status: logged ? (logged.status === "paid" ? "paid" : "pending") : "not_logged",
+      isFirst: !logged && comm.reason === "first_invoice",
+    };
+  });
 
   // Rows for the downloadable PDF report
   const reportRows: ReportRow[] = (invoices ?? []).map((inv) => {
@@ -242,9 +261,6 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
         />
       )}
 
-      {pendingIds.length > 0 && (
-        <MarkPaidPanel pendingIds={pendingIds} pendingTotal={pendingTotal} />
-      )}
 
       {/* All invoices for referred customers */}
       <Card>
@@ -269,83 +285,7 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
           {(invoices ?? []).length === 0 ? (
             <EmptyState title="No invoices found" hint="Link customers to this referrer or sync Zoho to see invoices." />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs uppercase text-zinc-500">
-                  <tr>
-                    <th className="pb-2 pr-4">Customer</th>
-                    <th className="pb-2 pr-4">Invoice</th>
-                    <th className="pb-2 pr-4">Date</th>
-                    <th className="pb-2 pr-4 text-right">Taxable Amt (excl. GST)</th>
-                    <th className="pb-2 pr-3 text-center">Rate</th>
-                    <th className="pb-2 pr-4 text-right">Est. Commission</th>
-                    <th className="pb-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(invoices ?? []).map((inv) => {
-                    // Commission is on the pre-GST taxable value (value_excl_tax), not the GST-inclusive total
-                    const invAmt = Number(inv.value_excl_tax ?? inv.value ?? 0);
-                    const comm = calcCommission(inv.lead_id ?? "", invAmt, inv.id, inv.zoho_invoice_id);
-                    const isLogged = existingOppIds.has(inv.id);
-                    const loggedRecord = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
-                    return (
-                      <tr key={inv.id} className="border-t border-zinc-800 hover:bg-zinc-800/20 transition-colors">
-                        <td className="py-2.5 pr-4 font-medium text-zinc-100">
-                          {referralLeadMap.get(inv.lead_id ?? "") ?? leadMap.get(inv.lead_id ?? "") ?? "—"}
-                        </td>
-                        <td className="py-2.5 pr-4 text-zinc-400 text-xs max-w-[200px] truncate">{inv.title ?? "—"}</td>
-                        <td className="py-2.5 pr-4 text-zinc-500 text-xs">
-                          {inv.close_date ? format(parseISO(inv.close_date), "dd MMM yyyy") : "—"}
-                        </td>
-                        <td className="py-2.5 pr-4 text-right tabular-nums text-zinc-200">{fmt(invAmt)}</td>
-                        <td className="py-2.5 pr-3 text-center">
-                          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
-                            {isLogged && loggedRecord
-                              ? `${loggedRecord.commission_pct}%`
-                              : `${Math.round(comm.pct * 10) / 10}%`}
-                          </span>
-                          {!isLogged && comm.reason === "first_invoice" && (
-                            <span className="ml-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-400">1st</span>
-                          )}
-                        </td>
-                        <td className="py-2.5 pr-4 text-right tabular-nums font-semibold" style={{ color: "#b5c76a" }}>
-                          {isLogged && loggedRecord
-                            ? fmt(Number(loggedRecord.commission_amount ?? 0))
-                            : fmt(comm.amount)}
-                        </td>
-                        <td className="py-2.5">
-                          {isLogged ? (
-                            loggedRecord?.status === "paid"
-                              ? <span className="rounded-full bg-[#b5c76a]/10 px-2 py-0.5 text-xs text-[#b5c76a]">✅ Paid</span>
-                              : <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400">⬜ Pending</span>
-                          ) : (
-                            <span className="rounded-full bg-zinc-700/20 px-2 py-0.5 text-xs text-zinc-500">Not logged</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-zinc-700">
-                    <td colSpan={3} className="pt-3 text-xs text-zinc-500">Total</td>
-                    <td className="pt-3 text-right tabular-nums font-bold text-zinc-200">
-                      {fmt((invoices ?? []).reduce((s, i) => s + Number(i.value_excl_tax ?? i.value ?? 0), 0))}
-                    </td>
-                    <td />
-                    <td className="pt-3 text-right tabular-nums font-bold" style={{ color: "#b5c76a" }}>
-                      {fmt((invoices ?? []).reduce((s, inv) => {
-                        const logged = (commissions ?? []).find((c) => c.opportunity_id === inv.id);
-                        const base = Number(inv.value_excl_tax ?? inv.value ?? 0);
-                        return s + (logged ? Number(logged.commission_amount ?? 0) : calcCommission(inv.lead_id ?? "", base, inv.id, inv.zoho_invoice_id).amount);
-                      }, 0))}
-                    </td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+            <CommissionTable rows={commissionRows} />
           )}
         </CardContent>
       </Card>
