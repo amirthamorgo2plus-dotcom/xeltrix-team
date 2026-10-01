@@ -31,6 +31,9 @@ const SORTS = {
 } as const;
 type SortKey = keyof typeof SORTS;
 
+// A customer has no single date, so "newest" is meaningless when grouped.
+const CUSTOMER_SORTS: SortKey[] = ["profit", "worst"];
+
 // PostgREST caps a response at 1000 rows, so paginate anything that can exceed it.
 async function fetchAll<T>(
   // Supabase query builders are thenable rather than real Promises.
@@ -49,7 +52,7 @@ async function fetchAll<T>(
 export default async function ProfitabilityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; sort?: string }>;
+  searchParams: Promise<{ range?: string; sort?: string; view?: string }>;
 }) {
   const sp = await searchParams;
   const m = await getMyMembership();
@@ -58,7 +61,11 @@ export default async function ProfitabilityPage({
 
   const teamId = m.team_id;
   const range = resolveRange(sp.range ?? "this_fy");
-  const sort: SortKey = sp.sort && sp.sort in SORTS ? (sp.sort as SortKey) : "newest";
+  const view: "invoice" | "customer" = sp.view === "customer" ? "customer" : "invoice";
+  const requested: SortKey = sp.sort && sp.sort in SORTS ? (sp.sort as SortKey) : "newest";
+  // Grouped by customer, fall back to profit rather than an undated sort.
+  const sort: SortKey =
+    view === "customer" && !CUSTOMER_SORTS.includes(requested) ? "profit" : requested;
 
   const supabase = await createClient();
 
@@ -155,6 +162,50 @@ export default async function ProfitabilityPage({
   const lossMakers = rows.filter((r) => r.revenue > 0 && r.profit < 0);
   const lossValue = lossMakers.reduce((s, r) => s + r.profit, 0);
 
+  type CustomerRow = {
+    customer: string;
+    invoices: number;
+    revenue: number;
+    cost: number;
+    uncosted: number;
+    profit: number;
+    marginPct: number | null;
+  };
+
+  const byCustomer = new Map<string, CustomerRow>();
+  for (const r of rows) {
+    const key = r.customer ?? "(unknown customer)";
+    const e = byCustomer.get(key) ?? {
+      customer: key,
+      invoices: 0,
+      revenue: 0,
+      cost: 0,
+      uncosted: 0,
+      profit: 0,
+      marginPct: null,
+    };
+    e.invoices += 1;
+    e.revenue += r.revenue;
+    e.cost += r.cost;
+    e.uncosted += r.uncosted;
+    byCustomer.set(key, e);
+  }
+  const customerRows = [...byCustomer.values()].map((c) => ({
+    ...c,
+    profit: c.revenue - c.cost,
+    marginPct: c.revenue > 0 ? ((c.revenue - c.cost) / c.revenue) * 100 : null,
+  }));
+
+  const sortedCustomers = [...customerRows].sort((a, b) => {
+    if (sort === "worst") {
+      const am = a.marginPct ?? Number.POSITIVE_INFINITY;
+      const bm = b.marginPct ?? Number.POSITIVE_INFINITY;
+      return am - bm;
+    }
+    return b.profit - a.profit;
+  });
+  const losingCustomers = customerRows.filter((c) => c.revenue > 0 && c.profit < 0);
+
   const sorted = [...rows].sort((a, b) => {
     if (sort === "profit") return b.profit - a.profit;
     if (sort === "worst") {
@@ -166,11 +217,15 @@ export default async function ProfitabilityPage({
     return String(b.date ?? "").localeCompare(String(a.date ?? ""));
   });
 
-  function url(next: { range?: string; sort?: string }) {
+  function url(next: { range?: string; sort?: string; view?: string }) {
     const params = new URLSearchParams();
     const r = next.range ?? range.key;
-    const s = next.sort ?? sort;
+    const v = next.view ?? view;
+    // Switching to the grouped view drops a sort that view cannot honour.
+    const s =
+      next.sort ?? (v === "customer" && !CUSTOMER_SORTS.includes(sort) ? "profit" : sort);
     if (r && r !== "this_fy") params.set("range", r);
+    if (v && v !== "invoice") params.set("view", v);
     if (s && s !== "newest") params.set("sort", s);
     const qs = params.toString();
     return `/profitability${qs ? `?${qs}` : ""}`;
@@ -215,16 +270,26 @@ export default async function ProfitabilityPage({
           </p>
         </div>
         <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="text-xs text-zinc-500">Sold below cost</p>
+          <p className="text-xs text-zinc-500">
+            {view === "customer" ? "Loss-making customers" : "Sold below cost"}
+          </p>
           <p
             className={`mt-1 text-xl font-bold ${
-              lossMakers.length > 0 ? "text-red-400" : "text-zinc-300"
+              (view === "customer" ? losingCustomers.length : lossMakers.length) > 0
+                ? "text-red-400"
+                : "text-zinc-300"
             }`}
           >
-            {lossMakers.length}
+            {view === "customer" ? losingCustomers.length : lossMakers.length}
           </p>
           <p className="text-xs text-zinc-600">
-            {lossMakers.length > 0 ? `${fmt(lossValue)} lost` : "none"}
+            {view === "customer"
+              ? losingCustomers.length > 0
+                ? `${fmt(losingCustomers.reduce((s2, c) => s2 + c.profit, 0))} lost`
+                : "none"
+              : lossMakers.length > 0
+                ? `${fmt(lossValue)} lost`
+                : "none"}
           </p>
         </div>
       </div>
@@ -232,9 +297,29 @@ export default async function ProfitabilityPage({
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>Invoices in {range.label}</CardTitle>
+            <CardTitle>
+              {view === "customer"
+                ? `${customerRows.length} customers in ${range.label}`
+                : `Invoices in ${range.label}`}
+            </CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-950">
-              {(Object.keys(SORTS) as SortKey[]).map((k) => (
+              {(["invoice", "customer"] as const).map((v) => (
+                <Link
+                  key={v}
+                  href={url({ view: v })}
+                  className={
+                    view === v
+                      ? "rounded bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
+                      : "rounded px-2.5 py-1 text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"
+                  }
+                >
+                  {v === "invoice" ? "By invoice" : "By customer"}
+                </Link>
+              ))}
+            </div>
+            <div className="inline-flex rounded-md border border-zinc-200 bg-white p-0.5 dark:border-zinc-800 dark:bg-zinc-950">
+              {(view === "customer" ? CUSTOMER_SORTS : (Object.keys(SORTS) as SortKey[])).map((k) => (
                 <Link
                   key={k}
                   href={url({ sort: k })}
@@ -248,6 +333,7 @@ export default async function ProfitabilityPage({
                 </Link>
               ))}
             </div>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -256,6 +342,63 @@ export default async function ProfitabilityPage({
               title="No invoices in this range"
               hint="Invoices appear here as they sync from Zoho."
             />
+          ) : view === "customer" ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs uppercase text-zinc-500">
+                  <tr>
+                    <th className="pb-2 pr-3">Customer</th>
+                    <th className="pb-2 pr-3 text-right">Invoices</th>
+                    <th className="pb-2 pr-3 text-right">Revenue</th>
+                    <th className="pb-2 pr-3 text-right">Cost</th>
+                    <th className="pb-2 pr-3 text-right">Gross profit</th>
+                    <th className="pb-2 text-right">Margin</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedCustomers.map((c) => {
+                    const loss = c.revenue > 0 && c.profit < 0;
+                    return (
+                      <tr
+                        key={c.customer}
+                        className="border-t border-zinc-200 dark:border-zinc-800"
+                      >
+                        <td className="max-w-[320px] truncate py-2 pr-3 font-medium">
+                          {c.customer}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">
+                          {c.invoices}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums">
+                          {fmt(c.revenue)}
+                        </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-zinc-400">
+                          {fmt(c.cost)}
+                        </td>
+                        <td
+                          className={`py-2 pr-3 text-right font-medium tabular-nums ${
+                            loss ? "text-red-400" : "text-[#b5c76a]"
+                          }`}
+                        >
+                          {fmt(c.profit)}
+                        </td>
+                        <td className="py-2 text-right">
+                          {c.marginPct == null ? (
+                            <span className="text-zinc-600">—</span>
+                          ) : (
+                            <Badge
+                              tone={loss ? "danger" : c.marginPct < 10 ? "warning" : "success"}
+                            >
+                              {Math.round(c.marginPct)}%
+                            </Badge>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
