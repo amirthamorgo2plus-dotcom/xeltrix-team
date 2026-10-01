@@ -16,6 +16,7 @@ import {
   Users2,
   Plug,
   Package,
+  TrendingUp,
   FileText,
   UserCog,
   Wallet,
@@ -59,6 +60,7 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/referrers",          label: "Referrers",          icon: HandCoins },
       { href: "/referral-customers", label: "Referral Customers", icon: UserPlus },
       { href: "/deep-cleaning",      label: "Deep Cleaning",      icon: Sparkles, adminOnly: true },
+      { href: "/profitability",      label: "Profitability",      icon: TrendingUp, adminOnly: true },
     ],
   },
   {
