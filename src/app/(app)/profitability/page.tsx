@@ -100,7 +100,7 @@ export default async function ProfitabilityPage({
     ? await fetchAll<ProfitLineItem>((from, to) =>
         supabase
           .from("zoho_invoice_items")
-          .select("zoho_invoice_id, zoho_item_id, sku, quantity, amount")
+          .select("zoho_invoice_id, zoho_item_id, sku, quantity, amount, unit_cost")
           .eq("team_id", teamId)
           .in("zoho_invoice_id", invoiceIds)
           .range(from, to)

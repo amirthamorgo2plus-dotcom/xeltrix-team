@@ -21,6 +21,8 @@ export type ProfitLineItem = {
   sku: string | null;
   quantity: number | string | null;
   amount: number | string | null;
+  /** Cost per unit frozen when the line was first mirrored (00037). */
+  unit_cost?: number | string | null;
 };
 
 export type CostLookup = {
@@ -40,11 +42,20 @@ export function buildCostLookup(products: CostProduct[] | null | undefined): Cos
   return { byItemId, bySku };
 }
 
-/** Cost of one invoice line, or null when the product has no cost price. */
+/**
+ * Cost of one invoice line, or null when no cost is known.
+ *
+ * Prefers the cost snapshotted onto the line at sync time, so a past invoice's
+ * margin does not move when a product's cost price is later edited. Falls back
+ * to the product's current cost only for lines mirrored before snapshotting
+ * existed, or whose product had no cost price at the time.
+ */
 export function lineCost(item: ProfitLineItem, lookup: CostLookup): number | null {
-  const unit =
-    (item.zoho_item_id ? lookup.byItemId.get(String(item.zoho_item_id)) : undefined) ??
-    (item.sku ? lookup.bySku.get(String(item.sku)) : undefined);
+  const snapshot = Number(item.unit_cost ?? NaN);
+  const unit = Number.isFinite(snapshot) && snapshot > 0
+    ? snapshot
+    : (item.zoho_item_id ? lookup.byItemId.get(String(item.zoho_item_id)) : undefined) ??
+      (item.sku ? lookup.bySku.get(String(item.sku)) : undefined);
   if (unit == null) return null;
   return unit * Number(item.quantity ?? 0);
 }

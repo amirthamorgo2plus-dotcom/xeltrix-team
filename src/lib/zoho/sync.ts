@@ -966,9 +966,44 @@ export async function syncFromZoho(
       .map((inv) => inv.invoice_id)
       .filter((id) => invDetail.map.get(id)?.line_items);
     if (detailedIds.length > 0) {
+      // Cost of goods is snapshotted onto the line so a past invoice's margin
+      // stops moving when a product's cost price is later edited. Because the
+      // rows below are replaced wholesale, any cost already recorded is carried
+      // across — first value wins, so a re-sync never restamps an old line at a
+      // newer cost. Only lines seen for the first time take today's cost.
+      const { data: priorItems } = await sb
+        .from("zoho_invoice_items")
+        .select("line_item_id, unit_cost")
+        .eq("team_id", integration.team_id)
+        .in("zoho_invoice_id", detailedIds);
+      const priorCost = new Map<string, number>();
+      for (const r of priorItems ?? []) {
+        const c = Number((r as { unit_cost: number | null }).unit_cost ?? NaN);
+        if (Number.isFinite(c)) priorCost.set(String((r as { line_item_id: string }).line_item_id), c);
+      }
+
+      const { data: costRows } = await sb
+        .from("opportunity_templates")
+        .select("zoho_item_id, sku, cost_price")
+        .eq("team_id", integration.team_id);
+      const costByItemId = new Map<string, number>();
+      const costBySku = new Map<string, number>();
+      for (const t of costRows ?? []) {
+        const row = t as { zoho_item_id: string | null; sku: string | null; cost_price: number | null };
+        const c = Number(row.cost_price ?? NaN);
+        if (!Number.isFinite(c) || c <= 0) continue;
+        if (row.zoho_item_id) costByItemId.set(String(row.zoho_item_id), c);
+        if (row.sku) costBySku.set(String(row.sku), c);
+      }
+
       const itemRows: Record<string, unknown>[] = [];
       for (const invId of detailedIds) {
         for (const li of invDetail.map.get(invId)?.line_items ?? []) {
+          const unitCost =
+            priorCost.get(String(li.line_item_id)) ??
+            (li.item_id ? costByItemId.get(String(li.item_id)) : undefined) ??
+            (li.sku ? costBySku.get(String(li.sku)) : undefined) ??
+            null;
           itemRows.push({
             team_id: integration.team_id,
             zoho_invoice_id: invId,
@@ -982,6 +1017,7 @@ export async function syncFromZoho(
             rate: li.rate ?? null,
             amount: li.item_total ?? null,
             tax_percentage: li.tax_percentage ?? null,
+            unit_cost: unitCost,
           });
         }
       }
