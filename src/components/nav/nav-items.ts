@@ -69,6 +69,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Clock,
     children: [
       { href: "/attendance/summary", label: "Summary", icon: ClipboardList },
+      { href: "/attendance/leave", label: "Leave & year", icon: CalendarDays },
       { href: "/holidays", label: "Holidays", icon: CalendarHeart },
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
     ],

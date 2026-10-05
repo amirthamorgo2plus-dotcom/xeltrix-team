@@ -122,6 +122,8 @@ export const getTeamSettings = cache(async () => {
     currency?: string;
     full_day_hours?: number;
     half_day_hours?: number;
+    /** Annual paid-leave days each employee is entitled to. */
+    annual_leave_days?: number;
     weekly_off?: unknown;
     target_cadence?: string;
     payment_qr_url?: string | null;
