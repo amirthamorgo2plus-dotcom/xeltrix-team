@@ -13,6 +13,16 @@ function computeHours(start: string, end: string) {
   return Math.max(0, Math.round((ms / 3600000) * 100) / 100);
 }
 
+// /attendance/summary and /attendance/leave are separate pages with their own
+// cache entries, so invalidating "/attendance" alone leaves them showing stale
+// totals right after a correction is saved. There is no layout.tsx at this
+// segment to invalidate wholesale with type "layout", so name each page.
+function revalidateAttendance() {
+  revalidatePath("/attendance");
+  revalidatePath("/attendance/summary");
+  revalidatePath("/attendance/leave");
+}
+
 export async function checkIn() {
   const m = await getMyMembership();
   if (!m) throw new Error("Not in a team");
@@ -30,7 +40,7 @@ export async function checkIn() {
     .maybeSingle();
 
   if (existing?.check_in_at) {
-    revalidatePath("/attendance");
+    revalidateAttendance();
     return;
   }
 
@@ -50,7 +60,7 @@ export async function checkIn() {
     });
   }
 
-  revalidatePath("/attendance");
+  revalidateAttendance();
   revalidatePath("/dashboard");
 }
 
@@ -77,7 +87,7 @@ export async function checkOut() {
     .update({ check_out_at: now, hours })
     .eq("id", existing.id);
 
-  revalidatePath("/attendance");
+  revalidateAttendance();
   revalidatePath("/dashboard");
 }
 
@@ -114,7 +124,7 @@ export async function markAttendance(
     );
 
   if (error) return { error: error.message };
-  revalidatePath("/attendance");
+  revalidateAttendance();
   revalidatePath("/dashboard");
   return {};
 }
