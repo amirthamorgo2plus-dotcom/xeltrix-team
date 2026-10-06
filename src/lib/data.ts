@@ -86,7 +86,7 @@ export const getTeamMembers = cache(async () => {
 
   const { data: members } = await supabase
     .from("team_members")
-    .select("id, role, active, user_id, zoho_salesperson_name, zoho_advance_account_name, track_attendance, attendance_only")
+    .select("id, role, active, user_id, zoho_salesperson_name, zoho_advance_account_name, track_attendance, attendance_only, employment_start")
     .eq("team_id", m.team_id)
     .eq("active", true)
     .order("role");
@@ -144,3 +144,42 @@ export function firstDayOfMonth(d = new Date()) {
 export function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
+
+/**
+ * Earliest attendance row per member, used to decide when tracking actually
+ * began for them. Attendance is a few hundred rows in total, so reading the
+ * dates and reducing beats a round trip per member.
+ */
+export const getFirstAttendanceDates = cache(async () => {
+  const members = await getTeamMembers();
+  const first = new Map<string, string>();
+  if (members.length === 0) return first;
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("attendance")
+    // attendance has no team_id — scope by current-org members instead
+    .select("member_id, date")
+    .in(
+      "member_id",
+      members.map((m) => m.id as string)
+    )
+    .order("date", { ascending: true });
+  for (const r of data ?? []) {
+    const id = r.member_id as string;
+    if (!first.has(id)) first.set(id, r.date as string);
+  }
+  return first;
+});
+
+/** Dates the team is closed, so they never count as a missing attendance record. */
+export const getClosedDates = cache(async () => {
+  const m = await getMyMembership();
+  if (!m) return new Set<string>();
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("holidays")
+    .select("date, working_allowed")
+    .eq("team_id", m.team_id)
+    .eq("working_allowed", false);
+  return new Set((data ?? []).map((h) => h.date as string));
+});
