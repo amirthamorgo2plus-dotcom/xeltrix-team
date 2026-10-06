@@ -18,6 +18,43 @@ function adminClient() {
   return createSbAdmin(url, srk, { auth: { persistSession: false } });
 }
 
+// Read zoho_invoice_items for a set of invoices, complete.
+//
+// PostgREST caps a response at 1000 rows, and a long `.in()` list runs into the
+// URL length limit. A nightly sync covers ~35 days and is under both, which is
+// why a plain select has worked; a full-history backfill (`options.since` set to
+// an old date) detail-fetches every invoice and is over both. A silently
+// truncated read is dangerous here: the caller treats a missing row as "this
+// line has no cost yet" and stamps today's cost onto it, destroying the very
+// snapshots the carry-across exists to preserve. So page, chunk, and surface
+// errors rather than returning a partial answer.
+async function selectInvoiceItems<T>(
+  sb: ReturnType<typeof adminClient>,
+  teamId: string,
+  columns: string,
+  invoiceIds: string[]
+): Promise<T[]> {
+  const PAGE = 1000;
+  const ID_CHUNK = 100;
+  const out: T[] = [];
+  for (let i = 0; i < invoiceIds.length; i += ID_CHUNK) {
+    const chunk = invoiceIds.slice(i, i + ID_CHUNK);
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb
+        .from("zoho_invoice_items")
+        .select(columns)
+        .eq("team_id", teamId)
+        .in("zoho_invoice_id", chunk)
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(`zoho_invoice_items read failed: ${error.message}`);
+      const rows = (data ?? []) as unknown as T[];
+      out.push(...rows);
+      if (rows.length < PAGE) break;
+    }
+  }
+  return out;
+}
+
 type SyncCounts = {
   customers: number;
   invoices: number;
@@ -728,12 +765,23 @@ export async function syncFromZoho(
   // Without this, invoices that got tax before line-items existed would be
   // skipped forever and never backfill their items. Scoped to this window's ids.
   const windowInvoiceIds = invoices.map((inv) => inv.invoice_id);
-  const { data: itemedRows } = await sb
-    .from("zoho_invoice_items")
-    .select("zoho_invoice_id")
-    .eq("team_id", integration.team_id)
-    .in("zoho_invoice_id", windowInvoiceIds.length ? windowInvoiceIds : ["_none_"]);
-  const invoicesWithItems = new Set((itemedRows ?? []).map((r) => r.zoho_invoice_id as string));
+  // An incomplete answer here is safe — it only re-details an invoice that did
+  // not need it — so a failed read degrades to "none have items" rather than
+  // aborting the sync.
+  let invoicesWithItems = new Set<string>();
+  try {
+    const itemedRows = await selectInvoiceItems<{ zoho_invoice_id: string }>(
+      sb,
+      integration.team_id,
+      "zoho_invoice_id",
+      windowInvoiceIds
+    );
+    invoicesWithItems = new Set(itemedRows.map((r) => r.zoho_invoice_id));
+  } catch (e) {
+    counts.warnings.push(
+      `Could not list mirrored line items: ${e instanceof Error ? e.message : String(e)}`
+    );
+  }
 
   // Needs detail if: missing tax yet, OR it's in the current month
   // (always re-fetched fresh to correct any stale value). Current-month
@@ -971,15 +1019,18 @@ export async function syncFromZoho(
       // rows below are replaced wholesale, any cost already recorded is carried
       // across — first value wins, so a re-sync never restamps an old line at a
       // newer cost. Only lines seen for the first time take today's cost.
-      const { data: priorItems } = await sb
-        .from("zoho_invoice_items")
-        .select("line_item_id, unit_cost")
-        .eq("team_id", integration.team_id)
-        .in("zoho_invoice_id", detailedIds);
+      // Must be complete: a row missing from this map is read as "new line" and
+      // takes today's cost. selectInvoiceItems throws rather than truncating,
+      // and the throw is caught below, which skips the delete/insert and leaves
+      // the existing rows — and their snapshots — untouched.
+      const priorItems = await selectInvoiceItems<{
+        line_item_id: string;
+        unit_cost: number | null;
+      }>(sb, integration.team_id, "line_item_id, unit_cost", detailedIds);
       const priorCost = new Map<string, number>();
-      for (const r of priorItems ?? []) {
-        const c = Number((r as { unit_cost: number | null }).unit_cost ?? NaN);
-        if (Number.isFinite(c)) priorCost.set(String((r as { line_item_id: string }).line_item_id), c);
+      for (const r of priorItems) {
+        const c = Number(r.unit_cost ?? NaN);
+        if (Number.isFinite(c)) priorCost.set(String(r.line_item_id), c);
       }
 
       const { data: costRows } = await sb
