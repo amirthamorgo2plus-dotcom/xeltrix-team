@@ -227,3 +227,19 @@ export async function createStaff(
   revalidateAll();
   return { ok: true };
 }
+
+// When employment actually began — used to pro-rate annual leave. Separate from
+// joined_at, which only records when the account was created and is wrong for
+// anyone who was working before the app existed.
+export async function setEmploymentStart(memberId: string, date: string | null) {
+  if (!(await requireAdmin())) throw new Error("Admins only.");
+  await assertWritable();
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Invalid date.");
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("team_members")
+    .update({ employment_start: date })
+    .eq("id", memberId);
+  if (error) throw new Error(error.message);
+  revalidateAll();
+}

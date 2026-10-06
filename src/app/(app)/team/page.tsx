@@ -13,7 +13,7 @@ export default async function TeamPage() {
   const supabase = await createClient();
   const { data: members } = await supabase
     .from("team_members")
-    .select("id, user_id, role, active, track_attendance, attendance_only")
+    .select("id, user_id, role, active, track_attendance, attendance_only, employment_start")
     .eq("team_id", me!.team_id)
     .order("active", { ascending: false })
     .order("role");
@@ -48,6 +48,7 @@ export default async function TeamPage() {
     role: m.role,
     active: m.active,
     track_attendance: m.track_attendance !== false,
+    employment_start: (m.employment_start as string | null) ?? null,
     attendance_only: m.attendance_only === true,
     last_sign_in_at: lastSignInById.get(m.user_id) ?? null,
   }));

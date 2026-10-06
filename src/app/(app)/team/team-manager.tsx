@@ -17,6 +17,7 @@ import {
   setAttendanceOnly,
   setMemberActive,
   setTrackAttendance,
+  setEmploymentStart,
 } from "./actions";
 
 function ResendButton({ memberId }: { memberId: string }) {
@@ -108,7 +109,33 @@ export type TeamMemberRow = {
   track_attendance: boolean;
   attendance_only: boolean;
   last_sign_in_at: string | null;
+  /** When employment began — pro-rates annual leave. Not the account date. */
+  employment_start: string | null;
 };
+
+function StartDateCell({
+  memberId,
+  value,
+}: {
+  memberId: string;
+  value: string | null;
+}) {
+  const [pending, start] = useTransition();
+  const [date, setDate] = useState(value ?? "");
+  return (
+    <input
+      type="date"
+      value={date}
+      disabled={pending}
+      onChange={(e) => {
+        const next = e.target.value;
+        setDate(next);
+        start(() => setEmploymentStart(memberId, next || null));
+      }}
+      className="h-8 rounded-md border border-zinc-300 bg-transparent px-2 text-xs disabled:opacity-50 dark:border-zinc-700"
+    />
+  );
+}
 
 function Toggle({
   on,
@@ -163,6 +190,7 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
             <TH>Member</TH>
             <TH>Role</TH>
             <TH>Last sign-in</TH>
+            <TH>Employment start</TH>
             <TH>In attendance</TH>
             <TH>Access</TH>
             <TH>Status</TH>
@@ -184,6 +212,9 @@ export function TeamManager({ members }: { members: TeamMemberRow[] }) {
                 ) : (
                   <span className="text-zinc-600">Never</span>
                 )}
+              </TD>
+              <TD>
+                <StartDateCell memberId={m.id} value={m.employment_start} />
               </TD>
               <TD>
                 <Toggle

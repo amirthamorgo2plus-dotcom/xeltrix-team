@@ -40,6 +40,28 @@ function leaveTaken(c: Counts): number {
 
 const nice = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
+/**
+ * Share of a year someone was employed for, 0-1.
+ *
+ * Someone who starts in September should not get a full year's leave. Measured
+ * in days rather than whole months so a mid-month start is not rounded in their
+ * favour or against them. Returns 1 when no start date is recorded — a missing
+ * date must never quietly reduce an allowance.
+ */
+function yearFraction(startIso: string | null, year: number): number {
+  if (!startIso) return 1;
+  const start = new Date(`${startIso}T00:00:00Z`);
+  if (Number.isNaN(start.getTime())) return 1;
+  const jan1 = Date.UTC(year, 0, 1);
+  const dec31 = Date.UTC(year, 11, 31);
+  if (start.getTime() <= jan1) return 1;
+  if (start.getTime() > dec31) return 0;
+  const DAY = 86_400_000;
+  const daysInYear = (dec31 - jan1) / DAY + 1;
+  const daysEmployed = (dec31 - start.getTime()) / DAY + 1;
+  return Math.max(0, Math.min(1, daysEmployed / daysInYear));
+}
+
 export default async function LeaveBalancePage({
   searchParams,
 }: {
@@ -94,13 +116,22 @@ export default async function LeaveBalancePage({
     const profile = (m.profiles as unknown) as { full_name?: string } | null;
     const counts = byMember.get(m.id) ?? { ...ZERO };
     const taken = leaveTaken(counts);
+    const start = (m as { employment_start?: string | null }).employment_start ?? null;
+    // Anyone who started before January gets a full year automatically.
+    const fraction = yearFraction(start, year);
+    // Rounded to a half day — the smallest unit attendance is recorded in.
+    const entitled =
+      entitlement == null ? null : Math.round(entitlement * fraction * 2) / 2;
     return {
       id: m.id as string,
       name: profile?.full_name || "(unnamed)",
       counts,
       worked: workedDays(counts),
       taken,
-      remaining: entitlement == null ? null : entitlement - taken,
+      start,
+      partYear: fraction < 1,
+      entitled,
+      remaining: entitled == null ? null : entitled - taken,
       compOff: compOff.get(m.id as string) ?? 0,
     };
   });
@@ -199,7 +230,21 @@ export default async function LeaveBalancePage({
                           </span>
                         </TD>
                         <TD className="text-right tabular-nums text-zinc-400">
-                          {entitlement == null ? "—" : nice(entitlement)}
+                          {r.entitled == null ? (
+                            "—"
+                          ) : (
+                            <>
+                              {nice(r.entitled)}
+                              {r.partYear && (
+                                <span
+                                  className="ml-1 text-[10px] text-amber-500"
+                                  title={`Pro-rated from ${r.start} — part of ${year} only`}
+                                >
+                                  pro-rata
+                                </span>
+                              )}
+                            </>
+                          )}
                         </TD>
                         <TD className="text-right tabular-nums">{nice(r.taken)}</TD>
                         <TD
@@ -247,7 +292,9 @@ export default async function LeaveBalancePage({
               <p className="mt-3 text-xs text-zinc-500">
                 A half day counts as half a day worked and half a day of leave. Comp-off is
                 earned by working holidays and is tracked separately — it does not come out
-                of the allowance.
+                of the allowance. Anyone who started part-way through {year} is pro-rated
+                from their employment start date, set on the Team page; everyone who
+                started earlier gets the full allowance.
               </p>
             </>
           )}
