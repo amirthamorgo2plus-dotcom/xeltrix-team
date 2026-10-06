@@ -2,7 +2,15 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers, getTeamSettings, isAdminOrManager } from "@/lib/data";
+import {
+  getClosedDates,
+  getFirstAttendanceDates,
+  getMyMembership,
+  getTeamMembers,
+  getTeamSettings,
+  isAdminOrManager,
+} from "@/lib/data";
+import { trackedFrom, unmarkedDays } from "@/lib/attendance-days";
 import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
@@ -90,11 +98,15 @@ export default async function LeaveBalancePage({
     : ["00000000-0000-0000-0000-000000000000"];
 
   const supabase = await createClient();
+  const [closedDates, firstAttendance] = await Promise.all([
+    getClosedDates(),
+    getFirstAttendanceDates(),
+  ]);
   const [{ data: rows }, { data: balances }] = await Promise.all([
     supabase
       // attendance has no team_id — scope by current-org members instead
       .from("attendance")
-      .select("member_id, status")
+      .select("member_id, date, status")
       .in("member_id", memberIds)
       .gte("date", `${year}-01-01`)
       .lte("date", `${year}-12-31`),
@@ -102,11 +114,16 @@ export default async function LeaveBalancePage({
   ]);
 
   const byMember = new Map<string, Counts>();
+  const marked = new Map<string, Set<string>>();
   for (const r of rows ?? []) {
-    const c = byMember.get(r.member_id as string) ?? { ...ZERO };
+    const id = r.member_id as string;
+    const c = byMember.get(id) ?? { ...ZERO };
     const key = r.status as keyof Counts;
     if (key in c) c[key] += 1;
-    byMember.set(r.member_id as string, c);
+    byMember.set(id, c);
+    const seen = marked.get(id) ?? new Set<string>();
+    seen.add(r.date as string);
+    marked.set(id, seen);
   }
   const compOff = new Map(
     (balances ?? []).map((b) => [b.member_id as string, Number(b.balance ?? 0)])
@@ -122,10 +139,19 @@ export default async function LeaveBalancePage({
     // Rounded to a half day — the smallest unit attendance is recorded in.
     const entitled =
       entitlement == null ? null : Math.round(entitlement * fraction * 2) / 2;
+    // Working days in this year with no record, inside the tracked period only.
+    const unmarked = unmarkedDays({
+      windowStart: `${year}-01-01`,
+      windowEnd: `${year}-12-31`,
+      trackedFrom: trackedFrom(start, firstAttendance.get(m.id as string)),
+      markedDates: marked.get(m.id as string) ?? new Set<string>(),
+      closedDates,
+    }).length;
     return {
       id: m.id as string,
       name: profile?.full_name || "(unnamed)",
       counts,
+      unmarked,
       worked: workedDays(counts),
       taken,
       start,
@@ -141,9 +167,10 @@ export default async function LeaveBalancePage({
       worked: a.worked + r.worked,
       taken: a.taken + r.taken,
       absent: a.absent + r.counts.absent,
+      unmarked: a.unmarked + r.unmarked,
       compOff: a.compOff + r.compOff,
     }),
-    { worked: 0, taken: 0, absent: 0, compOff: 0 }
+    { worked: 0, taken: 0, absent: 0, unmarked: 0, compOff: 0 }
   );
 
   const overdrawn = table.filter((r) => r.remaining != null && r.remaining < 0);
@@ -215,6 +242,7 @@ export default async function LeaveBalancePage({
                       <TH className="text-right">Remaining</TH>
                       <TH className="text-right">Days worked</TH>
                       <TH className="text-right">Absent</TH>
+                      <TH className="text-right">Unmarked</TH>
                       <TH className="text-right">Comp-off</TH>
                     </TR>
                   </THead>
@@ -264,6 +292,14 @@ export default async function LeaveBalancePage({
                         <TD className="text-right tabular-nums text-zinc-400">
                           {r.counts.absent}
                         </TD>
+                        <TD
+                          className={`text-right tabular-nums ${
+                            r.unmarked > 0 ? "text-amber-600 dark:text-amber-500" : "text-zinc-400"
+                          }`}
+                          title="Working days with no attendance record — not counted as absent"
+                        >
+                          {r.unmarked}
+                        </TD>
                         <TD className="text-right tabular-nums text-zinc-400">
                           {nice(r.compOff)}
                         </TD>
@@ -283,6 +319,9 @@ export default async function LeaveBalancePage({
                         {totals.absent}
                       </TD>
                       <TD className="text-right font-medium tabular-nums">
+                        {totals.unmarked}
+                      </TD>
+                      <TD className="text-right font-medium tabular-nums">
                         {nice(totals.compOff)}
                       </TD>
                     </TR>
@@ -290,7 +329,10 @@ export default async function LeaveBalancePage({
                 </Table>
               </div>
               <p className="mt-3 text-xs text-zinc-500">
-                A half day counts as half a day worked and half a day of leave. Comp-off is
+                <span className="text-amber-600 dark:text-amber-500">Unmarked</span> is a
+                working day with no attendance record, counted only from the date each person
+                started being tracked; it is not treated as absence and does not touch the
+                allowance. A half day counts as half a day worked and half a day of leave. Comp-off is
                 earned by working holidays and is tracked separately — it does not come out
                 of the allowance. Anyone who started part-way through {year} is pro-rated
                 from their employment start date, set on the Team page; everyone who

@@ -1,6 +1,12 @@
 import { addDays, format, getDay, getDate, parseISO, startOfMonth, endOfMonth } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
+import {
+  getFirstAttendanceDates,
+  getMyMembership,
+  getTeamMembers,
+  isAdminOrManager,
+} from "@/lib/data";
+import { todayIso, trackedFrom } from "@/lib/attendance-days";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -81,6 +87,20 @@ export default async function AttendancePage({
   );
   const holidayNames = new Map(
     (holidays ?? []).map((h) => [h.date as string, h.name as string])
+  );
+
+  // A working day with no row is only meaningful once we were tracking the
+  // person — before that, silence means the app was not in use.
+  const firstAttendance = await getFirstAttendanceDates();
+  const today = todayIso();
+  const trackedFromByMember = new Map<string, string | null>(
+    members.map((mm) => [
+      mm.id as string,
+      trackedFrom(
+        (mm as { employment_start?: string | null }).employment_start,
+        firstAttendance.get(mm.id as string)
+      ),
+    ])
   );
 
   const cellMap = new Map<string, { status: string; hours: number | null }>();
@@ -190,11 +210,21 @@ export default async function AttendancePage({
                           else if (tone === "warning") bg = "bg-amber-200 dark:bg-amber-800";
                           else if (tone === "info") bg = "bg-blue-200 dark:bg-blue-800";
                         }
+                        // Nobody marked this working day. Ringed rather than
+                        // filled, so it reads as "no record" and not as a
+                        // status — and so it stops looking like an off day.
+                        const tf = trackedFromByMember.get(mem.id as string) ?? null;
+                        const unmarked =
+                          !cell && !off && tf !== null && iso >= tf && iso <= today;
                         return (
                           <td
                             key={iso}
-                            title={`${iso}${cell ? " · " + cell.status : ""}`}
-                            className={`h-7 w-7 border border-zinc-200 text-center dark:border-zinc-800 ${bg}`}
+                            title={`${iso}${
+                              cell ? " · " + cell.status : unmarked ? " · no record" : ""
+                            }`}
+                            className={`h-7 w-7 border border-zinc-200 text-center dark:border-zinc-800 ${bg} ${
+                              unmarked ? "ring-1 ring-inset ring-amber-500/50" : ""
+                            }`}
                           />
                         );
                       })}
@@ -220,6 +250,10 @@ export default async function AttendancePage({
             </span>
             <span className="inline-flex items-center gap-1">
               <span className="inline-block h-3 w-3 rounded-sm bg-zinc-100 dark:bg-zinc-800" /> Off (Sun / 1st Sat / holiday)
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block h-3 w-3 rounded-sm ring-1 ring-inset ring-amber-500/50" />{" "}
+              Unmarked (no record)
             </span>
           </div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
