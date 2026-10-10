@@ -27,14 +27,17 @@ export function TaskComments({
   members,
   myMemberId,
   canManage,
+  defaultOpen = false,
 }: {
   taskId: string;
   comments: TaskComment[];
   members: Member[];
   myMemberId: string | null;
   canManage: boolean;
+  /** The task's own page leads with the thread; the list keeps it collapsed. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const memberById = new Map(members.map((m) => [m.id, m]));
 
   if (!open) {
