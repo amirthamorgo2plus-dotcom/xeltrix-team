@@ -24,6 +24,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const member = searchParams.get("member");
   const status = searchParams.get("status") ?? "all";
+  const priority = searchParams.get("priority");
 
   const supabase = await createClient();
   let query = supabase
@@ -31,6 +32,7 @@ export async function GET(request: Request) {
     .select("title, description, due_at, priority, status, owner_id, related_type, related_id, created_at")
     .order("created_at", { ascending: false });
   if (member && member !== "all") query = query.eq("owner_id", member);
+  if (priority && priority !== "all") query = query.eq("priority", priority);
 
   const [{ data, error }, members] = await Promise.all([query, memberNameLookup()]);
   if (error) return new Response(error.message, { status: 500 });

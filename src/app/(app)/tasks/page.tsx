@@ -16,6 +16,8 @@ import { TaskFilters } from "./filters";
 import { TaskStatusSelect } from "./status-select";
 import { AssigneeSelect } from "./assignee-select";
 import { TaskComments, type TaskComment } from "./task-comments";
+import { SORT_KEYS, type SortKey } from "@/lib/task-sort";
+import { TasksTable } from "./tasks-table";
 
 const priorityTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
   low: "muted",
@@ -45,6 +47,8 @@ function bucket(t: Task) {
 }
 
 // Which buckets a status filter reveals. "pending" = everything not done.
+const PRIORITIES = ["low", "medium", "high", "urgent"];
+
 const STATUS_BUCKETS: Record<string, ReadonlyArray<"overdue" | "today" | "upcoming" | "done">> = {
   all: ["overdue", "today", "upcoming", "done"],
   pending: ["overdue", "today", "upcoming"],
@@ -57,7 +61,14 @@ const STATUS_BUCKETS: Record<string, ReadonlyArray<"overdue" | "today" | "upcomi
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ member?: string; status?: string }>;
+  searchParams: Promise<{
+    member?: string;
+    status?: string;
+    priority?: string;
+    view?: string;
+    sort?: string;
+    dir?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const me = await getMyMembership();
@@ -70,6 +81,12 @@ export default async function TasksPage({
   const memberParam = sp.member ?? me?.id ?? "all";
   const statusParam = sp.status && STATUS_BUCKETS[sp.status] ? sp.status : "all";
   const visibleBuckets = STATUS_BUCKETS[statusParam];
+  const priorityParam = PRIORITIES.includes(sp.priority ?? "") ? sp.priority! : "all";
+  // The grouped list answers "what should I do next"; the table answers "what
+  // is the team carrying". Different jobs, so both stay.
+  const view = sp.view === "table" ? "table" : "list";
+  const sort = (SORT_KEYS as string[]).includes(sp.sort ?? "") ? (sp.sort as SortKey) : "due";
+  const dir = sp.dir === "desc" ? "desc" : "asc";
 
   const memberOpts = teamMembers.map((m) => {
     const profile = (m.profiles as unknown) as { full_name?: string } | null;
@@ -119,6 +136,7 @@ export default async function TasksPage({
     .eq("team_id", teamId)
     .order("due_at", { ascending: true, nullsFirst: false });
   if (memberParam !== "all") tasksQuery = tasksQuery.eq("owner_id", memberParam);
+  if (priorityParam !== "all") tasksQuery = tasksQuery.eq("priority", priorityParam);
 
   const [{ data: tasksData }, { data: commentsData }] = await Promise.all([
     tasksQuery,
@@ -151,6 +169,7 @@ export default async function TasksPage({
   const exportParams = new URLSearchParams();
   if (memberParam !== "all") exportParams.set("member", memberParam);
   if (statusParam !== "all") exportParams.set("status", statusParam);
+  if (priorityParam !== "all") exportParams.set("priority", priorityParam);
   const exportHref = exportParams.toString()
     ? `/api/export/tasks?${exportParams.toString()}`
     : "/api/export/tasks";
@@ -170,6 +189,32 @@ export default async function TasksPage({
     commentsByTask.set(c.subject_id as string, arr);
   });
 
+  const commentCounts = new Map<string, number>();
+  commentsByTask.forEach((list, taskId) => commentCounts.set(taskId, list.length));
+
+  // The table honours the same status filter the buckets do.
+  const tableTasks = visibleBuckets.flatMap((k) => groups[k]);
+
+  // Carried onto every sort link so sorting never drops the active filters.
+  const tableQuery: Record<string, string> = { view: "table" };
+  if (memberParam !== "all") tableQuery.member = memberParam;
+  else tableQuery.member = "all";
+  if (statusParam !== "all") tableQuery.status = statusParam;
+  if (priorityParam !== "all") tableQuery.priority = priorityParam;
+
+  const viewHref = (next: "list" | "table") => {
+    const q = new URLSearchParams();
+    q.set("member", memberParam);
+    if (statusParam !== "all") q.set("status", statusParam);
+    if (priorityParam !== "all") q.set("priority", priorityParam);
+    if (next === "table") {
+      q.set("view", "table");
+      q.set("sort", sort);
+      q.set("dir", dir);
+    }
+    return `/tasks?${q.toString()}`;
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3">
@@ -179,7 +224,31 @@ export default async function TasksPage({
             {shownCount} {statusParam === "all" ? "task" : statusParam} · {scopeLabel}
           </p>
         </div>
-        <ExportButton href={exportHref} />
+        <div className="flex items-center gap-2">
+          <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 text-sm dark:border-zinc-700">
+            <Link
+              href={viewHref("list")}
+              className={`px-3 py-1.5 ${
+                view === "list"
+                  ? "bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              List
+            </Link>
+            <Link
+              href={viewHref("table")}
+              className={`px-3 py-1.5 ${
+                view === "table"
+                  ? "bg-zinc-900 text-zinc-50 dark:bg-zinc-100 dark:text-zinc-900"
+                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              }`}
+            >
+              Table
+            </Link>
+          </div>
+          <ExportButton href={exportHref} />
+        </div>
       </div>
 
       <TaskFilters
@@ -187,6 +256,10 @@ export default async function TasksPage({
         myMemberId={me?.id ?? null}
         member={memberParam}
         status={statusParam}
+        priority={priorityParam}
+        view={view}
+        sort={sort}
+        dir={dir}
       />
 
       {memberParam === "all" && (
@@ -209,7 +282,23 @@ export default async function TasksPage({
 
       <TaskForm members={memberOpts} myMemberId={me?.id ?? null} />
 
-      {visibleBuckets.map((key) => (
+      {view === "table" && (
+        <Card>
+          <CardContent className="px-0 sm:px-0">
+            <TasksTable
+              tasks={tableTasks}
+              memberById={memberById}
+              commentCounts={commentCounts}
+              sort={sort}
+              dir={dir}
+              query={tableQuery}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {view === "list" &&
+        visibleBuckets.map((key) => (
         <Card key={key}>
           <CardHeader>
             <CardTitle className="capitalize">
@@ -239,12 +328,17 @@ export default async function TasksPage({
                         <TaskStatusSelect id={t.id} status={t.status} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className={t.status === "done" ? "line-through text-zinc-500" : ""}>
+                        <Link
+                          href={`/tasks/${t.id}`}
+                          className={`block hover:underline ${
+                            t.status === "done" ? "line-through text-zinc-500" : ""
+                          }`}
+                        >
                           {t.routine_id && (
                             <Repeat className="mr-1 inline h-3.5 w-3.5 align-[-2px] text-indigo-500" />
                           )}
                           {t.title}
-                        </div>
+                        </Link>
                         {t.description && (
                           <div className="text-xs text-zinc-500">{t.description}</div>
                         )}
@@ -292,7 +386,7 @@ export default async function TasksPage({
             )}
           </CardContent>
         </Card>
-      ))}
+        ))}
     </div>
   );
 }
