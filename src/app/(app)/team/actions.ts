@@ -66,6 +66,16 @@ export async function inviteMember(
     userId = data.user.id;
   }
 
+  // Same reason as createStaff: do not depend on the auth.users trigger. An
+  // invited member who has not signed in yet would otherwise have no profile
+  // and read as "(unnamed)" on every page that shows their name. The email
+  // prefix is a placeholder, matching what the trigger would have written,
+  // and on conflict leaves a name they have already chosen alone.
+  const { error: profileErr } = await sb
+    .from("profiles")
+    .upsert({ id: userId, full_name: email.split("@")[0] }, { onConflict: "id", ignoreDuplicates: true });
+  if (profileErr) return { error: profileErr.message };
+
   const { error: upErr } = await sb.from("team_members").upsert(
     {
       team_id: m.team_id,
@@ -209,7 +219,20 @@ export async function createStaff(
     return { error: /already/i.test(msg) ? "That username is taken." : msg };
   }
 
-  // The on_auth_user_created trigger seeds the profile (full_name from metadata).
+  // Create the profile here rather than relying on the on_auth_user_created
+  // trigger. That trigger lives on auth.users, which Supabase manages, and it
+  // has already been dropped once by a platform upgrade -- staff created in
+  // that window got no profile and showed as "(unnamed)" forever, because an
+  // attendance-only login never opens the Profile page that would upsert one.
+  // The trigger is still in place and does nothing here thanks to on conflict.
+  const { error: profileErr } = await sb
+    .from("profiles")
+    .upsert({ id: created.user.id, full_name: name }, { onConflict: "id" });
+  if (profileErr) {
+    await sb.auth.admin.deleteUser(created.user.id);
+    return { error: profileErr.message };
+  }
+
   const { error: memberErr } = await sb.from("team_members").insert({
     team_id: m.team_id,
     user_id: created.user.id,
