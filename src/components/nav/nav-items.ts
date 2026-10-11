@@ -30,6 +30,7 @@ import {
   Calculator,
   HelpCircle,
   Sparkles,
+  FlaskConical,
   type LucideIcon,
 } from "lucide-react";
 
@@ -78,6 +79,7 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { href: "/visits", label: "Visits", icon: MapPin },
+  { href: "/production", label: "Production", icon: FlaskConical },
 
   // ---- Selling ----
   {
