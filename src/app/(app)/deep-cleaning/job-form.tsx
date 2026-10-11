@@ -16,6 +16,7 @@ export type JobEdit = {
   address: string | null;
   status: string;
   service_date: string | null;
+  service_time: string | null;
   enquiry_date: string | null;
   source: string | null;
   property_type: string | null;
@@ -145,6 +146,18 @@ export function JobForm({
                     Leave blank until they confirm a day.
                   </span>
                 )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="service_time">Start time</Label>
+                <Input
+                  id="service_time"
+                  name="service_time"
+                  type="time"
+                  defaultValue={edit?.service_time?.slice(0, 5) ?? ""}
+                />
+                <span className="text-[11px] text-zinc-500">
+                  Optional — two jobs can share a day.
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="property_type">Property</Label>

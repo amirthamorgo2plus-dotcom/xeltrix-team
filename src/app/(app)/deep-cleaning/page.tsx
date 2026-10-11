@@ -55,7 +55,7 @@ export default async function DeepCleaningPage({
 
   let jobsQuery = supabase
     .from("deep_cleaning_jobs")
-    .select("id, customer_name, phone, address, status, service_date, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
+    .select("id, customer_name, phone, address, status, service_date, service_time, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
     .eq("team_id", teamId);
 
   if (status === "open") jobsQuery = jobsQuery.in("status", ["enquiry", "confirmed"]);
@@ -204,7 +204,14 @@ export default async function DeepCleaningPage({
                       <tr key={j.id} className="border-t border-zinc-800 hover:bg-zinc-800/30 transition-colors">
                         <td className="py-2.5 pr-3 text-zinc-400 text-xs">
                           {j.service_date ? (
-                            format(parseISO(j.service_date), "dd MMM yyyy")
+                            <>
+                              {format(parseISO(j.service_date), "dd MMM yyyy")}
+                              {j.service_time && (
+                                <span className="ml-1 text-zinc-500">
+                                  {String(j.service_time).slice(0, 5)}
+                                </span>
+                              )}
+                            </>
                           ) : j.enquiry_date ? (
                             <span className="text-zinc-600">
                               enq {format(parseISO(j.enquiry_date), "dd MMM")}
@@ -241,7 +248,8 @@ export default async function DeepCleaningPage({
                               trigger="edit"
                               edit={{
                                 id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                                status: j.status, service_date: j.service_date, enquiry_date: j.enquiry_date,
+                                status: j.status, service_date: j.service_date, service_time: j.service_time,
+                                enquiry_date: j.enquiry_date,
                                 source: j.source, property_type: j.property_type, crew_size: j.crew_size,
                                 description: j.description, amount, cost,
                                 payment_status: j.payment_status, payment_mode: j.payment_mode,

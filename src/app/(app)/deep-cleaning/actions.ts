@@ -50,6 +50,8 @@ export async function saveJob(fd: FormData) {
     address: (fd.get("address") as string | null)?.trim() || null,
     status,
     service_date: serviceDate,
+    // Empty means "no agreed hour", which is a real answer here, not a gap.
+    service_time: str(fd, "service_time"),
     enquiry_date: str(fd, "enquiry_date") ?? new Date().toISOString().slice(0, 10),
     source: str(fd, "source"),
     property_type: str(fd, "property_type"),

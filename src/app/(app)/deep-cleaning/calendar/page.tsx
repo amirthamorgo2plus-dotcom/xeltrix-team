@@ -43,6 +43,7 @@ type Job = {
   phone: string | null;
   status: string;
   service_date: string | null;
+  service_time: string | null;
   enquiry_date: string | null;
   source: string | null;
   property_type: string | null;
@@ -91,7 +92,7 @@ export default async function DeepCleaningCalendarPage({
     supabase
       .from("deep_cleaning_jobs")
       .select(
-        "id, customer_name, address, phone, status, service_date, enquiry_date, source, property_type, crew_size, amount, assigned_to, description"
+        "id, customer_name, address, phone, status, service_date, service_time, enquiry_date, source, property_type, crew_size, amount, assigned_to, description"
       )
       .eq("team_id", teamId)
       .in("status", ["confirmed", "done"])
@@ -103,7 +104,7 @@ export default async function DeepCleaningCalendarPage({
     supabase
       .from("deep_cleaning_jobs")
       .select(
-        "id, customer_name, address, phone, status, service_date, enquiry_date, source, property_type, crew_size, amount, assigned_to, description"
+        "id, customer_name, address, phone, status, service_date, service_time, enquiry_date, source, property_type, crew_size, amount, assigned_to, description"
       )
       .eq("team_id", teamId)
       .eq("status", "enquiry")
@@ -122,6 +123,17 @@ export default async function DeepCleaningCalendarPage({
     const arr = jobsByDay.get(j.service_date) ?? [];
     arr.push(j);
     jobsByDay.set(j.service_date, arr);
+  }
+  // Two jobs can share a day, so order them by when they start. A job with no
+  // agreed time sorts last rather than first — it is unscheduled within the
+  // day, not an early start.
+  for (const arr of jobsByDay.values()) {
+    arr.sort((a, b) => {
+      if (a.service_time && b.service_time) return a.service_time.localeCompare(b.service_time);
+      if (a.service_time) return -1;
+      if (b.service_time) return 1;
+      return a.customer_name.localeCompare(b.customer_name);
+    });
   }
 
   const pending = (unscheduled ?? []) as Job[];
@@ -250,6 +262,7 @@ export default async function DeepCleaningCalendarPage({
                           key={j.id}
                           href="/deep-cleaning"
                           title={[
+                            j.service_time ? j.service_time.slice(0, 5) : null,
                             j.customer_name,
                             j.address,
                             j.description,
@@ -266,6 +279,11 @@ export default async function DeepCleaningCalendarPage({
                           )}
                         >
                           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", color.dot)} />
+                          {j.service_time && (
+                            <span className="shrink-0 tabular-nums opacity-70">
+                              {j.service_time.slice(0, 5)}
+                            </span>
+                          )}
                           <span className="truncate">{j.customer_name}</span>
                         </Link>
                       );
@@ -284,7 +302,10 @@ export default async function DeepCleaningCalendarPage({
               <span className="inline-block h-3 w-3 rounded-sm bg-emerald-100 dark:bg-emerald-900/50" />
               Done
             </span>
-            <span>The dot is the person leading the job; “3p” is people committed that day.</span>
+            <span>
+              The dot is the person leading the job; “3p” is people committed that day. A
+              day can hold several jobs — timed ones come first.
+            </span>
           </div>
         </CardContent>
       </Card>
