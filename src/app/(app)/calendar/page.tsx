@@ -43,7 +43,7 @@ export default async function CalendarPage({
     })
   );
 
-  const [holRes, taskRes, fuRes, attRes] = await Promise.all([
+  const [holRes, taskRes, fuRes, attRes, dcRes] = await Promise.all([
     supabase
       .from("holidays")
       .select("date, name, working_allowed")
@@ -78,9 +78,16 @@ export default async function CalendarPage({
       .gte("date", isoStart)
       .lte("date", isoEnd)
       .in("status", ["leave", "half_day"]),
+    supabase
+      .from("deep_cleaning_jobs")
+      .select("id, customer_name, service_date, status")
+      .eq("team_id", teamId)
+      .in("status", ["confirmed", "done"])
+      .gte("service_date", isoStart)
+      .lte("service_date", isoEnd),
   ]);
 
-  type Event = { kind: "holiday" | "task" | "followup" | "leave"; label: string };
+  type Event = { kind: "holiday" | "task" | "followup" | "leave" | "cleaning"; label: string };
   const eventsByDay = new Map<string, Event[]>();
   const pushEvent = (iso: string, e: Event) => {
     const arr = eventsByDay.get(iso) ?? [];
@@ -112,6 +119,14 @@ export default async function CalendarPage({
     });
   });
 
+  (dcRes.data ?? []).forEach((j) => {
+    if (!j.service_date) return;
+    pushEvent(j.service_date as string, {
+      kind: "cleaning",
+      label: `🧹 ${j.customer_name as string}`,
+    });
+  });
+
   const prev = format(subMonths(monthStart, 1), "yyyy-MM");
   const next = format(addMonths(monthStart, 1), "yyyy-MM");
   const thisM = format(monthStart, "yyyy-MM");
@@ -121,13 +136,16 @@ export default async function CalendarPage({
     task: "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200",
     followup: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200",
     leave: "bg-violet-100 text-violet-800 dark:bg-violet-900/50 dark:text-violet-200",
+    cleaning: "bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200",
   } as const;
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold">Calendar</h1>
-        <p className="text-sm text-zinc-500">Holidays, leaves, tasks, and follow-ups in one place.</p>
+        <p className="text-sm text-zinc-500">
+          Holidays, leaves, tasks, follow-ups and deep-cleaning jobs in one place.
+        </p>
       </div>
 
       <Card>
