@@ -7,6 +7,14 @@
 // (e.g. "5 L", "200 ML"). Items sold by count with no pack size in the name
 // fall back to 1 litre per unit.
 
+// Expense accounts that hold the per-litre production payment, used to show
+// when it was last recorded. Overridable per team in
+// team_settings.config.production_expense_accounts.
+export const DEFAULT_PRODUCTION_ACCOUNTS = [
+  "Production Consultancy charges",
+  "Manufacturing charges",
+];
+
 export const RATE_SOAP_PHENYL = 5;
 export const RATE_OTHER = 10;
 

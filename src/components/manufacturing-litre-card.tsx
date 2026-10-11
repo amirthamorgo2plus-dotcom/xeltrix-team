@@ -1,5 +1,13 @@
+import { format, parseISO } from "date-fns";
 import type { ManufacturingLitreCost } from "@/lib/manufacturing-cost";
 import { RATE_SOAP_PHENYL, RATE_OTHER } from "@/lib/manufacturing-cost";
+
+export type LastProductionEntry = {
+  date: string;
+  amount: number;
+  daysAgo: number;
+  accounts: string[];
+};
 
 export function ManufacturingLitreCard({
   cost,
@@ -35,6 +43,51 @@ export function ManufacturingLitreCard({
           </div>
         ))}
       </div>
+
+    </div>
+  );
+}
+
+/**
+ * When the real per-litre payment was last recorded.
+ *
+ * Rendered beside the card rather than inside it, because it matters most in
+ * the case where the card has nothing to show: a month with no manufactured
+ * litres and no payment booked is exactly when this has been forgotten.
+ */
+export function LastProductionEntryLine({
+  lastEntry,
+  currency,
+}: {
+  lastEntry: LastProductionEntry | null;
+  currency: string;
+}) {
+  const money = (v: number) =>
+    new Intl.NumberFormat("en-IN", { style: "currency", currency, maximumFractionDigits: 0 }).format(v);
+
+  if (!lastEntry) {
+    return (
+      <p className="mt-3 border-t border-zinc-800 pt-2 text-xs text-amber-500">
+        No production cost recorded yet
+      </p>
+    );
+  }
+  const stale = lastEntry.daysAgo > 30;
+  return (
+    <div className="mt-3 border-t border-zinc-800 pt-2 text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-zinc-500">Production cost last entered</span>
+        <span className="text-zinc-300">{format(parseISO(lastEntry.date), "dd MMM yyyy")}</span>
+        <span className={stale ? "text-amber-500" : "text-zinc-500"}>
+          · {lastEntry.daysAgo === 0 ? "today" : `${lastEntry.daysAgo} days ago`}
+        </span>
+        <span className="ml-auto tabular-nums text-zinc-400">{money(lastEntry.amount)}</span>
+      </div>
+      {stale && (
+        <p className="mt-1 text-[11px] text-zinc-500">
+          Nothing booked to {lastEntry.accounts.join(" or ")} since then.
+        </p>
+      )}
     </div>
   );
 }

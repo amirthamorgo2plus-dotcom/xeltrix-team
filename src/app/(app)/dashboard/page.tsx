@@ -1,4 +1,4 @@
-import { addDays, differenceInDays, endOfMonth, format, getDay, getDate, parseISO, startOfMonth, subMonths } from "date-fns";
+import { addDays, differenceInCalendarDays, differenceInDays, endOfMonth, format, getDay, getDate, parseISO, startOfMonth, subMonths } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, firstDayOfMonth } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,8 +9,16 @@ import { SalesHistoryChart } from "@/components/sales-history-chart";
 import { SalesMixBreakdown } from "@/components/sales-mix-breakdown";
 import { ProductTypeSalesCard } from "@/components/product-type-sales-card";
 import { itemCategory, emptyMix, fitMix, type CategoryMix } from "@/lib/item-category";
-import { ManufacturingLitreCard } from "@/components/manufacturing-litre-card";
-import { emptyLitreCost, addLine as addLitreLine } from "@/lib/manufacturing-cost";
+import {
+  ManufacturingLitreCard,
+  LastProductionEntryLine,
+} from "@/components/manufacturing-litre-card";
+import {
+  emptyLitreCost,
+  addLine as addLitreLine,
+  DEFAULT_PRODUCTION_ACCOUNTS,
+} from "@/lib/manufacturing-cost";
+import type { LastProductionEntry } from "@/components/manufacturing-litre-card";
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
@@ -247,6 +255,33 @@ export default async function DashboardPage({
       if (cat === "manufactured") addLitreLine(mfgLitreCost, li.name, li.quantity, li.unit);
     }
   }
+
+  // When the per-litre payment was last recorded. Deliberately NOT scoped to
+  // the selected month: the point is to notice that it has not been entered,
+  // and scoping it to the month would hide exactly that.
+  const productionAccounts =
+    settings?.production_expense_accounts?.length
+      ? settings.production_expense_accounts
+      : DEFAULT_PRODUCTION_ACCOUNTS;
+  const { data: lastProd } = await supabase
+    .from("zoho_expenses")
+    .select("date, amount")
+    .eq("team_id", teamId)
+    .in("account_name", productionAccounts)
+    .not("date", "is", null)
+    .order("date", { ascending: false })
+    .limit(1);
+  const lastProductionEntry: LastProductionEntry | null = lastProd?.[0]
+    ? {
+        date: lastProd[0].date as string,
+        amount: Number(lastProd[0].amount ?? 0),
+        daysAgo: differenceInCalendarDays(
+          new Date(),
+          parseISO(lastProd[0].date as string)
+        ),
+        accounts: productionAccounts,
+      }
+    : null;
 
   const salesHistory = Array.from({ length: 12 }, (_, i) => {
     const d = startOfMonth(subMonths(new Date(), 11 - i));
@@ -496,6 +531,7 @@ export default async function DashboardPage({
               ) : (
                 <EmptyState title="No manufactured liquids this period" hint="₹5/L soap oil & phenyl · ₹10/L other liquids." />
               )}
+              <LastProductionEntryLine lastEntry={lastProductionEntry} currency={currency} />
             </CardContent>
           </Card>
         </div>

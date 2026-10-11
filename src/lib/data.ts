@@ -124,6 +124,12 @@ export const getTeamSettings = cache(async () => {
     half_day_hours?: number;
     /** Annual paid-leave days each employee is entitled to. */
     annual_leave_days?: number;
+    /**
+     * Zoho Books expense accounts that hold production (per-litre) labour.
+     * Configurable because the account this is booked to has changed before —
+     * hardcoding a name is how a card silently goes stale.
+     */
+    production_expense_accounts?: string[];
     weekly_off?: unknown;
     target_cadence?: string;
     payment_qr_url?: string | null;
