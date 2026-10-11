@@ -6,6 +6,7 @@ import type {
   ZohoContact,
   ZohoEstimate,
   ZohoExpense,
+  ZohoExpenseLineItem,
   ZohoInvoice,
   ZohoInvoiceLineItem,
   ZohoItem,
@@ -217,6 +218,45 @@ async function fetchContactAddresses(
     skipped: contactIds.length - processed,
     diag: { hadBilling, hadShipping, example },
   };
+}
+
+// An expense's lines come only from the per-expense detail endpoint. The list
+// endpoint reports account_name as the literal "Itemized" for a multi-line
+// expense and returns nothing else, so the real account and the per-line
+// description are invisible without this. Time-budgeted and concurrency-
+// capped like the other detail passes.
+async function fetchExpenseLines(
+  integration: IntegrationRow,
+  expenseIds: string[],
+  opts: { concurrency?: number; deadlineMs?: number } = {}
+): Promise<{ map: Map<string, ZohoExpenseLineItem[]>; fetched: number; skipped: number }> {
+  const concurrency = opts.concurrency ?? 6;
+  const deadline = opts.deadlineMs ?? Number.POSITIVE_INFINITY;
+  const out = new Map<string, ZohoExpenseLineItem[]>();
+  let processed = 0;
+
+  for (let i = 0; i < expenseIds.length; i += concurrency) {
+    if (Date.now() > deadline) break;
+    const batch = expenseIds.slice(i, i + concurrency);
+    const results = await Promise.all(
+      batch.map(async (id) => {
+        try {
+          const res = await zohoFetch<{ expense?: ZohoExpense }>(
+            integration,
+            `/expenses/${id}`
+          );
+          return { id, lines: res.expense?.line_items ?? null };
+        } catch {
+          return { id, lines: null as ZohoExpenseLineItem[] | null };
+        }
+      })
+    );
+    results.forEach((r) => {
+      if (r.lines) out.set(r.id, r.lines);
+    });
+    processed = Math.min(i + concurrency, expenseIds.length);
+  }
+  return { map: out, fetched: out.size, skipped: expenseIds.length - processed };
 }
 
 // Zoho's list endpoints (/invoices, /estimates) don't include sub_total or
@@ -1117,6 +1157,97 @@ export async function syncFromZoho(
         .upsert(expenseRows, { onConflict: "team_id,zoho_expense_id" });
       if (expErr) throw new Error(`expenses upsert failed: ${expErr.message}`);
       counts.expenses = expenseRows.length;
+
+      // ---- Expense lines ----
+      // Only a multi-line expense needs a detail call: the list endpoint marks
+      // those "Itemized" and hides both the real account and the per-line
+      // description. A single-account expense already has everything in its
+      // header, so its line is synthesised rather than fetched.
+      const itemized = expenses.filter((e) => (e.account_name ?? "") === "Itemized");
+      const singles = expenses.filter((e) => (e.account_name ?? "") !== "Itemized");
+
+      // Re-fetch an itemized expense when it has no lines yet, or when it is
+      // recent enough to still be edited.
+      const itemizedIds = itemized.map((e) => e.expense_id);
+      const haveLines = new Set<string>();
+      if (itemizedIds.length > 0) {
+        const ID_CHUNK = 100;
+        for (let i = 0; i < itemizedIds.length; i += ID_CHUNK) {
+          const { data } = await sb
+            .from("zoho_expense_items")
+            .select("zoho_expense_id")
+            .eq("team_id", integration.team_id)
+            .in("zoho_expense_id", itemizedIds.slice(i, i + ID_CHUNK));
+          for (const r of data ?? []) haveLines.add(r.zoho_expense_id as string);
+        }
+      }
+      const needLines = itemized
+        .filter(
+          (e) =>
+            !haveLines.has(e.expense_id) ||
+            (toDateOrNull(e.date) ?? "") >= CURRENT_MONTH_START
+        )
+        .map((e) => e.expense_id);
+
+      const expLines = await fetchExpenseLines(integration, needLines, {
+        deadlineMs: DETAIL_DEADLINE,
+      });
+      if (expLines.skipped > 0) {
+        counts.warnings.push(
+          `Expense lines: ${expLines.skipped} remaining (time budget) — click Sync again to continue.`
+        );
+      }
+
+      const lineRows: Record<string, unknown>[] = [];
+      for (const [expenseId, lines] of expLines.map) {
+        lines.forEach((li, idx) => {
+          lineRows.push({
+            team_id: integration.team_id,
+            zoho_expense_id: expenseId,
+            line_item_id: String(li.line_item_id ?? `${expenseId}-${idx}`),
+            account_id: li.account_id ?? null,
+            account_name: li.account_name ?? null,
+            description: li.description ?? null,
+            amount: li.amount ?? null,
+            item_order: li.item_order ?? idx,
+          });
+        });
+      }
+      // A single-account expense is one line by definition; recording it keeps
+      // "all production lines in a range" a single query over one table.
+      for (const e of singles) {
+        lineRows.push({
+          team_id: integration.team_id,
+          zoho_expense_id: e.expense_id,
+          line_item_id: `${e.expense_id}-0`,
+          account_id: e.account_id ?? null,
+          account_name: e.account_name ?? null,
+          description: e.description ?? null,
+          amount: e.total ?? null,
+          item_order: 0,
+        });
+      }
+
+      if (lineRows.length > 0) {
+        // Replace wholesale per expense so an edited expense losing a line
+        // does not leave the old one behind.
+        const touched = [...new Set(lineRows.map((r) => r.zoho_expense_id as string))];
+        const ID_CHUNK = 100;
+        for (let i = 0; i < touched.length; i += ID_CHUNK) {
+          await sb
+            .from("zoho_expense_items")
+            .delete()
+            .eq("team_id", integration.team_id)
+            .in("zoho_expense_id", touched.slice(i, i + ID_CHUNK));
+        }
+        const ROW_CHUNK = 500;
+        for (let i = 0; i < lineRows.length; i += ROW_CHUNK) {
+          const { error: lineErr } = await sb
+            .from("zoho_expense_items")
+            .insert(lineRows.slice(i, i + ROW_CHUNK));
+          if (lineErr) throw new Error(`expense lines insert failed: ${lineErr.message}`);
+        }
+      }
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

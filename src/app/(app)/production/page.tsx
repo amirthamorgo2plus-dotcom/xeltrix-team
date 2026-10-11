@@ -13,8 +13,10 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, isAdminOrManager } from "@/lib/data";
 import { itemCategory } from "@/lib/item-category";
 import {
+  DEFAULT_PRODUCTION_ACCOUNTS,
   isSoapOrPhenyl,
   lineLitres,
+  parseProductionLitres,
   RATE_OTHER,
   RATE_SOAP_PHENYL,
 } from "@/lib/manufacturing-cost";
@@ -115,6 +117,56 @@ export default async function ProductionPage({
         ),
       }
     : null;
+
+  // What was booked to a production account in this month, line by line.
+  // These come from Zoho, where the litres are written into each line's
+  // description next to the amount.
+  const productionAccounts =
+    settings?.production_expense_accounts?.length
+      ? settings.production_expense_accounts
+      : DEFAULT_PRODUCTION_ACCOUNTS;
+  const { data: monthExpenses } = await supabase
+    .from("zoho_expenses")
+    .select("zoho_expense_id, date")
+    .eq("team_id", teamId)
+    .gte("date", from)
+    .lte("date", to);
+  const expenseDate = new Map(
+    (monthExpenses ?? []).map((e) => [e.zoho_expense_id as string, e.date as string])
+  );
+  let zohoLines: {
+    date: string;
+    description: string | null;
+    amount: number;
+    parsed: { product: string; litres: number }[];
+  }[] = [];
+  const expenseIdList = [...expenseDate.keys()];
+  if (expenseIdList.length > 0) {
+    const CHUNK = 100;
+    for (let i = 0; i < expenseIdList.length; i += CHUNK) {
+      const { data: lines } = await supabase
+        .from("zoho_expense_items")
+        .select("zoho_expense_id, description, amount, account_name")
+        .eq("team_id", teamId)
+        .in("account_name", productionAccounts)
+        .in("zoho_expense_id", expenseIdList.slice(i, i + CHUNK));
+      for (const l of lines ?? []) {
+        zohoLines.push({
+          date: expenseDate.get(l.zoho_expense_id as string) ?? "",
+          description: (l.description as string | null) ?? null,
+          amount: Number(l.amount ?? 0),
+          parsed: parseProductionLitres(l.description as string | null),
+        });
+      }
+    }
+    zohoLines = zohoLines.sort((a, b) => b.date.localeCompare(a.date));
+  }
+  const zohoLitres = zohoLines.reduce(
+    (s, l) => s + l.parsed.reduce((t, p) => t + p.litres, 0),
+    0
+  );
+  const zohoAmount = zohoLines.reduce((s, l) => s + l.amount, 0);
+  const zohoUnread = zohoLines.filter((l) => l.parsed.length === 0).length;
 
   // Only the liquids we make can be produced, so the picker is X- items only.
   const products: ProductOption[] = (templates ?? [])
@@ -287,6 +339,77 @@ export default async function ProductionPage({
               </p>
             </div>
           </div>
+
+          {zohoLines.length > 0 && (
+            <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-3">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-sm font-medium text-zinc-200">
+                  Booked in Zoho this month
+                </span>
+                <span className="text-xs text-zinc-500">
+                  {litres(zohoLitres)} read from {zohoLines.length} line
+                  {zohoLines.length === 1 ? "" : "s"} · {money(zohoAmount)}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-left uppercase text-zinc-500">
+                    <tr>
+                      <th className="pb-1.5 pr-3">Date</th>
+                      <th className="pb-1.5 pr-3">Description</th>
+                      <th className="pb-1.5 pr-3 text-right">Litres read</th>
+                      <th className="pb-1.5 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {zohoLines.map((l, i) => {
+                      const lineLitresTotal = l.parsed.reduce((t, p) => t + p.litres, 0);
+                      return (
+                        <tr
+                          key={`${l.date}-${i}`}
+                          className="border-t border-zinc-800/60"
+                        >
+                          <td className="whitespace-nowrap py-1.5 pr-3 text-zinc-500">
+                            {l.date ? format(parseISO(l.date), "dd MMM") : "—"}
+                          </td>
+                          <td className="max-w-[360px] py-1.5 pr-3 text-zinc-300">
+                            <span className="line-clamp-2">{l.description ?? "—"}</span>
+                            {l.parsed.length > 1 && (
+                              <span className="text-[10px] text-zinc-500">
+                                {l.parsed.map((p) => `${p.product} ${p.litres} L`).join(" · ")}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">
+                            {lineLitresTotal > 0 ? (
+                              litres(lineLitresTotal)
+                            ) : (
+                              <span className="text-amber-500" title="No litres written in this description">
+                                not stated
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-1.5 text-right tabular-nums text-zinc-400">
+                            {money(l.amount)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                Read from each expense line&rsquo;s own text, since Zoho has no quantity
+                field on an expense.{" "}
+                {zohoUnread > 0 && (
+                  <span className="text-amber-500">
+                    {zohoUnread} line{zohoUnread === 1 ? "" : "s"} state no litres, so
+                    they are not counted above.
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
 
           {entries.length === 0 ? (
             <EmptyState

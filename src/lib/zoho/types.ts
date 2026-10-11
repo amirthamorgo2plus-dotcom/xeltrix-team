@@ -118,6 +118,15 @@ export type ZohoEstimate = {
   last_modified_time?: string;
 };
 
+export type ZohoExpenseLineItem = {
+  line_item_id: string;
+  account_id?: string;
+  account_name?: string;
+  description?: string;
+  amount?: number;
+  item_order?: number;
+};
+
 export type ZohoExpense = {
   expense_id: string;
   date: string;
@@ -135,6 +144,8 @@ export type ZohoExpense = {
   description?: string;
   status?: string;
   location?: string;
+  /** Only returned by the per-expense detail endpoint, never by the list. */
+  line_items?: ZohoExpenseLineItem[];
 };
 
 export type IntegrationRow = {

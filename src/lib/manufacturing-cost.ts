@@ -83,3 +83,41 @@ export function addLine(
   acc.totalLitres += litres;
   acc.totalCost += litres * (isSoapOrPhenyl(name) ? RATE_SOAP_PHENYL : RATE_OTHER);
 }
+
+/**
+ * Litres written into a Zoho expense line description.
+ *
+ * The production charge is entered as free text next to the amount —
+ * "Glass cleaner 200L", or "Floor Cleaner 1000L Room Freshner 240L" with two
+ * products on one line. There is no quantity field in Zoho to read instead,
+ * so this reads the text, and deliberately returns nothing rather than
+ * guessing when the text is a bank narration.
+ *
+ * Returns every "<name> <number>L" pair found, in order.
+ */
+export type ParsedProduction = { product: string; litres: number };
+
+export function parseProductionLitres(description: string | null | undefined): ParsedProduction[] {
+  const text = String(description ?? "");
+  if (!text.trim()) return [];
+  const out: ParsedProduction[] = [];
+  // A product name, then a number, then a litre unit. The name is taken from
+  // the text since the previous match, which is what separates two products
+  // written on one line.
+  const re = /([A-Za-z][A-Za-z\s\-&.()]{1,40}?)\s*(\d+(?:\.\d+)?)\s*(?:L|LTR|LITRE|LITER)\b/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    const product = m[1].replace(/[\s\-]+$/, "").trim();
+    const litres = parseFloat(m[2]);
+    // A bank narration is mostly digits and codes; a product name is not.
+    if (!product || /\d/.test(product) || product.length < 3) continue;
+    if (!Number.isFinite(litres) || litres <= 0) continue;
+    out.push({ product, litres });
+  }
+  return out;
+}
+
+/** What the parsed litres should have cost, for comparison with the amount. */
+export function expectedCost(parsed: ParsedProduction[]): number {
+  return parsed.reduce((s, p) => s + p.litres * litreRate(p.product), 0);
+}
