@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { addDays, endOfMonth, format, parseISO, startOfMonth } from "date-fns";
+import {
+  addDays,
+  differenceInCalendarDays,
+  endOfMonth,
+  format,
+  parseISO,
+  startOfMonth,
+} from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, getTeamSettings, isAdminOrManager } from "@/lib/data";
@@ -60,7 +67,12 @@ export default async function ProductionPage({
   );
 
   const supabase = await createClient();
-  const [{ data: entryRows }, { data: templates }, { data: monthInvoices }] = await Promise.all([
+  const [
+    { data: entryRows },
+    { data: templates },
+    { data: monthInvoices },
+    { data: lastEntryRow },
+  ] = await Promise.all([
     supabase
       .from("production_entries")
       .select("id, date, product_name, litres, rate, amount, notes, recorded_by")
@@ -80,7 +92,29 @@ export default async function ProductionPage({
       .eq("team_id", teamId)
       .gte("date", from)
       .lte("date", to),
+    // The most recent entry overall, NOT within the month being viewed.
+    // Opening an empty October should still say when production was last
+    // recorded at all — otherwise the gap is exactly what stays hidden.
+    supabase
+      .from("production_entries")
+      .select("date, product_name, litres, recorded_by")
+      .eq("team_id", teamId)
+      .order("date", { ascending: false })
+      .limit(1),
   ]);
+
+  const last = lastEntryRow?.[0]
+    ? {
+        date: lastEntryRow[0].date as string,
+        productName: lastEntryRow[0].product_name as string,
+        litres: Number(lastEntryRow[0].litres ?? 0),
+        by: (lastEntryRow[0].recorded_by as string | null) ?? null,
+        daysAgo: differenceInCalendarDays(
+          new Date(),
+          parseISO(lastEntryRow[0].date as string)
+        ),
+      }
+    : null;
 
   // Only the liquids we make can be produced, so the picker is X- items only.
   const products: ProductOption[] = (templates ?? [])
@@ -150,7 +184,34 @@ export default async function ProductionPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Record production</CardTitle>
+          <CardTitle className="flex flex-wrap items-baseline justify-between gap-2">
+            <span>Record production</span>
+            {last ? (
+              <span className="text-xs font-normal">
+                <span className="text-zinc-500">Last recorded </span>
+                <span className="text-zinc-300">
+                  {format(parseISO(last.date), "dd MMM yyyy")}
+                </span>
+                <span className={last.daysAgo > 7 ? "text-amber-500" : "text-zinc-500"}>
+                  {" · "}
+                  {last.daysAgo === 0 ? "today" : `${last.daysAgo} days ago`}
+                </span>
+                <span className="text-zinc-500">
+                  {" — "}
+                  {new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(
+                    last.litres
+                  )}
+                  {" L "}
+                  {last.productName}
+                  {last.by && ` by ${memberName.get(last.by) ?? "a team member"}`}
+                </span>
+              </span>
+            ) : (
+              <span className="text-xs font-normal text-amber-500">
+                Nothing recorded yet
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           {products.length === 0 ? (
