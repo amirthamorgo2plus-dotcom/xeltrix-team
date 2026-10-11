@@ -124,15 +124,15 @@ export default async function DeepCleaningCalendarPage({
     arr.push(j);
     jobsByDay.set(j.service_date, arr);
   }
-  // Two jobs can share a day, so order them by when they start. A job with no
-  // agreed time sorts last rather than first — it is unscheduled within the
-  // day, not an early start.
+  // Two jobs can share a day, so order them by when they start. No time means
+  // a full-day job, which spans the whole day and therefore leads it — a
+  // timed job is something that happens inside a day already partly taken.
   for (const arr of jobsByDay.values()) {
     arr.sort((a, b) => {
-      if (a.service_time && b.service_time) return a.service_time.localeCompare(b.service_time);
-      if (a.service_time) return -1;
-      if (b.service_time) return 1;
-      return a.customer_name.localeCompare(b.customer_name);
+      if (!a.service_time && !b.service_time) return a.customer_name.localeCompare(b.customer_name);
+      if (!a.service_time) return -1;
+      if (!b.service_time) return 1;
+      return a.service_time.localeCompare(b.service_time);
     });
   }
 
@@ -262,7 +262,7 @@ export default async function DeepCleaningCalendarPage({
                           key={j.id}
                           href="/deep-cleaning"
                           title={[
-                            j.service_time ? j.service_time.slice(0, 5) : null,
+                            j.service_time ? j.service_time.slice(0, 5) : "Full day",
                             j.customer_name,
                             j.address,
                             j.description,
@@ -279,11 +279,14 @@ export default async function DeepCleaningCalendarPage({
                           )}
                         >
                           <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", color.dot)} />
-                          {j.service_time && (
-                            <span className="shrink-0 tabular-nums opacity-70">
-                              {j.service_time.slice(0, 5)}
-                            </span>
-                          )}
+                          <span
+                            className={cn(
+                              "shrink-0 opacity-70",
+                              j.service_time && "tabular-nums"
+                            )}
+                          >
+                            {j.service_time ? j.service_time.slice(0, 5) : "Full day"}
+                          </span>
                           <span className="truncate">{j.customer_name}</span>
                         </Link>
                       );
@@ -304,7 +307,8 @@ export default async function DeepCleaningCalendarPage({
             </span>
             <span>
               The dot is the person leading the job; “3p” is people committed that day. A
-              day can hold several jobs — timed ones come first.
+              day can hold several jobs; one with no time is a full-day job and leads the
+              day.
             </span>
           </div>
         </CardContent>

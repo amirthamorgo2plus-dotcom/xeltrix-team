@@ -156,7 +156,7 @@ export function JobForm({
                   defaultValue={edit?.service_time?.slice(0, 5) ?? ""}
                 />
                 <span className="text-[11px] text-zinc-500">
-                  Optional — two jobs can share a day.
+                  Leave blank for a full day.
                 </span>
               </div>
               <div className="flex flex-col gap-1.5">

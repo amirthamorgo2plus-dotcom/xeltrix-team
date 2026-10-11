@@ -76,6 +76,9 @@ export default async function DeepCleaningPage({
       // Unscheduled enquiries have no service_date, so fall back to when they
       // came in — otherwise they all collapse to the bottom in one blob.
       .order("service_date", { ascending: false, nullsFirst: true })
+      // Within a day, same order as the schedule: full-day job first, then
+      // by start time.
+      .order("service_time", { ascending: true, nullsFirst: true })
       .order("enquiry_date", { ascending: false }),
     supabase.from("referrers").select("id, name, default_pct").eq("team_id", teamId).order("name"),
     getTeamMembers(),
@@ -206,11 +209,11 @@ export default async function DeepCleaningPage({
                           {j.service_date ? (
                             <>
                               {format(parseISO(j.service_date), "dd MMM yyyy")}
-                              {j.service_time && (
-                                <span className="ml-1 text-zinc-500">
-                                  {String(j.service_time).slice(0, 5)}
-                                </span>
-                              )}
+                              <span className="ml-1 text-zinc-500">
+                                {j.service_time
+                                  ? String(j.service_time).slice(0, 5)
+                                  : "full day"}
+                              </span>
                             </>
                           ) : j.enquiry_date ? (
                             <span className="text-zinc-600">
