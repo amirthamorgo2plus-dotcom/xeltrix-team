@@ -14,7 +14,12 @@ export type JobEdit = {
   customer_name: string;
   phone: string | null;
   address: string | null;
-  service_date: string;
+  status: string;
+  service_date: string | null;
+  enquiry_date: string | null;
+  source: string | null;
+  property_type: string | null;
+  crew_size: number | null;
   description: string | null;
   amount: number;
   cost: number | null;
@@ -44,6 +49,11 @@ export function JobForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [referrerId, setReferrerId] = useState(edit?.referrer_id ?? "");
+  // Money and referral only matter once the work exists. An enquiry is a
+  // name and a phone number, and a form that demands more than that is a
+  // form nobody fills in — which is how this ended up in a spreadsheet.
+  const [status, setStatus] = useState(edit?.status ?? "enquiry");
+  const isEnquiry = status === "enquiry" || status === "cancelled";
   const [refPct, setRefPct] = useState(edit?.referral_pct != null ? String(edit.referral_pct) : "");
 
   const referrer = referrers.find((r) => r.id === referrerId) ?? null;
@@ -80,6 +90,30 @@ export function JobForm({
             <h2 className="text-lg font-semibold text-zinc-100">{edit ? "Edit" : "Add"} Deep Cleaning Job</h2>
 
             <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="status">Status</Label>
+                <select
+                  id="status"
+                  name="status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className="h-10 rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+                >
+                  <option value="enquiry">Enquiry (pending)</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="done">Done</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="enquiry_date">Enquiry date</Label>
+                <Input
+                  id="enquiry_date"
+                  name="enquiry_date"
+                  type="date"
+                  defaultValue={edit?.enquiry_date ?? new Date().toISOString().slice(0, 10)}
+                />
+              </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="customer_name">Customer *</Label>
                 <Input id="customer_name" name="customer_name" required defaultValue={edit?.customer_name} placeholder="Customer / site name" />
@@ -89,8 +123,49 @@ export function JobForm({
                 <Input id="phone" name="phone" defaultValue={edit?.phone ?? ""} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="service_date">Service date</Label>
-                <Input id="service_date" name="service_date" type="date" defaultValue={edit?.service_date ?? new Date().toISOString().slice(0, 10)} />
+                <Label htmlFor="service_date">
+                  Service date {isEnquiry ? "" : "*"}
+                </Label>
+                <Input
+                  id="service_date"
+                  name="service_date"
+                  type="date"
+                  defaultValue={edit?.service_date ?? ""}
+                />
+                {isEnquiry && (
+                  <span className="text-[11px] text-zinc-500">
+                    Leave blank until they confirm a day.
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="property_type">Property</Label>
+                <select
+                  id="property_type"
+                  name="property_type"
+                  defaultValue={edit?.property_type ?? "house"}
+                  className="h-10 rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+                >
+                  <option value="house">House</option>
+                  <option value="office">Office</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="source">Enquiry source</Label>
+                <Input
+                  id="source"
+                  name="source"
+                  defaultValue={edit?.source ?? ""}
+                  placeholder="newspaper / office / referral"
+                  list="dc-sources"
+                />
+                <datalist id="dc-sources">
+                  <option value="newspaper" />
+                  <option value="office" />
+                  <option value="referral" />
+                  <option value="walk-in" />
+                </datalist>
               </div>
               <div className="col-span-2 flex flex-col gap-1.5">
                 <Label htmlFor="address">Address</Label>
@@ -157,6 +232,18 @@ export function JobForm({
                   <option value="">—</option>
                   {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="crew_size">People on the job</Label>
+                <Input
+                  id="crew_size"
+                  name="crew_size"
+                  type="number"
+                  min="1"
+                  max="50"
+                  defaultValue={edit?.crew_size ?? ""}
+                  placeholder="e.g. 3"
+                />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="notes">Notes</Label>

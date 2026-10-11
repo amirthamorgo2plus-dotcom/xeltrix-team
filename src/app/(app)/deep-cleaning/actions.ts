@@ -17,9 +17,26 @@ function num(fd: FormData, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+const STATUSES = ["enquiry", "confirmed", "done", "cancelled"] as const;
+type JobStatus = (typeof STATUSES)[number];
+
+function str(fd: FormData, key: string): string | null {
+  return (fd.get(key) as string | null)?.trim() || null;
+}
+
 export async function saveJob(fd: FormData) {
   const supabase = await createClient();
   const id = (fd.get("id") as string | null) || null;
+
+  const status = (str(fd, "status") ?? "enquiry") as JobStatus;
+  if (!STATUSES.includes(status)) return { error: "Unknown status." };
+
+  // An enquiry has no agreed day yet; a booking is the day itself, so it
+  // cannot be saved without one or it would never reach the calendar.
+  const serviceDate = str(fd, "service_date");
+  if ((status === "confirmed" || status === "done") && !serviceDate) {
+    return { error: "A confirmed or completed job needs a service date." };
+  }
 
   const amount = num(fd, "amount") ?? 0;
   const referralPct = num(fd, "referral_pct");
@@ -31,7 +48,12 @@ export async function saveJob(fd: FormData) {
     customer_name: (fd.get("customer_name") as string).trim(),
     phone: (fd.get("phone") as string | null)?.trim() || null,
     address: (fd.get("address") as string | null)?.trim() || null,
-    service_date: (fd.get("service_date") as string) || new Date().toISOString().slice(0, 10),
+    status,
+    service_date: serviceDate,
+    enquiry_date: str(fd, "enquiry_date") ?? new Date().toISOString().slice(0, 10),
+    source: str(fd, "source"),
+    property_type: str(fd, "property_type"),
+    crew_size: num(fd, "crew_size"),
     description: (fd.get("description") as string | null)?.trim() || null,
     amount,
     cost: num(fd, "cost"),
@@ -52,6 +74,40 @@ export async function saveJob(fd: FormData) {
   if (error) return { error: error.message };
   if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
+  revalidatePath("/deep-cleaning/calendar");
+  revalidatePath("/calendar");
+  return { error: null };
+}
+
+/** Move a job along the pipeline from the list, without opening the form. */
+export async function setJobStatus(id: string, status: string) {
+  if (!STATUSES.includes(status as JobStatus)) return { error: "Unknown status." };
+  const supabase = await createClient();
+
+  // Checked BEFORE the write. Confirming a job with no agreed day would set
+  // the status and then leave it off the calendar entirely — the one place
+  // anyone would look for it.
+  if (status === "confirmed" || status === "done") {
+    const { data: existing } = await supabase
+      .from("deep_cleaning_jobs")
+      .select("service_date")
+      .eq("id", id)
+      .maybeSingle();
+    if (existing && !existing.service_date) {
+      return { error: "Set a service date first — open the job and pick a day." };
+    }
+  }
+
+  const { data, error } = await supabase
+    .from("deep_cleaning_jobs")
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data?.length) return { error: NO_PERMISSION };
+  revalidatePath("/deep-cleaning");
+  revalidatePath("/deep-cleaning/calendar");
+  revalidatePath("/calendar");
   return { error: null };
 }
 
@@ -65,6 +121,8 @@ export async function deleteJob(id: string) {
   if (error) return { error: error.message };
   if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
+  revalidatePath("/deep-cleaning/calendar");
+  revalidatePath("/calendar");
   return { error: null };
 }
 
@@ -78,6 +136,8 @@ export async function setPaymentStatus(id: string, status: "pending" | "paid") {
   if (error) return { error: error.message };
   if (!data?.length) return { error: NO_PERMISSION };
   revalidatePath("/deep-cleaning");
+  revalidatePath("/deep-cleaning/calendar");
+  revalidatePath("/calendar");
   return { error: null };
 }
 

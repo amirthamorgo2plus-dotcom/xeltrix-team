@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
@@ -21,9 +22,12 @@ export default async function DeepCleaningPage() {
   const [{ data: jobs }, { data: referrers }, members] = await Promise.all([
     supabase
       .from("deep_cleaning_jobs")
-      .select("id, customer_name, phone, address, service_date, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
+      .select("id, customer_name, phone, address, status, service_date, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
       .eq("team_id", teamId)
-      .order("service_date", { ascending: false }),
+      // Unscheduled enquiries have no service_date, so fall back to when they
+      // came in — otherwise they all collapse to the bottom in one blob.
+      .order("service_date", { ascending: false, nullsFirst: true })
+      .order("enquiry_date", { ascending: false }),
     supabase.from("referrers").select("id, name, default_pct").eq("team_id", teamId).order("name"),
     getTeamMembers(),
   ]);
@@ -35,8 +39,11 @@ export default async function DeepCleaningPage() {
   }));
 
   const rows = jobs ?? [];
-  const totalRevenue = rows.reduce((s, j) => s + Number(j.amount ?? 0), 0);
-  const totalCost = rows.reduce((s, j) => s + Number(j.cost ?? 0), 0);
+  // Revenue and margin describe work that happened. An enquiry has no money
+  // attached to it yet, and a cancelled one never will.
+  const billable = rows.filter((j) => j.status === "done" || j.status === "confirmed");
+  const totalRevenue = billable.reduce((s, j) => s + Number(j.amount ?? 0), 0);
+  const totalCost = billable.reduce((s, j) => s + Number(j.cost ?? 0), 0);
   const totalMargin = totalRevenue - totalCost;
   const referralPending = rows
     .filter((j) => j.referrer_id && j.referral_status !== "paid")
@@ -49,9 +56,17 @@ export default async function DeepCleaningPage() {
           <h1 className="text-2xl font-semibold">Deep Cleaning</h1>
           <p className="text-sm text-zinc-500">Non-GST service jobs recorded manually (not in Zoho). Referral paid outside Zoho.</p>
         </div>
-        {canManage && (
-          <JobForm teamId={teamId} referrers={referrers ?? []} members={memberList} />
-        )}
+        <div className="flex items-center gap-2">
+          <Link
+            href="/deep-cleaning/calendar"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            Schedule
+          </Link>
+          {canManage && (
+            <JobForm teamId={teamId} referrers={referrers ?? []} members={memberList} />
+          )}
+        </div>
       </div>
 
       {/* KPI strip */}
@@ -133,7 +148,9 @@ export default async function DeepCleaningPage() {
                               trigger="edit"
                               edit={{
                                 id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                                service_date: j.service_date, description: j.description, amount, cost,
+                                status: j.status, service_date: j.service_date, enquiry_date: j.enquiry_date,
+                                source: j.source, property_type: j.property_type, crew_size: j.crew_size,
+                                description: j.description, amount, cost,
                                 payment_status: j.payment_status, payment_mode: j.payment_mode,
                                 referrer_id: j.referrer_id, referral_pct: j.referral_pct, assigned_to: j.assigned_to, notes: j.notes,
                               }}
