@@ -13,7 +13,8 @@ import {
   subMonths,
 } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers } from "@/lib/data";
+import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
+import { JobForm } from "../job-form";
 import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +68,7 @@ export default async function DeepCleaningCalendarPage({
 
   const me = await getMyMembership();
   const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
+  const canManage = isAdminOrManager(me?.role);
   const teamMembers = await getTeamMembers();
   const memberNameById = new Map(
     teamMembers.map((m) => {
@@ -76,7 +78,7 @@ export default async function DeepCleaningCalendarPage({
   );
 
   const supabase = await createClient();
-  const [{ data: booked }, { data: unscheduled }] = await Promise.all([
+  const [{ data: booked }, { data: unscheduled }, { data: referrers }] = await Promise.all([
     supabase
       .from("deep_cleaning_jobs")
       .select(
@@ -97,7 +99,13 @@ export default async function DeepCleaningCalendarPage({
       .eq("team_id", teamId)
       .eq("status", "enquiry")
       .order("enquiry_date", { ascending: true }),
+    supabase.from("referrers").select("id, name, default_pct").eq("team_id", teamId).order("name"),
   ]);
+
+  const memberList = teamMembers.map((m) => ({
+    id: m.id as string,
+    name: (m.profiles as { full_name?: string } | null)?.full_name ?? "Member",
+  }));
 
   const jobsByDay = new Map<string, Job[]>();
   for (const j of (booked ?? []) as Job[]) {
@@ -127,12 +135,25 @@ export default async function DeepCleaningCalendarPage({
             listed below.
           </p>
         </div>
-        <Link
-          href="/deep-cleaning"
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-        >
-          All jobs
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/deep-cleaning"
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            All jobs
+          </Link>
+          {canManage && (
+            // A job added from the schedule is a booking by default -- nobody
+            // opens a calendar to log something with no date.
+            <JobForm
+              teamId={teamId}
+              referrers={referrers ?? []}
+              members={memberList}
+              defaultStatus="confirmed"
+              label="+ Add booking"
+            />
+          )}
+        </div>
       </div>
 
       <Card>

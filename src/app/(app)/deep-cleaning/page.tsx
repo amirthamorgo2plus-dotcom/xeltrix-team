@@ -5,7 +5,7 @@ import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { JobForm } from "./job-form";
-import { PaymentToggle, ReferralToggle, DeleteJob } from "./row-actions";
+import { PaymentToggle, ReferralToggle, DeleteJob, JobStatusSelect } from "./row-actions";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
@@ -74,7 +74,12 @@ export default async function DeepCleaningPage() {
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-xs text-zinc-500">Revenue (non-GST)</p>
           <p className="mt-1 text-xl font-bold text-zinc-100">{fmt(totalRevenue)}</p>
-          <p className="text-xs text-zinc-600">{rows.length} job{rows.length === 1 ? "" : "s"}</p>
+          <p className="text-xs text-zinc-600">
+            {billable.length} job{billable.length === 1 ? "" : "s"}
+            {rows.length > billable.length && (
+              <span className="text-zinc-700"> · {rows.length - billable.length} enquiry</span>
+            )}
+          </p>
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-xs text-zinc-500">Total Cost</p>
@@ -104,6 +109,7 @@ export default async function DeepCleaningPage() {
                   <tr>
                     <th className="pb-2 pr-3">Date</th>
                     <th className="pb-2 pr-3">Customer</th>
+                    <th className="pb-2 pr-3">Status</th>
                     <th className="pb-2 pr-3 text-right">Amount</th>
                     <th className="pb-2 pr-3 text-right">Margin</th>
                     <th className="pb-2 pr-3 text-center">Payment</th>
@@ -121,11 +127,22 @@ export default async function DeepCleaningPage() {
                     return (
                       <tr key={j.id} className="border-t border-zinc-800 hover:bg-zinc-800/30 transition-colors">
                         <td className="py-2.5 pr-3 text-zinc-400 text-xs">
-                          {j.service_date ? format(parseISO(j.service_date), "dd MMM yyyy") : "—"}
+                          {j.service_date ? (
+                            format(parseISO(j.service_date), "dd MMM yyyy")
+                          ) : j.enquiry_date ? (
+                            <span className="text-zinc-600">
+                              enq {format(parseISO(j.enquiry_date), "dd MMM")}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </td>
                         <td className="py-2.5 pr-3">
                           <p className="font-medium text-zinc-100">{j.customer_name}</p>
                           {j.description && <p className="text-xs text-zinc-500 max-w-[220px] truncate">{j.description}</p>}
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <JobStatusSelect id={j.id} status={j.status} canManage={canManage} />
                         </td>
                         <td className="py-2.5 pr-3 text-right tabular-nums text-zinc-200">{fmt(amount)}</td>
                         <td className="py-2.5 pr-3 text-right tabular-nums text-[#b5c76a]">{margin != null ? fmt(margin) : "—"}</td>

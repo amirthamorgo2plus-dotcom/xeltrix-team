@@ -37,12 +37,20 @@ export function JobForm({
   members,
   edit,
   trigger,
+  defaultStatus,
+  defaultServiceDate,
+  label,
 }: {
   teamId: string;
   referrers: Referrer[];
   members: Member[];
   edit?: JobEdit;
   trigger?: "button" | "edit";
+  /** Opened from the schedule, where a new job is a booking, not an enquiry. */
+  defaultStatus?: string;
+  /** Pre-fills the day when added from a specific date on the calendar. */
+  defaultServiceDate?: string;
+  label?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -52,7 +60,7 @@ export function JobForm({
   // Money and referral only matter once the work exists. An enquiry is a
   // name and a phone number, and a form that demands more than that is a
   // form nobody fills in — which is how this ended up in a spreadsheet.
-  const [status, setStatus] = useState(edit?.status ?? "enquiry");
+  const [status, setStatus] = useState(edit?.status ?? defaultStatus ?? "enquiry");
   const isEnquiry = status === "enquiry" || status === "cancelled";
   const [refPct, setRefPct] = useState(edit?.referral_pct != null ? String(edit.referral_pct) : "");
 
@@ -80,7 +88,7 @@ export function JobForm({
         <button onClick={() => setOpen(true)}
           className="inline-flex h-9 items-center gap-2 rounded-md px-4 text-sm font-medium transition-colors"
           style={{ background: "#b5c76a", color: "#1a1a1a" }}>
-          + Add Job
+          {label ?? "+ Add Job"}
         </button>
       )}
 
@@ -130,7 +138,7 @@ export function JobForm({
                   id="service_date"
                   name="service_date"
                   type="date"
-                  defaultValue={edit?.service_date ?? ""}
+                  defaultValue={edit?.service_date ?? defaultServiceDate ?? ""}
                 />
                 {isEnquiry && (
                   <span className="text-[11px] text-zinc-500">
