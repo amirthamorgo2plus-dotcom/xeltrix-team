@@ -18,6 +18,7 @@ import { AssigneeSelect } from "./assignee-select";
 import { TaskComments, type TaskComment } from "./task-comments";
 import { SORT_KEYS, type SortKey } from "@/lib/task-sort";
 import { TasksTable } from "./tasks-table";
+import { TaskStats, type Tile } from "./task-stats";
 
 const priorityTone: Record<string, "muted" | "info" | "warning" | "danger"> = {
   low: "muted",
@@ -37,24 +38,38 @@ type Task = {
   routine_id: string | null;
 };
 
-function bucket(t: Task) {
+type Bucket = "overdue" | "today" | "upcoming" | "unscheduled" | "done";
+
+function bucket(t: Task): Bucket {
   if (t.status === "done" || t.status === "cancelled") return "done";
-  if (!t.due_at) return "upcoming";
+  // Its own bucket rather than "upcoming": a task with no due date is never
+  // due, so it can never be overdue or due today, and it used to hide among
+  // tasks that are genuinely scheduled.
+  if (!t.due_at) return "unscheduled";
   const due = new Date(t.due_at);
   if (isPast(due) && !isToday(due)) return "overdue";
   if (isToday(due)) return "today";
   return "upcoming";
 }
 
+const isOpen = (t: Task) => t.status === "todo" || t.status === "in_progress";
+
+// Overdue AND high-priority. Overdue alone is 44 tasks, which is a backlog;
+// this is the subset that is actually supposed to hurt.
+const isCritical = (t: Task) =>
+  isOpen(t) && bucket(t) === "overdue" && (t.priority === "high" || t.priority === "urgent");
+
 // Which buckets a status filter reveals. "pending" = everything not done.
 const PRIORITIES = ["low", "medium", "high", "urgent"];
 
-const STATUS_BUCKETS: Record<string, ReadonlyArray<"overdue" | "today" | "upcoming" | "done">> = {
-  all: ["overdue", "today", "upcoming", "done"],
-  pending: ["overdue", "today", "upcoming"],
+const STATUS_BUCKETS: Record<string, ReadonlyArray<Bucket>> = {
+  all: ["overdue", "today", "upcoming", "unscheduled", "done"],
+  pending: ["overdue", "today", "upcoming", "unscheduled"],
+  critical: ["overdue"],
   overdue: ["overdue"],
   today: ["today"],
   upcoming: ["upcoming"],
+  unscheduled: ["unscheduled"],
   done: ["done"],
 };
 
@@ -148,8 +163,30 @@ export default async function TasksPage({
   ]);
 
   const tasks: Task[] = tasksData ?? [];
-  const groups: Record<string, Task[]> = { overdue: [], today: [], upcoming: [], done: [] };
-  tasks.forEach((t) => groups[bucket(t)].push(t));
+  // Tiles describe everything in scope for the current person and priority,
+  // not what the status filter has narrowed to — otherwise clicking a tile
+  // would change the numbers the tiles are reporting.
+  const stats = {
+    critical: tasks.filter(isCritical).length,
+    overdue: tasks.filter((t) => isOpen(t) && bucket(t) === "overdue").length,
+    today: tasks.filter((t) => isOpen(t) && bucket(t) === "today").length,
+    unscheduled: tasks.filter((t) => isOpen(t) && bucket(t) === "unscheduled").length,
+    pending: tasks.filter(isOpen).length,
+    done: tasks.filter((t) => t.status === "done").length,
+  };
+
+  // "Critical" is not a time bucket but a cut across one, so it narrows the
+  // list before grouping rather than selecting a different bucket.
+  const visibleTasks = statusParam === "critical" ? tasks.filter(isCritical) : tasks;
+
+  const groups: Record<string, Task[]> = {
+    overdue: [],
+    today: [],
+    upcoming: [],
+    unscheduled: [],
+    done: [],
+  };
+  visibleTasks.forEach((t) => groups[bucket(t)].push(t));
 
   // Count only what the active status filter reveals.
   const shownCount = visibleBuckets.reduce((n, k) => n + groups[k].length, 0);
@@ -202,6 +239,33 @@ export default async function TasksPage({
   if (statusParam !== "all") tableQuery.status = statusParam;
   if (priorityParam !== "all") tableQuery.priority = priorityParam;
 
+  const statusHref = (next: string) => {
+    const q = new URLSearchParams();
+    q.set("member", memberParam);
+    if (next !== "all") q.set("status", next);
+    if (priorityParam !== "all") q.set("priority", priorityParam);
+    if (view === "table") {
+      q.set("view", "table");
+      q.set("sort", sort);
+      q.set("dir", dir);
+    }
+    return `/tasks?${q.toString()}`;
+  };
+
+  const tiles: Tile[] = [
+    { key: "critical", label: "Critical", value: stats.critical, href: statusHref("critical"),
+      hint: "Overdue and high or urgent priority" },
+    { key: "overdue", label: "Overdue", value: stats.overdue, href: statusHref("overdue"),
+      hint: "Open and past its due date" },
+    { key: "today", label: "Due today", value: stats.today, href: statusHref("today") },
+    { key: "unscheduled", label: "Unscheduled", value: stats.unscheduled,
+      href: statusHref("unscheduled"),
+      hint: "Open with no due date — never appears in overdue or due today" },
+    { key: "pending", label: "Pending", value: stats.pending, href: statusHref("pending"),
+      hint: "To do and in progress" },
+    { key: "done", label: "Completed", value: stats.done, href: statusHref("done") },
+  ];
+
   const viewHref = (next: "list" | "table") => {
     const q = new URLSearchParams();
     q.set("member", memberParam);
@@ -250,6 +314,8 @@ export default async function TasksPage({
           <ExportButton href={exportHref} />
         </div>
       </div>
+
+      <TaskStats tiles={tiles} active={statusParam} />
 
       <TaskFilters
         members={memberOptsAll}

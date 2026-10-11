@@ -5,10 +5,12 @@ import { Select } from "@/components/ui/select";
 
 const STATUS_OPTIONS = [
   { value: "all", label: "All statuses" },
+  { value: "critical", label: "Critical" },
   { value: "pending", label: "Pending" },
   { value: "overdue", label: "Overdue" },
   { value: "today", label: "Due today" },
   { value: "upcoming", label: "Upcoming" },
+  { value: "unscheduled", label: "Unscheduled" },
   { value: "done", label: "Done" },
 ];
 
