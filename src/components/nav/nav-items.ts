@@ -100,9 +100,8 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/deep-cleaning",
     label: "Deep Cleaning",
     icon: Sparkles,
-    adminOnly: true,
     children: [
-      { href: "/deep-cleaning/calendar", label: "Schedule", icon: CalendarDays, adminOnly: true },
+      { href: "/deep-cleaning/calendar", label: "Schedule", icon: CalendarDays },
     ],
   },
 

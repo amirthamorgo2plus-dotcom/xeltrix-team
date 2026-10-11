@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   addDays,
   addMonths,
@@ -13,7 +14,7 @@ import {
   subMonths,
 } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
+import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { JobForm } from "../job-form";
 import { memberColor } from "@/lib/member-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,7 +69,15 @@ export default async function DeepCleaningCalendarPage({
 
   const me = await getMyMembership();
   const teamId = me?.team_id ?? "00000000-0000-0000-0000-000000000000";
-  const canManage = isAdminOrManager(me?.role);
+  // Attendance-only staff have no business here; the nav hides it, but a
+  // typed URL should not get through either.
+  if ((me as { attendance_only?: boolean } | null)?.attendance_only) {
+    redirect("/attendance");
+  }
+
+  // Same rule as the jobs page: anyone on the team may book work.
+  const canWrite =
+    !!me && !(me as { attendance_only?: boolean }).attendance_only;
   const teamMembers = await getTeamMembers();
   const memberNameById = new Map(
     teamMembers.map((m) => {
@@ -142,7 +151,7 @@ export default async function DeepCleaningCalendarPage({
           >
             All jobs
           </Link>
-          {canManage && (
+          {canWrite && (
             // A job added from the schedule is a booking by default -- nobody
             // opens a calendar to log something with no date.
             <JobForm

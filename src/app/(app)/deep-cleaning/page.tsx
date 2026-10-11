@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { endOfMonth, format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
@@ -32,10 +33,24 @@ export default async function DeepCleaningPage({
 
   const m = await getMyMembership();
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
-  // Writes are admin/manager-only in RLS (dcj_insert/update/delete use
-  // auth_is_team_admin), so members see read-only status instead of controls
-  // the database would refuse.
-  const canManage = isAdminOrManager(m?.role);
+  // Attendance-only staff have no business here; the nav hides it, but a
+  // typed URL should not get through either.
+  if ((m as { attendance_only?: boolean } | null)?.attendance_only) {
+    redirect("/attendance");
+  }
+
+  // Two levels, because they are two different risks.
+  //
+  // canWrite: anyone on the team runs these jobs -- takes the enquiry, moves
+  // it along, marks it paid -- and RLS allows it (00040). Attendance-only
+  // logins are excluded here; they have no business on this page.
+  //
+  // isAdmin: deleting a job is irreversible and takes its amount, cost and
+  // referral payout with it, and marking a referral paid is money going out.
+  // Both stay with an admin, and dcj_delete still enforces the delete.
+  const isAdmin = isAdminOrManager(m?.role);
+  const canWrite =
+    !!m && !(m as { attendance_only?: boolean }).attendance_only;
   const supabase = await createClient();
 
   let jobsQuery = supabase
@@ -112,7 +127,7 @@ export default async function DeepCleaningPage({
           >
             Schedule
           </Link>
-          {canManage && (
+          {canWrite && (
             <JobForm teamId={teamId} referrers={referrers ?? []} members={memberList} />
           )}
         </div>
@@ -203,11 +218,11 @@ export default async function DeepCleaningPage({
                           {j.description && <p className="text-xs text-zinc-500 max-w-[220px] truncate">{j.description}</p>}
                         </td>
                         <td className="py-2.5 pr-3">
-                          <JobStatusSelect id={j.id} status={j.status} canManage={canManage} />
+                          <JobStatusSelect id={j.id} status={j.status} canManage={canWrite} />
                         </td>
                         <td className="py-2.5 pr-3 text-right tabular-nums text-zinc-200">{fmt(amount)}</td>
                         <td className="py-2.5 pr-3 text-right tabular-nums text-[#b5c76a]">{margin != null ? fmt(margin) : "—"}</td>
-                        <td className="py-2.5 pr-3 text-center"><PaymentToggle id={j.id} status={j.payment_status} canManage={canManage} /></td>
+                        <td className="py-2.5 pr-3 text-center"><PaymentToggle id={j.id} status={j.payment_status} canManage={canWrite} /></td>
                         <td className="py-2.5 pr-3 text-[#b5c76a]">{j.referrer_id ? (referrerMap.get(j.referrer_id) ?? "—") : <span className="text-zinc-600">—</span>}</td>
                         <td className="py-2.5 pr-3 text-right tabular-nums">
                           {j.referrer_id && j.referral_amount != null
@@ -215,10 +230,10 @@ export default async function DeepCleaningPage({
                             : <span className="text-zinc-600 text-xs">—</span>}
                         </td>
                         <td className="py-2.5 pr-3 text-center">
-                          {j.referrer_id && j.referral_amount ? <ReferralToggle id={j.id} status={j.referral_status} canManage={canManage} /> : <span className="text-zinc-700 text-xs">—</span>}
+                          {j.referrer_id && j.referral_amount ? <ReferralToggle id={j.id} status={j.referral_status} canManage={isAdmin} /> : <span className="text-zinc-700 text-xs">—</span>}
                         </td>
                         <td className="py-2.5 flex items-center gap-2">
-                          {canManage && (
+                          {canWrite && (
                             <JobForm
                               teamId={teamId}
                               referrers={referrers ?? []}
@@ -234,7 +249,7 @@ export default async function DeepCleaningPage({
                               }}
                             />
                           )}
-                          <DeleteJob id={j.id} canManage={canManage} />
+                          <DeleteJob id={j.id} canManage={isAdmin} />
                         </td>
                       </tr>
                     );
