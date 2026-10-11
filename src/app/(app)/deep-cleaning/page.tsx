@@ -1,16 +1,35 @@
 import Link from "next/link";
-import { format, parseISO } from "date-fns";
+import { endOfMonth, format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { JobForm } from "./job-form";
 import { PaymentToggle, ReferralToggle, DeleteJob, JobStatusSelect } from "./row-actions";
+import { JobFilters } from "./filters";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
 
-export default async function DeepCleaningPage() {
+const STATUS_VALUES = ["enquiry", "confirmed", "done", "cancelled"];
+
+export default async function DeepCleaningPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    status?: string;
+    payment?: string;
+    assigned?: string;
+    month?: string;
+  }>;
+}) {
+  const sp = await searchParams;
+  const status =
+    sp.status === "open" || STATUS_VALUES.includes(sp.status ?? "") ? sp.status! : "all";
+  const payment = sp.payment === "paid" || sp.payment === "pending" ? sp.payment : "all";
+  const assigned = sp.assigned?.trim() || "all";
+  const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : "all";
+
   const m = await getMyMembership();
   const teamId = m?.team_id ?? "00000000-0000-0000-0000-000000000000";
   // Writes are admin/manager-only in RLS (dcj_insert/update/delete use
@@ -19,18 +38,48 @@ export default async function DeepCleaningPage() {
   const canManage = isAdminOrManager(m?.role);
   const supabase = await createClient();
 
-  const [{ data: jobs }, { data: referrers }, members] = await Promise.all([
-    supabase
-      .from("deep_cleaning_jobs")
-      .select("id, customer_name, phone, address, status, service_date, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
-      .eq("team_id", teamId)
+  let jobsQuery = supabase
+    .from("deep_cleaning_jobs")
+    .select("id, customer_name, phone, address, status, service_date, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
+    .eq("team_id", teamId);
+
+  if (status === "open") jobsQuery = jobsQuery.in("status", ["enquiry", "confirmed"]);
+  else if (status !== "all") jobsQuery = jobsQuery.eq("status", status);
+  if (payment !== "all") jobsQuery = jobsQuery.eq("payment_status", payment);
+  if (assigned === "none") jobsQuery = jobsQuery.is("assigned_to", null);
+  else if (assigned !== "all") jobsQuery = jobsQuery.eq("assigned_to", assigned);
+  if (month !== "all") {
+    // Filters on the day the work happens, so an enquiry with no agreed date
+    // is not in any month and drops out — which is what picking a month means.
+    const first = `${month}-01`;
+    const last = format(endOfMonth(parseISO(first)), "yyyy-MM-dd");
+    jobsQuery = jobsQuery.gte("service_date", first).lte("service_date", last);
+  }
+
+  const [{ data: jobs }, { data: referrers }, members, { data: allDates }] = await Promise.all([
+    jobsQuery
       // Unscheduled enquiries have no service_date, so fall back to when they
       // came in — otherwise they all collapse to the bottom in one blob.
       .order("service_date", { ascending: false, nullsFirst: true })
       .order("enquiry_date", { ascending: false }),
     supabase.from("referrers").select("id, name, default_pct").eq("team_id", teamId).order("name"),
     getTeamMembers(),
+    // Unfiltered, so the month list does not shrink to whatever is selected.
+    supabase.from("deep_cleaning_jobs").select("service_date").eq("team_id", teamId),
   ]);
+
+  const filtered =
+    status !== "all" || payment !== "all" || assigned !== "all" || month !== "all";
+  const totalRows = (allDates ?? []).length;
+  const months = [
+    ...new Set(
+      (allDates ?? [])
+        .map((r) => r.service_date as string | null)
+        .filter((d): d is string => !!d)
+        .map((d) => d.slice(0, 7))
+    ),
+  ].sort((a, b) => b.localeCompare(a));
+
 
   const referrerMap = new Map((referrers ?? []).map((r) => [r.id, r.name]));
   const memberList = (members ?? []).map((mem) => ({
@@ -69,6 +118,12 @@ export default async function DeepCleaningPage() {
         </div>
       </div>
 
+      <JobFilters
+        members={memberList}
+        months={months}
+        current={{ status, payment, assigned, month }}
+      />
+
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
@@ -97,10 +152,16 @@ export default async function DeepCleaningPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{rows.length} job{rows.length === 1 ? "" : "s"}</CardTitle>
+          <CardTitle>
+            {filtered
+              ? `${rows.length} of ${totalRows} job${totalRows === 1 ? "" : "s"}`
+              : `${rows.length} job${rows.length === 1 ? "" : "s"}`}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          {rows.length === 0 ? (
+          {rows.length === 0 && filtered ? (
+            <EmptyState title="No jobs match these filters" />
+          ) : rows.length === 0 ? (
             <EmptyState title="No deep cleaning jobs yet" hint="Add a job to start tracking non-GST service work." />
           ) : (
             <div className="overflow-x-auto">
