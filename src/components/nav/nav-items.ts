@@ -43,25 +43,27 @@ export type NavItem = {
   children?: NavItem[];
 };
 
+// Ordered by who opens what, and how often.
+//
+// Tasks, Attendance and Visits are what a field member opens every day, so
+// they sit above the customer stack rather than below it. Admin-only groups
+// are filtered out entirely for a member, so putting them lower costs an
+// admin one scroll and saves everyone else a hunt.
+//
+// A parent is always a real page as well as a group header, so a child only
+// belongs here if its parent is genuinely the page it lives under.
 export const NAV_ITEMS: NavItem[] = [
   { href: "/hub", label: "Command Center", icon: LayoutGrid },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+
+  // ---- Daily work ----
   {
-    href: "/leads",
-    label: "Customers",
-    icon: Users,
+    href: "/tasks",
+    label: "Tasks",
+    icon: CheckSquare,
     children: [
-      { href: "/opportunities", label: "Pipeline",   icon: Briefcase },
-      { href: "/quotes",        label: "Quotes",     icon: FileText },
-      { href: "/follow-ups",    label: "Follow-ups", icon: Bell },
-      { href: "/complaints",    label: "Complaints", icon: AlertCircle },
-      { href: "/collections",        label: "Collections",        icon: BadgeIndianRupee },
-      { href: "/repeat-customers",   label: "Repeat Customers",   icon: Repeat },
-      { href: "/referrers",          label: "Referrers",          icon: HandCoins },
-      { href: "/referral-customers", label: "Referral Customers", icon: UserPlus },
-      { href: "/deep-cleaning",      label: "Deep Cleaning",      icon: Sparkles, adminOnly: true },
-      { href: "/deep-cleaning/calendar", label: "Cleaning Schedule", icon: CalendarDays, adminOnly: true },
-      { href: "/profitability",      label: "Profitability",      icon: TrendingUp, adminOnly: true },
+      { href: "/tasks/report", label: "Pending report", icon: ClipboardList },
+      { href: "/tasks/routines", label: "Routines", icon: Repeat, adminOnly: true },
     ],
   },
   {
@@ -75,17 +77,51 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/calendar", label: "Calendar", icon: CalendarDays },
     ],
   },
+  { href: "/visits", label: "Visits", icon: MapPin },
+
+  // ---- Selling ----
   {
-    href: "/tasks",
-    label: "Tasks",
-    icon: CheckSquare,
+    href: "/leads",
+    label: "Customers",
+    icon: Users,
     children: [
-      { href: "/tasks/report", label: "Pending report", icon: ClipboardList },
-      { href: "/tasks/routines", label: "Routines", icon: Repeat, adminOnly: true },
+      { href: "/opportunities",      label: "Pipeline",           icon: Briefcase },
+      { href: "/quotes",             label: "Quotes",             icon: FileText },
+      { href: "/follow-ups",         label: "Follow-ups",         icon: Bell },
+      { href: "/complaints",         label: "Complaints",         icon: AlertCircle },
+      { href: "/repeat-customers",   label: "Repeat Customers",   icon: Repeat },
+      { href: "/referrers",          label: "Referrers",          icon: HandCoins },
+      { href: "/referral-customers", label: "Referral Customers", icon: UserPlus },
     ],
   },
-  { href: "/visits", label: "Visits", icon: MapPin },
+
+  // ---- Deep cleaning: its own business line, with its own pipeline ----
+  {
+    href: "/deep-cleaning",
+    label: "Deep Cleaning",
+    icon: Sparkles,
+    adminOnly: true,
+    children: [
+      { href: "/deep-cleaning/calendar", label: "Schedule", icon: CalendarDays, adminOnly: true },
+    ],
+  },
+
+  // ---- Money in ----
+  { href: "/collections", label: "Collections", icon: BadgeIndianRupee },
   { href: "/payment-qr", label: "Payment QR", icon: QrCode },
+
+  // ---- Pricing ----
+  {
+    href: "/templates",
+    label: "Product price list",
+    icon: Package,
+    children: [
+      { href: "/price-lists", label: "Customer Price Lists", icon: ListChecks, adminOnly: true },
+      { href: "/margin-calculator", label: "Margin Calculator", icon: Calculator },
+    ],
+  },
+
+  // ---- Performance ----
   {
     href: "/targets",
     label: "Targets",
@@ -94,6 +130,9 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/salespersons", label: "Salesperson performance", icon: UserCog },
     ],
   },
+
+  // ---- Admin ----
+  { href: "/profitability", label: "Profitability", icon: TrendingUp, adminOnly: true },
   {
     href: "/expenses",
     label: "Expenses",
@@ -103,11 +142,9 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/payments", label: "Payments", icon: Wallet, adminOnly: true },
     ],
   },
-  { href: "/templates", label: "Product price list", icon: Package },
-  { href: "/price-lists", label: "Customer Price Lists", icon: ListChecks, adminOnly: true },
-  { href: "/margin-calculator", label: "Margin Calculator", icon: Calculator },
   { href: "/team", label: "Team members", icon: Users2, adminOnly: true },
   { href: "/integrations", label: "Integrations", icon: Plug, adminOnly: true },
+
   { href: "/help", label: "Help", icon: HelpCircle },
   { href: "/profile", label: "Profile", icon: User },
 ];
