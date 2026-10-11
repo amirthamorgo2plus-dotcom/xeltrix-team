@@ -74,8 +74,8 @@ const SECTIONS: Section[] = [
   // ---------- Leads & Sales ----------
   {
     id: "leads", group: "sales",
-    title_en: "Leads", title_ta: "லீட்ஸ் (வாய்ப்புகள்)",
-    intro_en: "All inbound prospects (potential customers).",
+    title_en: "Customers", title_ta: "வாடிக்கையாளர்கள்",
+    intro_en: "Everyone we sell to, plus new prospects.",
     intro_ta: "அனைத்து புதிய வாய்ப்புகள் (சாத்தியமான வாடிக்கையாளர்கள்).",
     steps: [
       { en: "Add a lead with name, phone, and source.", ta: "பெயர், தொலைபேசி, மூலம் கொண்டு ஒரு லீட் சேர்க்கவும்." },

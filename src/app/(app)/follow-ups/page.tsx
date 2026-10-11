@@ -30,7 +30,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "opportunity", label: "Opportunities" },
   { key: "quote", label: "Quotes" },
   { key: "complaint", label: "Complaints" },
-  { key: "lead", label: "Leads" },
+  { key: "lead", label: "Customers" },
 ];
 
 function sourceLabel(s: string | null): string | null {

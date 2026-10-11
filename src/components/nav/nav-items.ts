@@ -48,7 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   {
     href: "/leads",
-    label: "Leads",
+    label: "Customers",
     icon: Users,
     children: [
       { href: "/opportunities", label: "Pipeline",   icon: Briefcase },

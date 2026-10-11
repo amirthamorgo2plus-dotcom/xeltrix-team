@@ -49,8 +49,11 @@ export default async function LeadsPage({
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Leads</h1>
-          <p className="text-sm text-zinc-500">All inbound prospects.</p>
+          <h1 className="text-2xl font-semibold">Customers</h1>
+          <p className="text-sm text-zinc-500">
+            Everyone we sell to — created automatically from Zoho invoices, visits and
+            complaints, plus anyone added here.
+          </p>
         </div>
         <ExportButton href="/api/export/leads" />
       </div>
