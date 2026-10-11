@@ -9,16 +9,9 @@ import { SalesHistoryChart } from "@/components/sales-history-chart";
 import { SalesMixBreakdown } from "@/components/sales-mix-breakdown";
 import { ProductTypeSalesCard } from "@/components/product-type-sales-card";
 import { itemCategory, emptyMix, fitMix, type CategoryMix } from "@/lib/item-category";
-import {
-  ManufacturingLitreCard,
-  LastProductionEntryLine,
-} from "@/components/manufacturing-litre-card";
-import {
-  emptyLitreCost,
-  addLine as addLitreLine,
-  DEFAULT_PRODUCTION_ACCOUNTS,
-} from "@/lib/manufacturing-cost";
-import type { LastProductionEntry } from "@/components/manufacturing-litre-card";
+import { ManufacturingLitreCard } from "@/components/manufacturing-litre-card";
+import { getMonthProduction } from "@/lib/production-month";
+
 import { EmptyState } from "@/components/empty-state";
 import { QuoteOfTheDay } from "@/components/quote-of-the-day";
 import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
@@ -236,8 +229,6 @@ export default async function DashboardPage({
 
   const rawByMonth = new Map<string, CategoryMix>();
   const rangeRaw = emptyMix();
-  // Per-litre manufacturing (labour) cost for X- liquids in the selected period.
-  const mfgLitreCost = emptyLitreCost();
   for (const li of lineItems) {
     const date = invDateById.get(li.zoho_invoice_id);
     if (!date) continue;
@@ -252,35 +243,21 @@ export default async function DashboardPage({
     }
     if (inRange) {
       rangeRaw[cat] += amt;
-      if (cat === "manufactured") addLitreLine(mfgLitreCost, li.name, li.quantity, li.unit);
     }
   }
 
-  // When the per-litre payment was last recorded. Deliberately NOT scoped to
-  // the selected month: the point is to notice that it has not been entered,
-  // and scoping it to the month would hide exactly that.
-  const productionAccounts =
-    settings?.production_expense_accounts?.length
-      ? settings.production_expense_accounts
-      : DEFAULT_PRODUCTION_ACCOUNTS;
-  const { data: lastProd } = await supabase
-    .from("zoho_expenses")
-    .select("date, amount")
-    .eq("team_id", teamId)
-    .in("account_name", productionAccounts)
-    .not("date", "is", null)
-    .order("date", { ascending: false })
-    .limit(1);
-  const lastProductionEntry: LastProductionEntry | null = lastProd?.[0]
-    ? {
-        date: lastProd[0].date as string,
-        amount: Number(lastProd[0].amount ?? 0),
-        daysAgo: differenceInCalendarDays(
-          new Date(),
-          parseISO(lastProd[0].date as string)
-        ),
-        accounts: productionAccounts,
-      }
+  // What was actually manufactured this month, per product. Read from the
+  // production records rather than invoice lines: invoices say what was sold,
+  // which is the Sales Mix card's job.
+  const production = await getMonthProduction(
+    supabase,
+    teamId,
+    monthFirst,
+    monthLast,
+    settings?.production_expense_accounts ?? null
+  );
+  const productionDaysAgo = production.lastDate
+    ? differenceInCalendarDays(new Date(), parseISO(production.lastDate))
     : null;
 
   const salesHistory = Array.from({ length: 12 }, (_, i) => {
@@ -526,12 +503,11 @@ export default async function DashboardPage({
               <span className="text-xs text-zinc-500">{format(monthStart, "MMM yyyy")}</span>
             </CardHeader>
             <CardContent>
-              {mfgLitreCost.totalLitres > 0 ? (
-                <ManufacturingLitreCard cost={mfgLitreCost} currency={currency} />
-              ) : (
-                <EmptyState title="No manufactured liquids this period" hint="₹5/L soap oil & phenyl · ₹10/L other liquids." />
-              )}
-              <LastProductionEntryLine lastEntry={lastProductionEntry} currency={currency} />
+              <ManufacturingLitreCard
+                production={production}
+                currency={currency}
+                daysAgo={productionDaysAgo}
+              />
             </CardContent>
           </Card>
         </div>
