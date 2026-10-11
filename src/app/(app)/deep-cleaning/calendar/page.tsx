@@ -13,6 +13,7 @@ import {
   startOfWeek,
   subMonths,
 } from "date-fns";
+import { AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { JobForm } from "../job-form";
@@ -136,6 +137,45 @@ export default async function DeepCleaningCalendarPage({
     });
   }
 
+  // Overbooking, from the two things that are actually impossible rather
+  // than merely busy:
+  //   - a full-day job sharing its day with anything else
+  //   - one person leading two jobs at once
+  // Crew size is not used: more people on a day is normal, and a cap would
+  // be a number nobody agreed on.
+  type Clash = { reasons: string[] };
+  const clashes = new Map<string, Clash>();
+  for (const [day, jobs] of jobsByDay) {
+    if (jobs.length < 2) continue;
+    const reasons: string[] = [];
+    const fullDay = jobs.filter((j) => !j.service_time);
+    if (fullDay.length > 0) {
+      reasons.push(
+        fullDay.length > 1
+          ? `${fullDay.length} full-day jobs on the same day`
+          : `a full-day job (${fullDay[0].customer_name}) shares the day with ${
+              jobs.length - 1
+            } other${jobs.length - 1 === 1 ? "" : "s"}`
+      );
+    }
+    const leads = new Map<string, string[]>();
+    for (const j of jobs) {
+      if (!j.assigned_to) continue;
+      const arr = leads.get(j.assigned_to) ?? [];
+      arr.push(j.customer_name);
+      leads.set(j.assigned_to, arr);
+    }
+    for (const [memberId, names] of leads) {
+      if (names.length > 1) {
+        reasons.push(
+          `${memberNameById.get(memberId) ?? "One person"} is leading ${names.length} jobs`
+        );
+      }
+    }
+    if (reasons.length > 0) clashes.set(day, { reasons });
+  }
+  const clashDays = [...clashes.keys()].sort();
+
   const pending = (unscheduled ?? []) as Job[];
   const monthJobs = (booked ?? []).filter((j) =>
     (j.service_date ?? "").startsWith(format(monthStart, "yyyy-MM"))
@@ -210,6 +250,24 @@ export default async function DeepCleaningCalendarPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {clashDays.filter((d) => d.startsWith(format(monthStart, "yyyy-MM"))).length > 0 && (
+            <div className="mb-3 rounded-md border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs">
+              <p className="flex items-center gap-1.5 font-medium text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Possibly overbooked
+              </p>
+              <ul className="mt-1 space-y-0.5 text-zinc-400">
+                {clashDays
+                  .filter((d) => d.startsWith(format(monthStart, "yyyy-MM")))
+                  .map((d) => (
+                    <li key={d}>
+                      <span className="text-zinc-300">{format(parseISO(d), "dd MMM")}</span> —{" "}
+                      {clashes.get(d)?.reasons.join("; ")}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
           <div className="grid grid-cols-7 gap-px overflow-hidden rounded-md border border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800">
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
               <div
@@ -226,6 +284,7 @@ export default async function DeepCleaningCalendarPage({
               const off = isWeeklyOff(d);
               // How many people are committed that day, across every job.
               const people = jobs.reduce((s, j) => s + (j.crew_size ?? 1), 0);
+              const clash = clashes.get(iso);
 
               return (
                 <div
@@ -233,8 +292,10 @@ export default async function DeepCleaningCalendarPage({
                   className={cn(
                     "min-h-28 bg-white p-1 text-xs dark:bg-zinc-950",
                     !inMonth && "opacity-40",
-                    off && inMonth && "bg-zinc-50 dark:bg-zinc-900/50"
+                    off && inMonth && "bg-zinc-50 dark:bg-zinc-900/50",
+                    clash && "ring-1 ring-inset ring-amber-500/60"
                   )}
+                  title={clash ? clash.reasons.join(" · ") : undefined}
                 >
                   <div className="flex items-center justify-between">
                     <span
@@ -245,14 +306,19 @@ export default async function DeepCleaningCalendarPage({
                     >
                       {format(d, "d")}
                     </span>
-                    {people > 0 && (
-                      <span
-                        className="text-[10px] text-zinc-500"
-                        title={`${people} ${people === 1 ? "person" : "people"} committed`}
-                      >
-                        {people}p
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1">
+                      {clash && (
+                        <AlertTriangle className="h-3 w-3 text-amber-500" aria-label="Overbooked" />
+                      )}
+                      {people > 0 && (
+                        <span
+                          className="text-[10px] text-zinc-500"
+                          title={`${people} ${people === 1 ? "person" : "people"} committed`}
+                        >
+                          {people}p
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <div className="mt-1 flex flex-col gap-0.5">
                     {jobs.map((j) => {
@@ -304,6 +370,9 @@ export default async function DeepCleaningCalendarPage({
             <span className="inline-flex items-center gap-1.5">
               <span className="inline-block h-3 w-3 rounded-sm bg-emerald-100 dark:bg-emerald-900/50" />
               Done
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <AlertTriangle className="h-3 w-3 text-amber-500" /> Overbooked
             </span>
             <span>
               The dot is the person leading the job; “3p” is people committed that day. A
