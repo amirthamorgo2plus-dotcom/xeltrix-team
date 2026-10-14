@@ -182,6 +182,59 @@ export default async function AttendanceSummaryPage({
           {list.length === 0 ? (
             <EmptyState title="No members" />
           ) : (
+            <>
+            {/* Phones: one card per person. Nine numeric columns do not fit a
+                375px screen, and the question someone asks on a phone is
+                "how am I doing", not "compare everyone across nine columns". */}
+            <ul className="divide-y divide-zinc-200 sm:hidden dark:divide-zinc-800">
+              {list.map((r) => (
+                <li key={r.id} className="py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-2 font-medium">
+                      <span className={`h-2.5 w-2.5 rounded-full ${memberColor(r.id).dot}`} />
+                      {r.name}
+                    </span>
+                    <span className="text-sm">
+                      <span className="font-semibold tabular-nums">{r.worked}</span>
+                      <span className="text-zinc-500"> worked</span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                    {cols
+                      .filter((c) => r.c[c.key] > 0)
+                      .map((c) => (
+                        <span key={c.key}>
+                          {c.label}{" "}
+                          <span
+                            className={`tabular-nums ${
+                              c.key === "absent" ? "text-red-500" : "text-zinc-300"
+                            }`}
+                          >
+                            {r.c[c.key]}
+                          </span>
+                        </span>
+                      ))}
+                    <span>
+                      Unmarked{" "}
+                      <span
+                        className={`tabular-nums ${
+                          r.unmarked > 0 ? "text-amber-500" : "text-zinc-400"
+                        }`}
+                      >
+                        {r.unmarked}
+                      </span>
+                    </span>
+                    <span>
+                      Comp-off{" "}
+                      <span className="tabular-nums text-zinc-300">
+                        {r.compoff.toFixed(1)}
+                      </span>
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden sm:block">
             <Table>
               <THead>
                 <TR hover={false}>
@@ -242,6 +295,8 @@ export default async function AttendanceSummaryPage({
                 </TR>
               </TBody>
             </Table>
+            </div>
+            </>
           )}
           {list.length > 0 && (
             <p className="mt-3 text-xs text-zinc-500">

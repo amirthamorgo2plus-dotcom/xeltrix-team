@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getTeamSettings } from "@/lib/data";
+import { getMyMembership, getTeamSettings } from "@/lib/data";
+import { QuickLinks } from "@/components/nav/quick-links";
 import {
   DEFAULT_HUB_LINKS,
   HUB_CATEGORIES,
@@ -119,6 +120,7 @@ function HubCardLink({ link, status }: { link: HubLink; status: "up" | "down" | 
 }
 
 export default async function HubPage() {
+  const me = await getMyMembership();
   // Admin-managed links live in team_settings.config.hub_links; fall back to the
   // seed list until an admin has saved any.
   const settings = await getTeamSettings();
@@ -144,6 +146,13 @@ export default async function HubPage() {
           Every Xeltrix tool and channel, one click away.
         </p>
       </div>
+
+      <QuickLinks
+        role={me?.role}
+        attendanceOnly={
+          (me as { attendance_only?: boolean } | null)?.attendance_only ?? false
+        }
+      />
 
       {HUB_CATEGORIES.map((category) => {
         const items = links.filter((l) => l.category === category);

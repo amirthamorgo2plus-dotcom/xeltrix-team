@@ -94,7 +94,65 @@ export function TasksTable({
   if (rows.length === 0) return <EmptyState title="No tasks match these filters" />;
 
   return (
-    <div className="overflow-x-auto">
+    <>
+      {/* Phones get stacked cards. The table is 809px wide, and sideways
+          swiping through six columns to read one task is worse than reading
+          it top to bottom. Same rows, same order, same sort — only the shape
+          differs, so a link shared from either view lands in the same place. */}
+      <ul className="divide-y divide-zinc-200 sm:hidden dark:divide-zinc-800">
+        {rows.map((t) => {
+          const owner = t.owner_id ? memberById.get(t.owner_id) : null;
+          const color = memberColor(t.owner_id);
+          const due = t.due_at ? new Date(t.due_at) : null;
+          const overdue =
+            due !== null &&
+            isPast(due) &&
+            !isToday(due) &&
+            t.status !== "done" &&
+            t.status !== "cancelled";
+          const status = STATUS_META[t.status] ?? { label: t.status, tone: "muted" as const };
+          const count = commentCounts.get(t.id) ?? 0;
+          const done = t.status === "done" || t.status === "cancelled";
+          return (
+            <li key={t.id} className={`border-l-4 ${color.border}`}>
+              <Link href={`/tasks/${t.id}`} className="block px-3 py-3">
+                <div
+                  className={`text-sm ${done ? "text-zinc-500 line-through" : "font-medium"}`}
+                >
+                  {t.routine_id && (
+                    <Repeat className="mr-1 inline h-3.5 w-3.5 align-[-2px] text-indigo-500" />
+                  )}
+                  {t.title}
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                  <Badge tone={status.tone}>{status.label}</Badge>
+                  <Badge tone={priorityTone[t.priority] ?? "muted"}>{t.priority}</Badge>
+                  {due ? (
+                    <span className={overdue ? "font-medium text-red-500" : "text-zinc-500"}>
+                      {format(ist(due), "dd MMM")}
+                      {overdue && " · overdue"}
+                    </span>
+                  ) : (
+                    <span className="text-zinc-500">no due date</span>
+                  )}
+                  {count > 0 && (
+                    <span className="inline-flex items-center gap-1 text-zinc-500">
+                      <MessageSquare className="h-3 w-3" />
+                      {count}
+                    </span>
+                  )}
+                  <span className="ml-auto inline-flex items-center gap-1.5 text-zinc-400">
+                    <Avatar src={owner?.avatar_url} name={owner?.name} size={18} />
+                    {owner?.name ?? "unassigned"}
+                  </span>
+                </div>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto sm:block">
       <Table>
         <THead>
           <TR hover={false}>
@@ -181,6 +239,7 @@ export function TasksTable({
           })}
         </TBody>
       </Table>
-    </div>
+      </div>
+    </>
   );
 }
