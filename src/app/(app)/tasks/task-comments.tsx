@@ -45,7 +45,9 @@ export function TaskComments({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+        // Negative margin keeps the layout identical while giving the row a
+        // 32px hit area; at 16px it was unhittable with a thumb.
+        className="-my-1.5 inline-flex min-h-8 items-center gap-1 py-1.5 text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
       >
         <MessageSquare className="h-3.5 w-3.5" />
         {comments.length > 0 ? `${comments.length} comment${comments.length === 1 ? "" : "s"}` : "Add comment"}

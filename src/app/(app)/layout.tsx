@@ -68,7 +68,11 @@ export default async function AppLayout({
   return (
     <div className="flex min-h-screen">
       <Sidebar role={role} attendanceOnly={attendanceOnly} superAdmin={superAdmin} />
-      <div className="flex flex-1 flex-col">
+      {/* min-w-0 is load-bearing: a flex item defaults to min-width:auto, so
+          without it this column refuses to shrink below its widest child and
+          drags every page past the viewport on a phone. Wide content is meant
+          to scroll inside its own container, not push the whole layout. */}
+      <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-14 items-center justify-between gap-2 border-b border-zinc-200 px-4 md:px-6 dark:border-zinc-800">
           <div className="flex items-center gap-2 text-sm text-zinc-500 min-w-0">
             <MobileNav role={role} attendanceOnly={attendanceOnly} />
@@ -83,9 +87,16 @@ export default async function AppLayout({
               </Link>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <OrgSwitcher teams={teams} current={membership.team_id} />
-            {!attendanceOnly && <WorldClocks />}
+            {/* Hidden on a phone: two clocks plus a day label cannot fit in a
+                375px header, and squeezing them produced "IST - --:-- -".
+                Nobody reaches for a world clock on a field phone anyway. */}
+            {!attendanceOnly && (
+              <span className="hidden sm:inline-flex">
+                <WorldClocks />
+              </span>
+            )}
             {!attendanceOnly && <NotificationBell />}
             <form action="/auth/signout" method="post">
               <button
@@ -113,7 +124,7 @@ export default async function AppLayout({
             </a>
           </div>
         )}
-        <main className="flex-1 p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

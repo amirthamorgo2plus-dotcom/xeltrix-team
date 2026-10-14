@@ -19,7 +19,7 @@ export function AssigneeSelect({
       disabled={pending}
       suppressHydrationWarning
       onChange={(e) => start(() => reassignTask(id, e.target.value))}
-      className="h-7 rounded-md border border-zinc-300 bg-transparent px-1 text-xs dark:border-zinc-700"
+      className="h-8 rounded-md border border-zinc-300 bg-transparent px-1 text-xs dark:border-zinc-700"
       title="Reassign"
     >
       <option value="">— unassigned —</option>

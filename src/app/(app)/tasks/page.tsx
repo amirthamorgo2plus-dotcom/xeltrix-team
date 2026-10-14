@@ -421,6 +421,10 @@ export default async function TasksPage({
                               <Link
                                 href={`/tasks?member=${t.owner_id}`}
                                 title={`Show only ${owner?.name ?? "this member"}'s tasks`}
+                                // Padding pulled back by the same amount: an
+                                // 18px avatar is a 19px tap target otherwise,
+                                // which no thumb can hit reliably.
+                                className="-m-1.5 inline-flex items-center p-1.5"
                               >
                                 <Avatar
                                   src={owner?.avatar_url}

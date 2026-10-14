@@ -116,7 +116,9 @@ export function MobileNav({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open menu"
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-800"
+        // shrink-0: it sits in a flex row with a min-w-0 sibling, which was
+        // squeezing the only navigation control on a phone down to 28px.
+        className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:bg-zinc-100 md:hidden dark:hover:bg-zinc-800"
       >
         <Menu className="h-5 w-5" />
       </button>
