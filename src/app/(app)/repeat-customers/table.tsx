@@ -1,5 +1,6 @@
 "use client";
 
+import { PhoneLink } from "@/components/phone-link";
 import { useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
 import type { CustomerStat, ReorderStatus } from "@/lib/repeat-customers";
@@ -126,7 +127,11 @@ export function RepeatCustomersTable({
                     </td>
                     <td className="px-4 py-3 font-medium text-zinc-200">
                       {c.name}
-                      {c.phone && <div className="text-xs text-zinc-600">{c.phone}</div>}
+                      {c.phone && (
+                        <div className="text-xs">
+                          <PhoneLink phone={c.phone} className="text-zinc-600" />
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-right text-zinc-300 tabular-nums">{c.orderCount}</td>
                     <td className="px-4 py-3 text-right text-zinc-400 tabular-nums">~{c.typicalIntervalDays}</td>

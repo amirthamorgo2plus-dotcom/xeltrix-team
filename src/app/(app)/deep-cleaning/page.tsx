@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PhoneLink } from "@/components/phone-link";
 import { redirect } from "next/navigation";
 import { endOfMonth, format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
@@ -211,6 +212,9 @@ export default async function DeepCleaningPage({
                         )}
                       </span>
                     </div>
+                    {j.phone && (
+                      <PhoneLink phone={j.phone} className="text-sm text-zinc-300" />
+                    )}
                     <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
                       <span>
                         {j.service_date

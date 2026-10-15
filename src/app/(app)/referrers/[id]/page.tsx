@@ -1,6 +1,7 @@
 import { format, parseISO } from "date-fns";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { PhoneLink } from "@/components/phone-link";
 import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -194,7 +195,11 @@ export default async function ReferrerDetailPage({ params }: { params: Promise<{
           <a href="/referrers" className="text-xs text-zinc-500 hover:text-zinc-300">← All Referrers</a>
           <h1 className="text-2xl font-semibold">{referrer.name}</h1>
           <div className="flex flex-wrap gap-4 text-sm text-zinc-400">
-            {referrer.phone && <span>📞 {referrer.phone}</span>}
+            {referrer.phone && (
+              <span>
+                📞 <PhoneLink phone={referrer.phone} />
+              </span>
+            )}
             {referrer.email && <span>✉️ {referrer.email}</span>}
             {referrer.bank_details && <span>🏦 {referrer.bank_details}</span>}
           </div>

@@ -10,6 +10,7 @@ import { LeadForm } from "./lead-form";
 import { LeadStatusSelect } from "./status-select";
 import { LocationCell } from "./location-cell";
 import { SortControl, resolveSort } from "@/components/sort-control";
+import { PhoneLink } from "@/components/phone-link";
 
 function toNum(v: number | string | null): number | null {
   if (v == null) return null;
@@ -85,14 +86,16 @@ export default async function LeadsPage({
                       {format(ist(l.created_at), "dd MMM")}
                     </span>
                   </div>
-                  {(l.email || l.phone) && (
+                  {l.phone ? (
+                    <PhoneLink phone={l.phone} className="text-sm text-zinc-300" />
+                  ) : l.email ? (
                     <a
-                      href={l.phone ? `tel:${l.phone}` : `mailto:${l.email}`}
-                      className="inline-flex min-h-8 items-center text-sm text-zinc-300 underline-offset-2 hover:underline"
+                      href={`mailto:${l.email}`}
+                      className="-my-1.5 inline-flex min-h-8 items-center py-1.5 text-sm text-zinc-300 underline-offset-2 hover:underline"
                     >
-                      {l.phone || l.email}
+                      {l.email}
                     </a>
-                  )}
+                  ) : null}
                   <div className="flex flex-wrap items-center gap-2">
                     <LeadStatusSelect id={l.id} value={l.status} />
                     <Badge tone={statusTone[l.status] ?? "muted"}>{l.status}</Badge>
@@ -127,7 +130,11 @@ export default async function LeadsPage({
                   <tr key={l.id} className="border-t border-zinc-200 dark:border-zinc-800">
                     <td className="py-2 pr-4 font-medium">{l.name}</td>
                     <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-400">
-                      {l.email || l.phone || "—"}
+                      {l.phone ? (
+                        <PhoneLink phone={l.phone} />
+                      ) : (
+                        l.email || "—"
+                      )}
                     </td>
                     <td className="py-2 pr-4 text-zinc-600 dark:text-zinc-400">
                       {l.source || "—"}

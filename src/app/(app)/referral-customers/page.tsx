@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { PhoneLink } from "@/components/phone-link";
 import { getMyMembership } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -183,7 +184,11 @@ export default async function ReferralCustomersPage() {
                       <tr key={lk.id} className="border-t border-zinc-800 hover:bg-zinc-800/30 transition-colors">
                         <td className="py-3 pr-4">
                           <p className="font-medium text-zinc-100">{customerName}</p>
-                          {joined?.phone && <p className="text-xs text-zinc-500">{joined.phone}</p>}
+                          {joined?.phone && (
+                            <p className="text-xs">
+                              <PhoneLink phone={joined.phone} className="text-zinc-500" />
+                            </p>
+                          )}
                         </td>
                         <td className="py-3 pr-4">
                           <a href={`/referrers/${lk.referrer_id}`} className="text-[#b5c76a] font-medium hover:underline">

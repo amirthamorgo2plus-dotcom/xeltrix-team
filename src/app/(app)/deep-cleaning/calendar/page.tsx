@@ -14,6 +14,7 @@ import {
   subMonths,
 } from "date-fns";
 import { AlertTriangle } from "lucide-react";
+import { PhoneLink } from "@/components/phone-link";
 import { createClient } from "@/lib/supabase/server";
 import { getMyMembership, getTeamMembers } from "@/lib/data";
 import { JobForm } from "../job-form";
@@ -404,7 +405,7 @@ export default async function DeepCleaningCalendarPage({
                   {j.address && (
                     <span className="truncate text-zinc-500">{j.address}</span>
                   )}
-                  {j.phone && <span className="text-zinc-500">{j.phone}</span>}
+                  {j.phone && <PhoneLink phone={j.phone} className="text-zinc-500" />}
                   {j.source && (
                     <span className="text-xs text-zinc-500">via {j.source}</span>
                   )}
