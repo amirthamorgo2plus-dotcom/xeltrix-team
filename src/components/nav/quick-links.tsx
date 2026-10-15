@@ -14,6 +14,9 @@ import { visibleNavItems } from "@/components/nav/nav-items";
 
 // The daily ones, in the order a field member needs them. Anything not listed
 // stays in the sidebar; a launcher that shows everything is just the nav again.
+// Twelve, so the grid fills three even rows of four on a phone rather than
+// leaving a single tile stranded on its own. Roughly in the order a field
+// member needs them: record something, then look something up.
 const QUICK = [
   "/attendance",
   "/visits",
@@ -21,8 +24,14 @@ const QUICK = [
   "/production",
   "/leads",
   "/deep-cleaning",
+  "/complaints",
+  "/payment-qr",
   "/collections",
   "/targets",
+  "/calendar",
+  // Last because it is a place to read, not a place to enter something --
+  // but it needs a tile now that it is no longer where people land.
+  "/dashboard",
 ];
 
 export function QuickLinks({
@@ -32,8 +41,14 @@ export function QuickLinks({
   role: string | null | undefined;
   attendanceOnly?: boolean;
 }) {
+  // Children as well as top-level items: Complaints and Calendar live under
+  // Customers and Attendance in the sidebar, but on a launcher they are
+  // destinations in their own right. visibleNavItems has already dropped
+  // anything this role cannot open, at both levels.
   const allowed = visibleNavItems(role, attendanceOnly);
-  const byHref = new Map(allowed.map((i) => [i.href, i]));
+  const byHref = new Map(
+    allowed.flatMap((i) => [i, ...(i.children ?? [])]).map((i) => [i.href, i])
+  );
   const items = QUICK.map((h) => byHref.get(h)).filter(
     (i): i is NonNullable<typeof i> => Boolean(i)
   );
@@ -46,9 +61,13 @@ export function QuickLinks({
         <Link
           key={href}
           href={href}
-          className="flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white p-2 text-center transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60"
+          className="flex min-h-24 flex-col items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white p-2 text-center transition-colors active:bg-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:active:bg-zinc-800 dark:hover:bg-zinc-800/60"
         >
-          <Icon className="h-5 w-5 shrink-0 text-[#b5c76a]" aria-hidden />
+          {/* A tinted rounded square reads as an app icon at a glance, which
+              is the point: people recognise the shape before the word. */}
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#b5c76a]/10">
+            <Icon className="h-5 w-5 text-[#b5c76a]" aria-hidden />
+          </span>
           {/* Wraps rather than truncates: "Deep Cleaning" on two lines is
               readable, "Deep Cle…" is not. */}
           <span className="text-[11px] leading-tight text-zinc-600 dark:text-zinc-300">

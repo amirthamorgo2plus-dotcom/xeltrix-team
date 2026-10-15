@@ -129,7 +129,7 @@ export function LoginForm({
     const res = await verifyCode(fd);
     setVerifying(false);
     if (res.error) setError(friendlyError(res.error));
-    else if (res.verified) router.push("/dashboard");
+    else if (res.verified) router.push("/hub");
   }
 
   return (

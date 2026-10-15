@@ -9,7 +9,7 @@ import { DEMO_EMAIL, DEMO_TEAM_ID } from "@/lib/demo";
 // Auto-sign-in the public read-only demo account. Triggered by the homepage
 // "View Demo" button — the visitor types nothing. Signs in by password (the
 // demo account is intentionally shared; the password is server-only env), points
-// the active-org cookie at the demo org, and lands on the dashboard.
+// the active-org cookie at the demo org, and lands on the launcher.
 export async function enterDemo() {
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({
@@ -27,5 +27,5 @@ export async function enterDemo() {
     sameSite: "lax",
   });
 
-  redirect("/dashboard");
+  redirect("/hub");
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMyMembership, getTeamSettings } from "@/lib/data";
@@ -121,6 +122,12 @@ function HubCardLink({ link, status }: { link: HubLink; status: "up" | "down" | 
 
 export default async function HubPage() {
   const me = await getMyMembership();
+  // This is the landing page now, so it has to honour the same restriction
+  // every other page does: an attendance-only login gets Attendance, not a
+  // launcher showing a single tile.
+  if ((me as { attendance_only?: boolean } | null)?.attendance_only) {
+    redirect("/attendance");
+  }
   // Admin-managed links live in team_settings.config.hub_links; fall back to the
   // seed list until an admin has saved any.
   const settings = await getTeamSettings();
@@ -143,7 +150,7 @@ export default async function HubPage() {
       <div>
         <h1 className="text-2xl font-semibold">Command Center</h1>
         <p className="text-sm text-zinc-500">
-          Every Xeltrix tool and channel, one click away.
+          Tap to open. Every Xeltrix tool and channel, one click away.
         </p>
       </div>
 
