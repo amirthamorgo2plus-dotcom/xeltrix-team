@@ -120,6 +120,37 @@ const SECTIONS: Section[] = [
 
   // ---------- Money & Targets ----------
   {
+    id: "deep-cleaning-billing", group: "money",
+    title_en: "Deep cleaning — Xeltrix or Purex?",
+    title_ta: "டீப் கிளீனிங் — Xeltrix அல்லது Purex?",
+    intro_en:
+      "The same crew and the same schedule, billed by two companies. Xeltrix raises a GST invoice; Purex takes the non-GST cash work. Every job says which one billed it, so the money is counted exactly once.",
+    intro_ta:
+      "ஒரே குழு, ஒரே அட்டவணை — ஆனால் இரண்டு நிறுவனங்கள் பில் போடுகின்றன. Xeltrix GST இன்வாய்ஸ் போடும்; Purex GST இல்லாத பண வேலையை எடுக்கும். ஒவ்வொரு வேலையிலும் யார் பில் போட்டது என்று குறிக்கப்படும், அதனால் பணம் ஒரு முறை மட்டுமே கணக்கிடப்படும்.",
+    steps: [
+      {
+        en: "Billed by Purex — cash, non-GST. Leave the Zoho invoice box empty. The amount on the job IS the revenue, because nothing else records it.",
+        ta: "Purex பில் — பணம், GST இல்லை. Zoho இன்வாய்ஸ் பெட்டியை காலியாக விடவும். வேலையில் உள்ள தொகையே வருவாய், ஏனெனில் வேறு எங்கும் பதிவு இல்லை.",
+      },
+      {
+        en: "Billed by Xeltrix — raise the GST invoice in Zoho using the S-DEEP CLEANING item, then put that invoice number on the job. The revenue is then counted from the invoice, not from the job.",
+        ta: "Xeltrix பில் — Zoho-வில் S-DEEP CLEANING item பயன்படுத்தி GST இன்வாய்ஸ் போடவும், பின்பு அந்த இன்வாய்ஸ் எண்ணை வேலையில் பதிவு செய்யவும். வருவாய் இன்வாய்ஸிலிருந்து கணக்கிடப்படும், வேலையிலிருந்து அல்ல.",
+      },
+      {
+        en: "\"All deep cleaning\" at the top of the page adds both together. That is the figure to compare against a target — the two KPIs below it are deliberately split, because each half is counted somewhere different.",
+        ta: "பக்கத்தின் மேலே உள்ள \"All deep cleaning\" இரண்டையும் கூட்டும். இலக்குடன் ஒப்பிட வேண்டியது இந்த எண்ணே — கீழே உள்ள இரண்டு KPI-கள் வேண்டுமென்றே பிரிக்கப்பட்டுள்ளன.",
+      },
+      {
+        en: "A Purex job cannot have an invoice number, and the app will refuse it. If a cash job later gets invoiced, change Billed by to Xeltrix first.",
+        ta: "Purex வேலைக்கு இன்வாய்ஸ் எண் இருக்க முடியாது, app அதை ஏற்காது. பண வேலைக்கு பின்னர் இன்வாய்ஸ் போட்டால், முதலில் Billed by-ஐ Xeltrix ஆக மாற்றவும்.",
+      },
+    ],
+    tip: {
+      en: "The page warns when the Xeltrix jobs and the Xeltrix invoice lines do not match. More lines than jobs means invoiced cleaning that was never put on the schedule; more jobs than lines means the invoice is missing, or used an item name the app does not count as cleaning.",
+      ta: "Xeltrix வேலைகளும் இன்வாய்ஸ் வரிகளும் பொருந்தாதபோது பக்கம் எச்சரிக்கும். வேலைகளை விட வரிகள் அதிகம் என்றால், இன்வாய்ஸ் போடப்பட்ட வேலை அட்டவணையில் பதிவு செய்யப்படவில்லை; வரிகளை விட வேலைகள் அதிகம் என்றால், இன்வாய்ஸ் போடப்படவில்லை அல்லது app கணக்கிடாத item பெயர் பயன்படுத்தப்பட்டுள்ளது.",
+    },
+  },
+  {
     id: "collections", group: "money",
     title_en: "Collections", title_ta: "வசூல்",
     intro_en: "Outstanding invoice balances from customers.",

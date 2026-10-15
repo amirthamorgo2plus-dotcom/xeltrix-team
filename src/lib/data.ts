@@ -132,6 +132,8 @@ export const getTeamSettings = cache(async () => {
     production_expense_accounts?: string[];
     /** What a deep cleaning quote assumes before anyone edits it. */
     deep_cleaning_rates?: { labour_per_person_day?: number; travel_flat?: number };
+    /** Zoho item names that are the cleaning SERVICE, not a cleaning product. */
+    deep_cleaning_items?: string[];
     weekly_off?: unknown;
     target_cadence?: string;
     payment_qr_url?: string | null;

@@ -3,12 +3,13 @@ import { PhoneLink } from "@/components/phone-link";
 import { redirect } from "next/navigation";
 import { endOfMonth, format, parseISO } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
-import { getMyMembership, getTeamMembers, isAdminOrManager } from "@/lib/data";
+import { getMyMembership, getTeamMembers, getTeamSettings, isAdminOrManager } from "@/lib/data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { JobForm } from "./job-form";
 import { PaymentToggle, ReferralToggle, DeleteJob, JobStatusSelect } from "./row-actions";
 import { JobFilters } from "./filters";
+import { getDeepCleaningRevenue } from "@/lib/deep-cleaning-revenue";
 
 const fmt = (v: number) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(v);
@@ -52,6 +53,7 @@ export default async function DeepCleaningPage({
   const isAdmin = isAdminOrManager(m?.role);
   const canWrite =
     !!m && !(m as { attendance_only?: boolean }).attendance_only;
+  const settings = await getTeamSettings();
   const supabase = await createClient();
 
   let jobsQuery = supabase
@@ -100,6 +102,22 @@ export default async function DeepCleaningPage({
   ].sort((a, b) => b.localeCompare(a));
 
 
+  // Everything billed as deep cleaning, by either company, for the month
+  // being viewed -- or the year to date when no month is chosen, since the
+  // page is otherwise unfiltered by date.
+  const revFrom = month !== "all" ? `${month}-01` : `${new Date().getFullYear()}-01-01`;
+  const revTo =
+    month !== "all"
+      ? format(endOfMonth(parseISO(`${month}-01`)), "yyyy-MM-dd")
+      : `${new Date().getFullYear()}-12-31`;
+  const combined = await getDeepCleaningRevenue(
+    supabase,
+    teamId,
+    revFrom,
+    revTo,
+    settings?.deep_cleaning_items ?? null
+  );
+
   const referrerMap = new Map((referrers ?? []).map((r) => [r.id, r.name]));
   const memberList = (members ?? []).map((mem) => ({
     id: mem.id,
@@ -131,7 +149,10 @@ export default async function DeepCleaningPage({
       <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-semibold">Deep Cleaning</h1>
-          <p className="text-sm text-zinc-500">Non-GST service jobs recorded manually (not in Zoho). Referral paid outside Zoho.</p>
+          <p className="text-sm text-zinc-500">
+            Every cleaning job, whichever company billed it. Purex cash is counted from the
+            job; Xeltrix work is counted from its Zoho invoice. Referral paid outside Zoho.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Link
@@ -157,6 +178,59 @@ export default async function DeepCleaningPage({
         months={months}
         current={{ status, payment, assigned, month }}
       />
+
+      {/* Everything billed as deep cleaning, however it was billed. This is
+          the number to compare against a target: the KPIs below deliberately
+          split it, because the two halves are counted in different places. */}
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-xs text-zinc-500">
+            All deep cleaning ·{" "}
+            {month !== "all"
+              ? format(parseISO(`${month}-01`), "MMMM yyyy")
+              : `${new Date().getFullYear()}`}
+          </span>
+          <span className="text-2xl font-bold tabular-nums text-zinc-100">
+            {fmt(combined.total)}
+          </span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-xs">
+          <span className="text-zinc-500">
+            Purex cash{" "}
+            <span className="tabular-nums text-[#b5c76a]">{fmt(combined.purex)}</span>{" "}
+            <span className="text-zinc-600">
+              · {combined.purexJobs} job{combined.purexJobs === 1 ? "" : "s"}
+            </span>
+          </span>
+          <span className="text-zinc-500">
+            Xeltrix invoiced{" "}
+            <span className="tabular-nums text-sky-400">{fmt(combined.xeltrix)}</span>{" "}
+            <span className="text-zinc-600">
+              · {combined.xeltrixLines} invoice line
+              {combined.xeltrixLines === 1 ? "" : "s"}
+            </span>
+          </span>
+        </div>
+        {/* The two should match: a Xeltrix job and its invoice line are the
+            same piece of work. Which way they differ says something
+            different, so say which. */}
+        {combined.xeltrixLines > combined.xeltrixJobs && (
+          <p className="mt-2 text-[11px] text-amber-500">
+            {combined.xeltrixLines - combined.xeltrixJobs} invoiced cleaning line
+            {combined.xeltrixLines - combined.xeltrixJobs === 1 ? " has" : "s have"} no job
+            on the schedule. The money is counted above, but the work was never recorded
+            here — no crew, cost or margin for it.
+          </p>
+        )}
+        {combined.xeltrixJobs > combined.xeltrixLines && (
+          <p className="mt-2 text-[11px] text-amber-500">
+            {combined.xeltrixJobs - combined.xeltrixLines} job
+            {combined.xeltrixJobs - combined.xeltrixLines === 1 ? " is" : "s are"} marked as
+            billed by Xeltrix with no matching invoice line. Either the invoice was never
+            raised, or it used an item name the app does not count as cleaning.
+          </p>
+        )}
+      </div>
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
