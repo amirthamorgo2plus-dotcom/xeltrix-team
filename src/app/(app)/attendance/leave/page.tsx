@@ -232,7 +232,84 @@ export default async function LeaveBalancePage({
                   {overdrawn.map((r) => r.name).join(", ")}
                 </p>
               )}
-              <div className="overflow-x-auto">
+              {/* Phones: one card per person, led by Remaining. Eight numeric
+                  columns is 631px, so on a 375px screen the one number
+                  somebody opens this page for was off the right edge. */}
+              <ul className="divide-y divide-zinc-200 sm:hidden dark:divide-zinc-800">
+                {table.map((r) => (
+                  <li key={r.id} className="py-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="inline-flex min-w-0 items-center gap-2 font-medium">
+                        <span
+                          className={`h-2.5 w-2.5 shrink-0 rounded-full ${memberColor(r.id).dot}`}
+                        />
+                        <span className="truncate">{r.name}</span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        {r.remaining == null ? (
+                          // No allowance set yet: "— left" reads like a number
+                          // is missing rather than a setting.
+                          <span className="text-xs text-zinc-500">no allowance set</span>
+                        ) : (
+                          <>
+                            <span
+                              className={`text-lg font-semibold tabular-nums ${
+                                r.remaining < 0 ? "text-red-400" : "text-[#b5c76a]"
+                              }`}
+                            >
+                              {nice(r.remaining)}
+                            </span>
+                            <span className="ml-1 text-xs text-zinc-500">left</span>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                      <span>
+                        Entitled{" "}
+                        <span className="tabular-nums text-zinc-300">
+                          {r.entitled == null ? "—" : nice(r.entitled)}
+                        </span>
+                        {r.partYear && <span className="ml-1 text-amber-500">pro-rata</span>}
+                      </span>
+                      <span>
+                        Taken <span className="tabular-nums text-zinc-300">{nice(r.taken)}</span>
+                      </span>
+                      <span>
+                        Worked <span className="tabular-nums text-zinc-300">{nice(r.worked)}</span>
+                      </span>
+                      {r.counts.absent > 0 && (
+                        <span>
+                          Absent{" "}
+                          <span className="tabular-nums text-red-400">{r.counts.absent}</span>
+                        </span>
+                      )}
+                      {r.unmarked > 0 && (
+                        <span>
+                          Unmarked{" "}
+                          <span className="tabular-nums text-amber-500">{r.unmarked}</span>
+                        </span>
+                      )}
+                      {r.compOff > 0 && (
+                        <span>
+                          Comp-off{" "}
+                          <span className="tabular-nums text-zinc-300">{nice(r.compOff)}</span>
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+                <li className="flex items-baseline justify-between py-3 font-semibold">
+                  <span>Team total</span>
+                  <span className="text-xs font-normal text-zinc-500">
+                    Taken <span className="tabular-nums text-zinc-200">{nice(totals.taken)}</span>{" "}
+                    · Worked{" "}
+                    <span className="tabular-nums text-zinc-200">{nice(totals.worked)}</span>
+                  </span>
+                </li>
+              </ul>
+
+              <div className="hidden overflow-x-auto sm:block">
                 <Table>
                   <THead>
                     <TR>
