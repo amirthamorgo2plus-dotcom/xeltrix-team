@@ -104,6 +104,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Sparkles,
     children: [
       { href: "/deep-cleaning/calendar", label: "Schedule", icon: CalendarDays },
+      { href: "/deep-cleaning/quote", label: "Quote", icon: Calculator },
     ],
   },
 

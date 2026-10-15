@@ -130,6 +130,8 @@ export const getTeamSettings = cache(async () => {
      * hardcoding a name is how a card silently goes stale.
      */
     production_expense_accounts?: string[];
+    /** What a deep cleaning quote assumes before anyone edits it. */
+    deep_cleaning_rates?: { labour_per_person_day?: number; travel_flat?: number };
     weekly_off?: unknown;
     target_cadence?: string;
     payment_qr_url?: string | null;
