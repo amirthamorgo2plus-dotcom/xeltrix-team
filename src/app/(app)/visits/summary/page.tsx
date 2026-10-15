@@ -318,7 +318,63 @@ export default async function VisitsSummaryPage({
             {empRows.length === 0 ? (
               <EmptyState title="No visits this month yet" />
             ) : (
-              <table className="w-full text-sm">
+              <>
+              {/* Phones: one card per person. Seven columns squash to
+                  illegible at 375px rather than overflowing, which is a
+                  quieter failure and no better. */}
+              <ul className="divide-y divide-zinc-200 sm:hidden dark:divide-zinc-800">
+                {empRows.map((r) => {
+                  const info = memberInfo.get(r.memberId);
+                  const avg = r.visits > 0 ? Math.round(r.minutes / r.visits) : 0;
+                  return (
+                    <li key={r.memberId} className="py-3">
+                      <Link
+                        href={summaryUrl({ member: r.memberId })}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <Avatar src={info?.avatar_url ?? null} name={info?.name} size={22} />
+                          <span className="truncate font-medium">{info?.name}</span>
+                        </span>
+                        <span className="shrink-0 text-sm">
+                          <span className="font-semibold tabular-nums">{r.visits}</span>
+                          <span className="ml-1 text-xs text-zinc-500">
+                            visit{r.visits === 1 ? "" : "s"}
+                          </span>
+                        </span>
+                      </Link>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <span>
+                          {r.uniqueCustomers.size}{" "}
+                          <span className="text-zinc-400">
+                            customer{r.uniqueCustomers.size === 1 ? "" : "s"}
+                          </span>
+                        </span>
+                        {r.newCustomers > 0 && (
+                          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                            +{r.newCustomers} new
+                          </span>
+                        )}
+                        <span>
+                          {r.activeDays.size}{" "}
+                          <span className="text-zinc-400">
+                            day{r.activeDays.size === 1 ? "" : "s"}
+                          </span>
+                        </span>
+                        <span>
+                          {fmtHours(r.minutes)}{" "}
+                          <span className="text-zinc-400">on site</span>
+                        </span>
+                        <span>
+                          {avg} m <span className="text-zinc-400">avg</span>
+                        </span>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <table className="hidden w-full text-sm sm:table">
                 <thead className="text-left text-xs uppercase tracking-wider text-zinc-500">
                   <tr>
                     <th className="pb-2 pr-4">Employee</th>
@@ -382,6 +438,7 @@ export default async function VisitsSummaryPage({
                   })}
                 </tbody>
               </table>
+              </>
             )}
           </CardContent>
         </Card>

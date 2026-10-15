@@ -22,10 +22,14 @@ export function LangToggle({ current }: { current: Lang }) {
             aria-pressed={current === l}
             disabled={pending || current === l}
             onClick={() => start(() => setVisitsLang(l))}
+            // min-h-8 and wider padding: this is the control a Tamil-reading
+            // field worker needs first, and at 24px it was the smallest thing
+            // on the page.
             className={
-              current === l
-                ? "rounded bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300"
-                : "rounded px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800"
+              "inline-flex min-h-8 items-center rounded px-3 text-xs " +
+              (current === l
+                ? "bg-emerald-500/15 font-medium text-emerald-700 dark:text-emerald-300"
+                : "text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800")
             }
           >
             {LANG_LABEL[l]}

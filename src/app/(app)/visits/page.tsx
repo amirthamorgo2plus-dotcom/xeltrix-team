@@ -305,13 +305,13 @@ export default async function VisitsPage({
       <div className="inline-flex rounded-md border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-950">
         <Link
           href="/visits"
-          className="rounded bg-emerald-500/15 px-3 py-1 text-sm font-medium text-emerald-700 dark:text-emerald-300"
+          className="inline-flex min-h-9 items-center rounded bg-emerald-500/15 px-3 text-sm font-medium text-emerald-700 dark:text-emerald-300"
         >
           {t.tabDaily}
         </Link>
         <Link
           href="/visits/summary"
-          className="rounded px-3 py-1 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          className="inline-flex min-h-9 items-center rounded px-3 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
         >
           {t.tabMonthly}
         </Link>
