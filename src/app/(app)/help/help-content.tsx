@@ -104,6 +104,37 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    id: "feedback", group: "sales",
+    title_en: "Feedback vs Complaints",
+    title_ta: "Feedback மற்றும் Complaints",
+    intro_en:
+      "Two pages because they are two different things. A complaint is a case somebody has to close. Feedback is simply what a customer said, including when they were happy.",
+    intro_ta:
+      "இரண்டும் வெவ்வேறு விஷயங்கள், அதனால் இரண்டு பக்கங்கள். Complaint என்பது யாராவது முடிக்க வேண்டிய ஒரு case. Feedback என்பது வாடிக்கையாளர் சொன்னது — அவர்கள் மகிழ்ச்சியாக இருந்ததையும் சேர்த்து.",
+    steps: [
+      {
+        en: "After a job, ask how it went and record the answer on Feedback: a rating from 1 to 5, and their words.",
+        ta: "வேலை முடிந்தபின் எப்படி இருந்தது என்று கேட்டு, Feedback பக்கத்தில் பதிவு செய்யுங்கள்: 1 முதல் 5 வரை மதிப்பீடு, அவர்கள் சொன்ன வார்த்தைகள்.",
+      },
+      {
+        en: "Praise is worth recording too. If only the angry customers are written down, the average is meaningless and nobody knows which jobs went well.",
+        ta: "பாராட்டையும் பதிவு செய்யுங்கள். கோபமானவர்களை மட்டும் எழுதினால், சராசரிக்கு அர்த்தம் இல்லை, எந்த வேலை நன்றாக நடந்தது என்றும் தெரியாது.",
+      },
+      {
+        en: "A 1 or 2 shows a Raise complaint button. That opens a real complaint with the customer and their words already filled in, and the two stay linked.",
+        ta: "1 அல்லது 2 மதிப்பீட்டிற்கு Raise complaint பொத்தான் தெரியும். அது வாடிக்கையாளர் பெயரும் அவர்கள் சொன்னதும் நிரப்பப்பட்ட நிஜமான complaint-ஐ உருவாக்கும், இரண்டும் இணைக்கப்பட்டிருக்கும்.",
+      },
+      {
+        en: "\"Needs a response\" counts unhappy customers with no complaint raised yet. That number should be zero.",
+        ta: "\"Needs a response\" என்பது complaint போடப்படாத அதிருப்தியான வாடிக்கையாளர்களின் எண்ணிக்கை. அது பூஜ்ஜியமாக இருக்க வேண்டும்.",
+      },
+    ],
+    tip: {
+      en: "Feedback can be tied to one cleaning job, so you can see whether a particular crew or a particular day went badly.",
+      ta: "Feedback ஒரு குறிப்பிட்ட cleaning வேலையுடன் இணைக்கலாம், அதனால் எந்த குழு அல்லது எந்த நாள் சரியில்லை என்று பார்க்கலாம்.",
+    },
+  },
+  {
     id: "visits", group: "sales",
     title_en: "Visits", title_ta: "வருகைகள் (Field Visits)",
     intro_en: "Field check-ins with a live customer map.",

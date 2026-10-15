@@ -31,6 +31,7 @@ import {
   HelpCircle,
   Sparkles,
   FlaskConical,
+  MessageSquareHeart,
   type LucideIcon,
 } from "lucide-react";
 
@@ -91,6 +92,7 @@ export const NAV_ITEMS: NavItem[] = [
       { href: "/quotes",             label: "Quotes",             icon: FileText },
       { href: "/follow-ups",         label: "Follow-ups",         icon: Bell },
       { href: "/complaints",         label: "Complaints",         icon: AlertCircle },
+      { href: "/feedback",           label: "Feedback",           icon: MessageSquareHeart },
       { href: "/repeat-customers",   label: "Repeat Customers",   icon: Repeat },
       { href: "/referrers",          label: "Referrers",          icon: HandCoins },
       { href: "/referral-customers", label: "Referral Customers", icon: UserPlus },
