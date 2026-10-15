@@ -71,6 +71,46 @@ export default async function LeadsPage({
           {!leads || leads.length === 0 ? (
             <EmptyState title="No leads yet" hint="Add your first one above." />
           ) : (
+            <>
+            {/* Phones: one card per customer. This table had no scroll
+                container, so at 564px it dragged the whole page sideways
+                rather than scrolling within its card -- the only page left
+                that still overflowed. */}
+            <ul className="divide-y divide-zinc-200 sm:hidden dark:divide-zinc-800">
+              {leads.map((l) => (
+                <li key={l.id} className="flex flex-col gap-1.5 py-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="truncate font-medium">{l.name}</span>
+                    <span className="shrink-0 text-xs text-zinc-500">
+                      {format(ist(l.created_at), "dd MMM")}
+                    </span>
+                  </div>
+                  {(l.email || l.phone) && (
+                    <a
+                      href={l.phone ? `tel:${l.phone}` : `mailto:${l.email}`}
+                      className="inline-flex min-h-8 items-center text-sm text-zinc-300 underline-offset-2 hover:underline"
+                    >
+                      {l.phone || l.email}
+                    </a>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <LeadStatusSelect id={l.id} value={l.status} />
+                    <Badge tone={statusTone[l.status] ?? "muted"}>{l.status}</Badge>
+                    {l.source && (
+                      <span className="text-xs text-zinc-500">via {l.source}</span>
+                    )}
+                  </div>
+                  <LocationCell
+                    id={l.id}
+                    lat={toNum(l.latitude as number | string | null)}
+                    lng={toNum(l.longitude as number | string | null)}
+                    status={(l.geocode_status as string | null) ?? null}
+                  />
+                </li>
+              ))}
+            </ul>
+
+            <div className="hidden overflow-x-auto sm:block">
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase text-zinc-500">
                 <tr>
@@ -113,6 +153,8 @@ export default async function LeadsPage({
                 ))}
               </tbody>
             </table>
+            </div>
+            </>
           )}
         </CardContent>
       </Card>

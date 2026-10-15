@@ -50,7 +50,9 @@ export function SortControl({
             key={key}
             href={hrefFor(key)}
             scroll={false}
-            className={`inline-flex items-center gap-1 rounded px-2 py-1 transition-colors ${
+            // min-h-8: these were 24px, and they sit above a long list where
+            // mis-tapping means re-sorting rather than opening something.
+            className={`inline-flex min-h-8 items-center gap-1 rounded px-2.5 transition-colors ${
               active
                 ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
                 : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"

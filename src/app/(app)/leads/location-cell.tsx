@@ -44,7 +44,10 @@ export function LocationCell({
             href={`https://www.google.com/maps?q=${lat},${lng}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-emerald-600 hover:underline dark:text-emerald-400"
+            // Padding pulled back by an equal margin: a 16px link opening
+            // Google Maps is a coin toss with a thumb, and the row spacing
+            // stays exactly as it was.
+            className="-my-1.5 inline-flex min-h-8 items-center gap-1 py-1.5 text-emerald-600 hover:underline dark:text-emerald-400"
             title={status === "manual" ? "Exact (hand-placed)" : "Approximate (auto-geocoded)"}
           >
             <MapPin className="h-3.5 w-3.5" />
@@ -56,7 +59,7 @@ export function LocationCell({
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-zinc-500 underline-offset-2 hover:underline"
+          className="-my-1.5 inline-flex min-h-8 items-center px-1 py-1.5 text-zinc-500 underline-offset-2 hover:underline"
         >
           {hasCoords ? "edit" : "set"}
         </button>
