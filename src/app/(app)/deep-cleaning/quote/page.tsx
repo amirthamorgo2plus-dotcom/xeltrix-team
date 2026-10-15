@@ -6,6 +6,7 @@ import {
   DEFAULT_LABOUR_PER_PERSON_DAY,
   DEFAULT_TRAVEL_FLAT,
 } from "@/lib/deep-cleaning-quote";
+import { itemCategory } from "@/lib/item-category";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QuoteClient, type Product, type Referrer } from "./quote-client";
 
@@ -34,11 +35,18 @@ export default async function DeepCleaningQuotePage() {
       .order("name"),
   ]);
 
-  const products: Product[] = (templates ?? []).map((t) => ({
-    id: t.id as string,
-    name: t.name as string,
-    cost_price: t.cost_price == null ? null : Number(t.cost_price),
-  }));
+  // A cleaning job consumes our own liquids AND bought-in consumables --
+  // gloves, scotch brite, garbage covers all show up on real invoices -- so
+  // the list cannot be narrowed to X- items. It can be grouped, and services
+  // are not a material at all.
+  const products: Product[] = (templates ?? [])
+    .map((t) => ({
+      id: t.id as string,
+      name: t.name as string,
+      cost_price: t.cost_price == null ? null : Number(t.cost_price),
+      category: itemCategory(t.name as string),
+    }))
+    .filter((p) => p.category !== "services");
 
   return (
     <div className="flex flex-col gap-6">

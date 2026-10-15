@@ -15,7 +15,22 @@ import {
 } from "@/lib/deep-cleaning-quote";
 import { saveQuoteDefaults } from "./actions";
 
-export type Product = { id: string; name: string; cost_price: number | null };
+export type Product = {
+  id: string;
+  name: string;
+  cost_price: number | null;
+  category: string;
+};
+
+// Ordered by how likely a cleaning job is to use them, not alphabetically:
+// our own liquids first, then the consumables bought in for the job.
+const GROUPS: { key: string; label: string }[] = [
+  { key: "manufactured", label: "Our products" },
+  { key: "traded", label: "Bought-in consumables" },
+  { key: "raw_material", label: "Raw materials" },
+  { key: "packing_material", label: "Packing" },
+  { key: "other", label: "Other" },
+];
 export type Referrer = { id: string; name: string; default_pct: number | null };
 
 type Line = { id: string; productId: string; qty: number };
@@ -144,11 +159,19 @@ export function QuoteClient({
                     className="min-w-0 flex-1"
                   >
                     <option value="">Select…</option>
-                    {products.map((pr) => (
-                      <option key={pr.id} value={pr.id}>
-                        {pr.name}
-                      </option>
-                    ))}
+                    {GROUPS.map((g) => {
+                      const items = products.filter((pr) => pr.category === g.key);
+                      if (items.length === 0) return null;
+                      return (
+                        <optgroup key={g.key} label={`${g.label} (${items.length})`}>
+                          {items.map((pr) => (
+                            <option key={pr.id} value={pr.id}>
+                              {pr.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      );
+                    })}
                   </Select>
                   <Input
                     type="number" min="0" step="0.5" value={l.qty}
