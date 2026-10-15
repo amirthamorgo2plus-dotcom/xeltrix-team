@@ -18,6 +18,9 @@ import { visibleNavItems } from "@/components/nav/nav-items";
 // leaving a single tile stranded on its own. Roughly in the order a field
 // member needs them: record something, then look something up.
 const QUICK = [
+  // First because it is the one tile reached every day from a desk, where
+  // landing on a launcher would otherwise cost a click each morning.
+  "/dashboard",
   "/attendance",
   "/visits",
   "/tasks",
@@ -29,9 +32,6 @@ const QUICK = [
   "/collections",
   "/targets",
   "/calendar",
-  // Last because it is a place to read, not a place to enter something --
-  // but it needs a tile now that it is no longer where people land.
-  "/dashboard",
 ];
 
 export function QuickLinks({
