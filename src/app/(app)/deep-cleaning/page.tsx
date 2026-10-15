@@ -182,7 +182,83 @@ export default async function DeepCleaningPage({
           ) : rows.length === 0 ? (
             <EmptyState title="No deep cleaning jobs yet" hint="Add a job to start tracking non-GST service work." />
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Phones: one card per job. Nine columns of money and referral
+                state do not fit 375px, and the controls that matter on site
+                are the two toggles, so they stay. */}
+            <ul className="divide-y divide-zinc-800 sm:hidden">
+              {rows.map((j) => {
+                const amount = Number(j.amount ?? 0);
+                const cost = j.cost != null ? Number(j.cost) : null;
+                const margin = cost != null ? amount - cost : null;
+                return (
+                  <li key={j.id} className="flex flex-col gap-2 py-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-zinc-100">
+                          {j.customer_name}
+                        </p>
+                        {j.description && (
+                          <p className="truncate text-xs text-zinc-500">{j.description}</p>
+                        )}
+                      </div>
+                      <span className="shrink-0 text-right">
+                        <span className="block tabular-nums text-zinc-100">{fmt(amount)}</span>
+                        {margin != null && (
+                          <span className="block text-xs tabular-nums text-[#b5c76a]">
+                            {fmt(margin)} margin
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                      <span>
+                        {j.service_date
+                          ? `${format(parseISO(j.service_date), "dd MMM yyyy")} · ${
+                              j.service_time ? String(j.service_time).slice(0, 5) : "full day"
+                            }`
+                          : j.enquiry_date
+                            ? `enquired ${format(parseISO(j.enquiry_date), "dd MMM")}`
+                            : "no date"}
+                      </span>
+                      {j.referrer_id && (
+                        <span className="text-[#b5c76a]">
+                          via {referrerMap.get(j.referrer_id) ?? "referrer"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <JobStatusSelect id={j.id} status={j.status} canManage={canWrite} />
+                      <PaymentToggle
+                        id={j.id}
+                        status={j.payment_status}
+                        canManage={canWrite}
+                      />
+                      {canWrite && (
+                        <JobForm
+                          teamId={teamId}
+                          referrers={referrers ?? []}
+                          members={memberList}
+                          trigger="edit"
+                          edit={{
+                            id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
+                            status: j.status, service_date: j.service_date, service_time: j.service_time,
+                            enquiry_date: j.enquiry_date,
+                            source: j.source, property_type: j.property_type, crew_size: j.crew_size,
+                            description: j.description, amount, cost,
+                            payment_status: j.payment_status, payment_mode: j.payment_mode,
+                            referrer_id: j.referrer_id, referral_pct: j.referral_pct,
+                            assigned_to: j.assigned_to, notes: j.notes,
+                          }}
+                        />
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="hidden overflow-x-auto sm:block">
               <table className="w-full text-sm">
                 <thead className="text-left text-xs uppercase text-zinc-500">
                   <tr>
@@ -268,6 +344,7 @@ export default async function DeepCleaningPage({
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

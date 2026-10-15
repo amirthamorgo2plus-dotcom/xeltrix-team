@@ -418,7 +418,36 @@ export default async function ProductionPage({
             />
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Phones: one row per entry, read left to right in one line
+                  rather than across seven columns. */}
+              <ul className="divide-y divide-zinc-800 sm:hidden">
+                {entries.map((e) => (
+                  <li key={e.id} className="flex items-center gap-2 py-2.5">
+                    <span className="w-12 shrink-0 text-xs text-zinc-500">
+                      {format(parseISO(e.date), "dd MMM")}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{e.product_name}</span>
+                      <span className="block text-xs text-zinc-500">
+                        {litres(e.litres)} × ₹{e.rate}/L
+                        {e.notes && ` · ${e.notes}`}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right text-sm font-medium tabular-nums">
+                      {money(e.amount)}
+                    </span>
+                    <DeleteEntry id={e.id} canDelete={isAdmin} />
+                  </li>
+                ))}
+                <li className="flex items-center justify-between py-2.5 font-semibold">
+                  <span>Total</span>
+                  <span className="tabular-nums">
+                    {litres(producedLitres)} · {money(producedCost)}
+                  </span>
+                </li>
+              </ul>
+
+              <div className="hidden overflow-x-auto sm:block">
                 <Table>
                   <THead>
                     <TR hover={false}>
