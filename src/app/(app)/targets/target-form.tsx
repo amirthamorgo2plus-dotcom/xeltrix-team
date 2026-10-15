@@ -50,7 +50,9 @@ export function TargetForm({
           </div>
           <div className="flex flex-col gap-1">
             <Label>Target amount *</Label>
-            <Input name="amount" type="number" step="1000" required />
+            {/* Not step="1000": the browser refuses anything that is not a round
+                thousand, with no message anyone would understand. */}
+            <Input name="amount" type="number" step="1" min="0" required />
           </div>
           <div className="flex items-end">
             <Button type="submit" disabled={pending}>

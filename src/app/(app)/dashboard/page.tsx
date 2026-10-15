@@ -18,6 +18,7 @@ import { EmployeeOfTheMonth } from "@/components/employee-of-the-month";
 import { DashboardFilters } from "./filters";
 import { RangeFilter } from "@/components/range-filter";
 import { resolveRange } from "@/lib/date-range";
+import { getDeepCleaningRevenue } from "@/lib/deep-cleaning-revenue";
 import { computeRepeatCustomers, summarize, type WonOppRow } from "@/lib/repeat-customers";
 
 function fmtMoney(v: number, currency: string) {
@@ -312,9 +313,30 @@ export default async function DashboardPage({
   );
   const pendingCollCount = pendingCollRows?.length ?? 0;
 
-  // Deep cleaning (non-GST) for the range
-  const deepRevenue = (deepJobs ?? []).reduce((s, j) => s + Number(j.amount ?? 0), 0);
-  const deepCount = deepJobs?.length ?? 0;
+  // Deep cleaning for the range: both companies, since one crew does the
+  // work and the target covers all of it. Summing deepJobs here instead
+  // would count enquiries that were never done, and would count a Xeltrix
+  // job twice -- once here and once in Sales, where its invoice already is.
+  const deepCombined = await getDeepCleaningRevenue(
+    supabase,
+    teamId,
+    monthFirst,
+    monthLast,
+    settings?.deep_cleaning_items ?? null
+  );
+  const deepRevenue = deepCombined.total;
+  const deepCount = deepCombined.purexJobs + deepCombined.xeltrixLines;
+
+  // Targets are monthly, so a range spanning several months adds them up.
+  const { data: deepTargetRows } = await supabase
+    .from("deep_cleaning_targets")
+    .select("amount")
+    .eq("team_id", teamId)
+    .gte("month", monthFirst)
+    .lte("month", monthLast);
+  const deepTarget = (deepTargetRows ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  const deepPct = deepTarget > 0 ? Math.round((deepRevenue / deepTarget) * 100) : null;
+
   const deepReferralPending = (deepJobs ?? [])
     .filter((j) => j.referral_status !== "paid")
     .reduce((s, j) => s + Number(j.referral_amount ?? 0), 0);
@@ -457,10 +479,21 @@ export default async function DashboardPage({
           tone={reorderSummary.overdueCount > 0 ? "danger" : reorderSummary.dueCount > 0 ? "warning" : "success"}
         />
         <KpiCard
-          label="Deep Cleaning (non-GST)"
+          label="Deep Cleaning"
           value={fmtMoney(deepRevenue, currency)}
-          secondary={deepReferralPending > 0 ? { label: "Referral pending", value: fmtMoney(deepReferralPending, currency) } : undefined}
-          hint={`${deepCount} job${deepCount !== 1 ? "s" : ""} this period`}
+          secondary={
+            deepTarget > 0
+              ? { label: "Target", value: fmtMoney(deepTarget, currency) }
+              : deepReferralPending > 0
+                ? { label: "Referral pending", value: fmtMoney(deepReferralPending, currency) }
+                : undefined
+          }
+          hint={
+            deepPct === null
+              ? `Purex + Xeltrix · ${deepCount} job${deepCount !== 1 ? "s" : ""}`
+              : `${deepPct}% of target · Purex + Xeltrix`
+          }
+          tone={deepPct === null ? null : deepPct >= 100 ? "success" : deepPct >= 50 ? "warning" : "danger"}
           href="/deep-cleaning"
         />
       </div>
