@@ -56,7 +56,7 @@ export default async function DeepCleaningPage({
 
   let jobsQuery = supabase
     .from("deep_cleaning_jobs")
-    .select("id, customer_name, phone, address, status, service_date, service_time, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
+    .select("id, customer_name, phone, address, status, zoho_invoice_number, service_date, service_time, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
     .eq("team_id", teamId);
 
   if (status === "open") jobsQuery = jobsQuery.in("status", ["enquiry", "confirmed"]);
@@ -109,7 +109,13 @@ export default async function DeepCleaningPage({
   const rows = jobs ?? [];
   // Revenue and margin describe work that happened. An enquiry has no money
   // attached to it yet, and a cancelled one never will.
-  const billable = rows.filter((j) => j.status === "done" || j.status === "confirmed");
+  // Billed through Zoho? Then the money is on the invoice and belongs to the
+  // sales figures, not here. Counting it in both places is exactly the bug
+  // this column exists to stop.
+  const billable = rows.filter(
+    (j) => (j.status === "done" || j.status === "confirmed") && !j.zoho_invoice_number
+  );
+  const invoicedCount = rows.filter((j) => j.zoho_invoice_number).length;
   const totalRevenue = billable.reduce((s, j) => s + Number(j.amount ?? 0), 0);
   const totalCost = billable.reduce((s, j) => s + Number(j.cost ?? 0), 0);
   const totalMargin = totalRevenue - totalCost;
@@ -152,12 +158,12 @@ export default async function DeepCleaningPage({
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-xs text-zinc-500">Revenue (non-GST)</p>
+          <p className="text-xs text-zinc-500">Cash revenue (non-GST)</p>
           <p className="mt-1 text-xl font-bold text-zinc-100">{fmt(totalRevenue)}</p>
           <p className="text-xs text-zinc-600">
             {billable.length} job{billable.length === 1 ? "" : "s"}
-            {rows.length > billable.length && (
-              <span className="text-zinc-700"> · {rows.length - billable.length} enquiry</span>
+            {invoicedCount > 0 && (
+              <span className="text-zinc-700"> · {invoicedCount} on a Zoho invoice</span>
             )}
           </p>
         </div>
@@ -211,6 +217,11 @@ export default async function DeepCleaningPage({
                       </div>
                       <span className="shrink-0 text-right">
                         <span className="block tabular-nums text-zinc-100">{fmt(amount)}</span>
+                        {j.zoho_invoice_number && (
+                          <span className="block text-[11px] text-sky-400">
+                            {j.zoho_invoice_number}
+                          </span>
+                        )}
                         {margin != null && (
                           <span className="block text-xs tabular-nums text-[#b5c76a]">
                             {fmt(margin)} margin
@@ -252,7 +263,8 @@ export default async function DeepCleaningPage({
                           trigger="edit"
                           edit={{
                             id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                            status: j.status, service_date: j.service_date, service_time: j.service_time,
+                            status: j.status, zoho_invoice_number: j.zoho_invoice_number,
+                            service_date: j.service_date, service_time: j.service_time,
                             enquiry_date: j.enquiry_date,
                             source: j.source, property_type: j.property_type, crew_size: j.crew_size,
                             description: j.description, amount, cost,
@@ -310,7 +322,17 @@ export default async function DeepCleaningPage({
                           )}
                         </td>
                         <td className="py-2.5 pr-3">
-                          <p className="font-medium text-zinc-100">{j.customer_name}</p>
+                          <p className="font-medium text-zinc-100">
+                            {j.customer_name}
+                            {j.zoho_invoice_number && (
+                              <span
+                                className="ml-2 rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-normal text-sky-400"
+                                title="Billed through Zoho — counted in sales, not in cash revenue"
+                              >
+                                {j.zoho_invoice_number}
+                              </span>
+                            )}
+                          </p>
                           {j.description && <p className="text-xs text-zinc-500 max-w-[220px] truncate">{j.description}</p>}
                         </td>
                         <td className="py-2.5 pr-3">
@@ -337,7 +359,8 @@ export default async function DeepCleaningPage({
                               trigger="edit"
                               edit={{
                                 id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                                status: j.status, service_date: j.service_date, service_time: j.service_time,
+                                status: j.status, zoho_invoice_number: j.zoho_invoice_number,
+                                service_date: j.service_date, service_time: j.service_time,
                                 enquiry_date: j.enquiry_date,
                                 source: j.source, property_type: j.property_type, crew_size: j.crew_size,
                                 description: j.description, amount, cost,

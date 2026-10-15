@@ -15,6 +15,7 @@ export type JobEdit = {
   phone: string | null;
   address: string | null;
   status: string;
+  zoho_invoice_number: string | null;
   service_date: string | null;
   service_time: string | null;
   enquiry_date: string | null;
@@ -253,6 +254,20 @@ export function JobForm({
                   <option value="">—</option>
                   {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
+              </div>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="zoho_invoice_number">Zoho invoice number</Label>
+                <Input
+                  id="zoho_invoice_number"
+                  name="zoho_invoice_number"
+                  defaultValue={edit?.zoho_invoice_number ?? ""}
+                  placeholder="e.g. INV-000580 — leave blank for cash"
+                  list="dc-invoice-hint"
+                />
+                <span className="text-[11px] text-zinc-500">
+                  Fill this in only if the job was billed through Zoho. The amount is then
+                  counted from the invoice, so it is not counted twice.
+                </span>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="crew_size">People on the job</Label>

@@ -49,6 +49,9 @@ export async function saveJob(fd: FormData) {
     phone: (fd.get("phone") as string | null)?.trim() || null,
     address: (fd.get("address") as string | null)?.trim() || null,
     status,
+    // Set means "billed through Zoho": the money is counted from the invoice,
+    // not from this row.
+    zoho_invoice_number: str(fd, "zoho_invoice_number"),
     service_date: serviceDate,
     // Empty means "no agreed hour", which is a real answer here, not a gap.
     service_time: str(fd, "service_time"),
