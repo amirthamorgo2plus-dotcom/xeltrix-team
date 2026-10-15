@@ -52,7 +52,7 @@ export function ProductTypeSalesCard({
                   type="button"
                   aria-pressed={active}
                   onClick={() => setSelected(c)}
-                  className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs transition-colors ${
+                  className={`inline-flex items-center gap-1.5 min-h-8 rounded px-2.5 text-xs transition-colors ${
                     active
                       ? "bg-zinc-100 font-medium text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100"
                       : "text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800/60"

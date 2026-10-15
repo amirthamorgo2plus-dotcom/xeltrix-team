@@ -29,7 +29,9 @@ export function RangeFilter({
           <Link
             key={opt.key}
             href={urlFor(opt.key)}
-            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+            // min-h-8: these are the dashboard's primary control and were 26px,
+            // which is a miss as often as a hit with a thumb.
+            className={`inline-flex min-h-8 items-center rounded-full border px-3 text-xs transition-colors ${
               active
                 ? "border-emerald-500/40 bg-emerald-500/10 font-medium text-emerald-700 dark:text-emerald-300"
                 : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400 dark:hover:bg-zinc-900"

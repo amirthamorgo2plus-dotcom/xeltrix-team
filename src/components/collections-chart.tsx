@@ -29,7 +29,43 @@ export function CollectionsChart({ data, currency }: { data: Row[]; currency: st
   const grandTotal = data.reduce((s, r) => s + r.total, 0);
 
   return (
-    <div className="overflow-x-auto">
+    <>
+      {/* Phones: one card per salesperson, total first and only the buckets
+          that have money in them. Seven columns of currency is 464px, so the
+          overdue end -- the part worth reading -- sat off the right edge. */}
+      <ul className="divide-y divide-zinc-800/50 sm:hidden">
+        {data.map((row) => (
+          <li key={row.name} className="py-3">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-sm font-medium text-zinc-200">{row.name}</span>
+              <span className="shrink-0 text-sm font-semibold tabular-nums text-zinc-100">
+                {fmt(row.total)}
+              </span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {BUCKETS.filter((b) => row[b.key] > 0).map((b) => (
+                <span
+                  key={b.key}
+                  className="rounded px-2 py-0.5 text-[11px] font-medium"
+                  style={{ color: b.color, background: b.muted }}
+                >
+                  {b.label} {fmt(row[b.key])}
+                </span>
+              ))}
+            </div>
+          </li>
+        ))}
+        {data.length > 1 && (
+          <li className="flex items-baseline justify-between py-3">
+            <span className="text-xs font-semibold text-zinc-400">Total</span>
+            <span className="text-sm font-bold tabular-nums text-zinc-50">
+              {fmt(grandTotal)}
+            </span>
+          </li>
+        )}
+      </ul>
+
+      <div className="hidden overflow-x-auto sm:block">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-zinc-800">
@@ -94,6 +130,7 @@ export function CollectionsChart({ data, currency }: { data: Row[]; currency: st
           </tfoot>
         )}
       </table>
-    </div>
+      </div>
+    </>
   );
 }

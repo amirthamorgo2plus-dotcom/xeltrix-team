@@ -70,7 +70,10 @@ export function ManufacturingLitreCard({
       ) : (
         <p className="text-sm text-zinc-500">
           No production recorded for this month yet.{" "}
-          <Link href="/production" className="text-zinc-300 underline hover:text-zinc-100">
+          <Link
+            href="/production"
+            className="-my-1.5 inline-flex min-h-8 items-center py-1.5 text-zinc-300 underline hover:text-zinc-100"
+          >
             Record it
           </Link>
           .
