@@ -31,6 +31,9 @@ export async function saveJob(fd: FormData) {
   const status = (str(fd, "status") ?? "enquiry") as JobStatus;
   if (!STATUSES.includes(status)) return { error: "Unknown status." };
 
+  // Purex is the default because the cash work is most of it.
+  const entity = str(fd, "billing_entity") === "xeltrix" ? "xeltrix" : "purex";
+
   // An enquiry has no agreed day yet; a booking is the day itself, so it
   // cannot be saved without one or it would never reach the calendar.
   const serviceDate = str(fd, "service_date");
@@ -49,9 +52,12 @@ export async function saveJob(fd: FormData) {
     phone: (fd.get("phone") as string | null)?.trim() || null,
     address: (fd.get("address") as string | null)?.trim() || null,
     status,
+    billing_entity: entity,
     // Set means "billed through Zoho": the money is counted from the invoice,
-    // not from this row.
-    zoho_invoice_number: str(fd, "zoho_invoice_number"),
+    // not from this row. A Purex job is cash by definition, so any number
+    // left in the field from before the entity was switched is dropped --
+    // the database rejects the combination anyway.
+    zoho_invoice_number: entity === "xeltrix" ? str(fd, "zoho_invoice_number") : null,
     service_date: serviceDate,
     // Empty means "no agreed hour", which is a real answer here, not a gap.
     service_time: str(fd, "service_time"),

@@ -15,6 +15,7 @@ export type JobEdit = {
   phone: string | null;
   address: string | null;
   status: string;
+  billing_entity: string;
   zoho_invoice_number: string | null;
   service_date: string | null;
   service_time: string | null;
@@ -63,6 +64,9 @@ export function JobForm({
   // name and a phone number, and a form that demands more than that is a
   // form nobody fills in — which is how this ended up in a spreadsheet.
   const [status, setStatus] = useState(edit?.status ?? defaultStatus ?? "enquiry");
+  // One crew and one schedule, two billing entities: Xeltrix raises a GST
+  // invoice, Purex takes the cash work.
+  const [entity, setEntity] = useState(edit?.billing_entity ?? "purex");
   const isEnquiry = status === "enquiry" || status === "cancelled";
   const [refPct, setRefPct] = useState(edit?.referral_pct != null ? String(edit.referral_pct) : "");
 
@@ -255,18 +259,32 @@ export function JobForm({
                   {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 </select>
               </div>
-              <div className="col-span-2 flex flex-col gap-1.5">
-                <Label htmlFor="zoho_invoice_number">Zoho invoice number</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="billing_entity">Billed by</Label>
+                <select
+                  id="billing_entity"
+                  name="billing_entity"
+                  value={entity}
+                  onChange={(e) => setEntity(e.target.value)}
+                  className="h-10 rounded-md border border-zinc-700 bg-transparent px-3 text-sm"
+                >
+                  <option value="purex">Purex — cash, non-GST</option>
+                  <option value="xeltrix">Xeltrix — GST invoice</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="zoho_invoice_number">Zoho invoice</Label>
                 <Input
                   id="zoho_invoice_number"
                   name="zoho_invoice_number"
                   defaultValue={edit?.zoho_invoice_number ?? ""}
-                  placeholder="e.g. INV-000580 — leave blank for cash"
-                  list="dc-invoice-hint"
+                  placeholder="INV-000580"
+                  disabled={entity !== "xeltrix"}
                 />
                 <span className="text-[11px] text-zinc-500">
-                  Fill this in only if the job was billed through Zoho. The amount is then
-                  counted from the invoice, so it is not counted twice.
+                  {entity === "xeltrix"
+                    ? "Counted from the invoice, so it is not counted twice."
+                    : "Cash job — no invoice."}
                 </span>
               </div>
               <div className="flex flex-col gap-1.5">

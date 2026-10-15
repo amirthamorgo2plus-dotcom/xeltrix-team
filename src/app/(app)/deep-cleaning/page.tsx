@@ -56,7 +56,7 @@ export default async function DeepCleaningPage({
 
   let jobsQuery = supabase
     .from("deep_cleaning_jobs")
-    .select("id, customer_name, phone, address, status, zoho_invoice_number, service_date, service_time, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
+    .select("id, customer_name, phone, address, status, billing_entity, zoho_invoice_number, service_date, service_time, enquiry_date, source, property_type, crew_size, description, amount, cost, payment_status, payment_mode, referrer_id, referral_pct, referral_amount, referral_status, assigned_to, notes")
     .eq("team_id", teamId);
 
   if (status === "open") jobsQuery = jobsQuery.in("status", ["enquiry", "confirmed"]);
@@ -109,13 +109,16 @@ export default async function DeepCleaningPage({
   const rows = jobs ?? [];
   // Revenue and margin describe work that happened. An enquiry has no money
   // attached to it yet, and a cancelled one never will.
-  // Billed through Zoho? Then the money is on the invoice and belongs to the
-  // sales figures, not here. Counting it in both places is exactly the bug
-  // this column exists to stop.
-  const billable = rows.filter(
-    (j) => (j.status === "done" || j.status === "confirmed") && !j.zoho_invoice_number
-  );
-  const invoicedCount = rows.filter((j) => j.zoho_invoice_number).length;
+  // Work that has happened or is booked. An enquiry has no money attached
+  // yet and a cancelled one never will.
+  const real = rows.filter((j) => j.status === "done" || j.status === "confirmed");
+  // Purex is the cash side: its revenue is counted here because nowhere else
+  // records it. Xeltrix work is on a Zoho invoice and counted in sales, so
+  // counting it here too is exactly the double count this exists to stop.
+  const billable = real.filter((j) => j.billing_entity !== "xeltrix");
+  const xeltrixJobs = real.filter((j) => j.billing_entity === "xeltrix");
+  const xeltrixRevenue = xeltrixJobs.reduce((s, j) => s + Number(j.amount ?? 0), 0);
+  const invoicedCount = xeltrixJobs.length;
   const totalRevenue = billable.reduce((s, j) => s + Number(j.amount ?? 0), 0);
   const totalCost = billable.reduce((s, j) => s + Number(j.cost ?? 0), 0);
   const totalMargin = totalRevenue - totalCost;
@@ -158,14 +161,21 @@ export default async function DeepCleaningPage({
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
-          <p className="text-xs text-zinc-500">Cash revenue (non-GST)</p>
+          <p className="text-xs text-zinc-500">Purex cash revenue (non-GST)</p>
           <p className="mt-1 text-xl font-bold text-zinc-100">{fmt(totalRevenue)}</p>
           <p className="text-xs text-zinc-600">
-            {billable.length} job{billable.length === 1 ? "" : "s"}
-            {invoicedCount > 0 && (
-              <span className="text-zinc-700"> · {invoicedCount} on a Zoho invoice</span>
-            )}
+            {billable.length} Purex job{billable.length === 1 ? "" : "s"}
           </p>
+          {invoicedCount > 0 && (
+            <p className="mt-1 border-t border-zinc-800 pt-1 text-xs text-zinc-500">
+              Xeltrix (GST){" "}
+              <span className="tabular-nums text-sky-400">{fmt(xeltrixRevenue)}</span> ·{" "}
+              {invoicedCount} job{invoicedCount === 1 ? "" : "s"}
+              <span className="block text-[11px] text-zinc-600">
+                counted in sales, not here
+              </span>
+            </p>
+          )}
         </div>
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
           <p className="text-xs text-zinc-500">Total Cost</p>
@@ -217,9 +227,9 @@ export default async function DeepCleaningPage({
                       </div>
                       <span className="shrink-0 text-right">
                         <span className="block tabular-nums text-zinc-100">{fmt(amount)}</span>
-                        {j.zoho_invoice_number && (
+                        {j.billing_entity === "xeltrix" && (
                           <span className="block text-[11px] text-sky-400">
-                            {j.zoho_invoice_number}
+                            Xeltrix{j.zoho_invoice_number ? ` · ${j.zoho_invoice_number}` : ""}
                           </span>
                         )}
                         {margin != null && (
@@ -263,7 +273,8 @@ export default async function DeepCleaningPage({
                           trigger="edit"
                           edit={{
                             id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                            status: j.status, zoho_invoice_number: j.zoho_invoice_number,
+                            status: j.status, billing_entity: j.billing_entity,
+                            zoho_invoice_number: j.zoho_invoice_number,
                             service_date: j.service_date, service_time: j.service_time,
                             enquiry_date: j.enquiry_date,
                             source: j.source, property_type: j.property_type, crew_size: j.crew_size,
@@ -324,12 +335,12 @@ export default async function DeepCleaningPage({
                         <td className="py-2.5 pr-3">
                           <p className="font-medium text-zinc-100">
                             {j.customer_name}
-                            {j.zoho_invoice_number && (
+                            {j.billing_entity === "xeltrix" && (
                               <span
                                 className="ml-2 rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-normal text-sky-400"
-                                title="Billed through Zoho — counted in sales, not in cash revenue"
+                                title="Billed by Xeltrix on a GST invoice — counted in sales, not in Purex cash revenue"
                               >
-                                {j.zoho_invoice_number}
+                                Xeltrix{j.zoho_invoice_number ? ` · ${j.zoho_invoice_number}` : ""}
                               </span>
                             )}
                           </p>
@@ -359,7 +370,8 @@ export default async function DeepCleaningPage({
                               trigger="edit"
                               edit={{
                                 id: j.id, customer_name: j.customer_name, phone: j.phone, address: j.address,
-                                status: j.status, zoho_invoice_number: j.zoho_invoice_number,
+                                status: j.status, billing_entity: j.billing_entity,
+                                zoho_invoice_number: j.zoho_invoice_number,
                                 service_date: j.service_date, service_time: j.service_time,
                                 enquiry_date: j.enquiry_date,
                                 source: j.source, property_type: j.property_type, crew_size: j.crew_size,
