@@ -9,7 +9,7 @@ export default async function Home() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) redirect("/dashboard");
+  if (user) redirect("/hub");
 
   return (
     <div className="min-h-screen font-sans" style={{ backgroundColor: "#111111", color: "#f5f5f5" }}>

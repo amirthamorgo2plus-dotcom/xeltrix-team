@@ -29,11 +29,9 @@ type SortKey = "status" | "name" | "orders" | "interval" | "since" | "value";
 
 export function RepeatCustomersTable({
   rows,
-  isAdmin,
   currency,
 }: {
   rows: CustomerStat[];
-  isAdmin: boolean;
   currency: string;
 }) {
   const [search, setSearch] = useState("");
@@ -112,7 +110,7 @@ export function RepeatCustomersTable({
                 {th("interval", "Every (days)", "right")}
                 {th("since", "Last order", "right")}
                 {th("value", "Total value", "right")}
-                {isAdmin && <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">Salesperson</th>}
+                <th className="px-4 py-3 text-left text-xs font-medium text-zinc-500">Salesperson</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -143,7 +141,7 @@ export function RepeatCustomersTable({
                       {fmtMoney(c.totalValue, currency)}
                       <div className="text-xs text-zinc-600">avg {fmtMoney(c.avgOrderValue, currency)}</div>
                     </td>
-                    {isAdmin && <td className="px-4 py-3 text-zinc-400">{c.salesperson ?? "—"}</td>}
+                    <td className="px-4 py-3 text-zinc-400">{c.salesperson ?? "—"}</td>
                     <td className="px-4 py-3 text-right">
                       {wa ? (
                         <a

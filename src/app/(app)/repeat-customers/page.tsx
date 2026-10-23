@@ -36,15 +36,11 @@ export default async function RepeatCustomersPage({
   const members = await getTeamMembers();
   const supabase = await createClient();
 
-  const isAdmin = me?.role === "admin" || me?.role === "manager";
-  const memberFilter = isAdmin && sp.member && sp.member !== "all" ? sp.member : null;
+  const memberFilter = sp.member && sp.member !== "all" ? sp.member : null;
 
   function memberName(m: (typeof members)[number]) {
     return ((m.profiles as unknown) as { full_name?: string } | null)?.full_name ?? m.id;
   }
-  const myZoho =
-    (members.find((m) => m.id === me?.id) as { zoho_salesperson_name?: string | null } | undefined)
-      ?.zoho_salesperson_name ?? null;
 
   const { data: rows = [] } = await supabase
     .from("opportunities")
@@ -55,13 +51,12 @@ export default async function RepeatCustomersPage({
     .eq("stage", "won")
     .not("close_date", "is", null);
 
-  // Scope rows: members see their own customers; admins see all (or one salesperson).
+  // Everyone sees the whole team's customers, matching the dashboard's "Due for
+  // reorder" card that links here. Scoping members to their own rows left the
+  // page empty for them, because most synced invoices carry no owner and a
+  // Zoho salesperson name that rarely matches the member's.
   let scoped = (rows ?? []) as WonOppRow[];
-  if (!isAdmin) {
-    scoped = scoped.filter((r) => r.owner_id === me?.id || (myZoho && r.zoho_salesperson_name === myZoho));
-  } else if (memberFilter) {
-    scoped = scoped.filter((r) => r.owner_id === memberFilter);
-  }
+  if (memberFilter) scoped = scoped.filter((r) => r.owner_id === memberFilter);
 
   const stats = computeRepeatCustomers(scoped);
   const sum = summarize(stats);
@@ -77,31 +72,29 @@ export default async function RepeatCustomersPage({
         </p>
       </div>
 
-      {/* Salesperson filter (admins) */}
-      {isAdmin && (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-zinc-500">Salesperson:</span>
+      {/* Salesperson filter */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-zinc-500">Salesperson:</span>
+        <Link
+          href="/repeat-customers"
+          className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            !memberFilter ? "bg-[#b5c76a]/10 text-[#b5c76a]" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+          }`}
+        >
+          All
+        </Link>
+        {members.map((m) => (
           <Link
-            href="/repeat-customers"
+            key={m.id}
+            href={`/repeat-customers?member=${m.id}`}
             className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-              !memberFilter ? "bg-[#b5c76a]/10 text-[#b5c76a]" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+              memberFilter === m.id ? "bg-[#b5c76a]/10 text-[#b5c76a]" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
             }`}
           >
-            All
+            {memberName(m)}
           </Link>
-          {members.map((m) => (
-            <Link
-              key={m.id}
-              href={`/repeat-customers?member=${m.id}`}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                memberFilter === m.id ? "bg-[#b5c76a]/10 text-[#b5c76a]" : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
-              }`}
-            >
-              {memberName(m)}
-            </Link>
-          ))}
-        </div>
-      )}
+        ))}
+      </div>
 
       {/* KPIs */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -163,7 +156,7 @@ export default async function RepeatCustomersPage({
       )}
 
       {/* Full sortable table */}
-      <RepeatCustomersTable rows={stats} isAdmin={!!isAdmin} currency={CURRENCY} />
+      <RepeatCustomersTable rows={stats} currency={CURRENCY} />
     </div>
   );
 }

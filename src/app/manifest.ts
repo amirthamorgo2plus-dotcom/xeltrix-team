@@ -5,7 +5,8 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Xeltrix Team",
     short_name: "Xeltrix",
     description: "Team CRM, attendance, visits, and sales for Xeltrix Chemicals.",
-    start_url: "/dashboard",
+    // Command Center is everyone's home: the installed app opens on it.
+    start_url: "/hub",
     scope: "/",
     display: "standalone",
     orientation: "portrait",
