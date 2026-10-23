@@ -43,3 +43,6 @@ next-env.d.ts
 
 # Supabase CLI scratch
 supabase/.temp/
+
+# Claude Code per-machine permissions, not shared with the team
+.claude/settings.local.json
